@@ -1,4 +1,4 @@
-const SUPPORTED_LANGS = ['en', 'ja'];
+const SUPPORTED_LANGS = ['en', 'zh-CN', 'de', 'fr', 'ja'];
 const DEFAULT_LANG = 'en';
 
 function getInitialLang() {
@@ -11,6 +11,9 @@ function getInitialLang() {
 
   const browser = (navigator.language || '').toLowerCase();
   if (browser.startsWith('ja')) return 'ja';
+  if (browser.startsWith('zh')) return 'zh-CN';
+  if (browser.startsWith('de')) return 'de';
+  if (browser.startsWith('fr')) return 'fr';
   return DEFAULT_LANG;
 }
 
@@ -38,6 +41,13 @@ function applyMessages(messages, lang) {
   });
 
   if (messages['meta.title']) document.title = messages['meta.title'];
+
+  const mevaLink = document.querySelector('[data-meva-link]');
+  if (mevaLink) {
+    mevaLink.href = lang === 'ja'
+      ? 'https://xenoma.com/business/eskin-meva/'
+      : 'https://xenoma.com/en/business/eskin-meva/';
+  }
 
   document.querySelectorAll('[data-lang]').forEach((button) => {
     button.classList.toggle('active', button.getAttribute('data-lang') === lang);

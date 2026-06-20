@@ -6,22 +6,22 @@
   <title>MEVA Cloud — Visual Sample EN/JP</title>
   <style>
     :root {
-      --bg-0: #030607;
-      --bg-1: #061214;
-      --bg-2: #092125;
-      --card: rgba(255,255,255,0.065);
-      --card-strong: rgba(255,255,255,0.105);
+      --bg-0: #05262C;
+      --bg-1: #0A3F49;
+      --bg-2: #12606A;
+      --card: rgba(255,255,255,0.095);
+      --card-strong: rgba(255,255,255,0.14);
       --line: rgba(255,255,255,0.14);
       --line-soft: rgba(255,255,255,0.08);
       --text: #F4F8F8;
-      --muted: #91A7AB;
-      --muted-2: #638086;
-      --teal: #2EE6C8;
-      --teal-2: #18B9AD;
-      --blue: #5B8CFF;
+      --muted: #B8D0D3;
+      --muted-2: #86A8AD;
+      --teal: #37D7CA;
+      --teal-2: #16AEB4;
+      --blue: #65A7D8;
       --purple: #B56CFF;
       --amber: #FFD166;
-      --orange: #FF8A3D;
+      --orange: #F28C42;
       --danger: #FF5E7A;
       --shadow: 0 24px 80px rgba(0,0,0,.48);
       --radius-xl: 28px;
@@ -37,10 +37,10 @@
       font-family: var(--font);
       color: var(--text);
       background:
-        radial-gradient(circle at 16% 8%, rgba(46,230,200,.18), transparent 31%),
-        radial-gradient(circle at 82% 10%, rgba(91,140,255,.14), transparent 28%),
-        radial-gradient(circle at 72% 78%, rgba(255,138,61,.10), transparent 28%),
-        linear-gradient(135deg, var(--bg-0), var(--bg-1) 40%, #020405);
+        radial-gradient(circle at 14% 8%, rgba(55,215,202,.24), transparent 30%),
+        radial-gradient(circle at 82% 10%, rgba(101,167,216,.16), transparent 28%),
+        radial-gradient(circle at 72% 78%, rgba(242,140,66,.10), transparent 28%),
+        linear-gradient(135deg, var(--bg-0), var(--bg-1) 46%, #073038);
       min-height: 100vh;
       overflow-x: hidden;
     }
@@ -72,7 +72,7 @@
       top: 0;
       z-index: 20;
       backdrop-filter: blur(18px);
-      background: linear-gradient(to bottom, rgba(3,6,7,.82), rgba(3,6,7,.44));
+      background: linear-gradient(to bottom, rgba(5,38,44,.88), rgba(5,38,44,.50));
       border-bottom: 1px solid rgba(255,255,255,.08);
     }
 
@@ -117,9 +117,10 @@
     .links {
       display: flex;
       align-items: center;
-      gap: 22px;
+      gap: 26px;
       color: #C8D5D8;
-      font-size: 13px;
+      font-size: 15px;
+      font-weight: 650;
     }
 
     .links a { opacity: .88; }
@@ -128,13 +129,13 @@
     .lang {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       border: 1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.055);
       border-radius: 999px;
       padding: 5px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
       white-space: nowrap;
     }
 
@@ -158,10 +159,11 @@
 
     .hero {
       display: grid;
-      grid-template-columns: 1.02fr .98fr;
-      gap: 34px;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 28px;
       align-items: center;
-      padding: 42px 0 24px;
+      min-height: 540px;
+      padding: 28px 0 14px;
     }
 
     .eyebrow {
@@ -189,10 +191,32 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(38px, 5.2vw, 70px);
-      line-height: .93;
-      letter-spacing: -.075em;
-      max-width: 660px;
+      max-width: 700px;
+      height: 246px;
+      padding: 0 0 20px;
+      overflow: visible;
+    }
+
+    .hero-main {
+      display: inline-block;
+      font-size: clamp(48px, 6.2vw, 86px);
+      line-height: 1.16;
+      letter-spacing: -.085em;
+      padding-bottom: .16em;
+      overflow: visible;
+    }
+
+    .hero-sub {
+      display: block;
+      width: min(700px, 100%);
+      height: 142px;
+      margin-top: 0;
+      color: #E7F3F4;
+      font-size: clamp(25px, 2.85vw, 39px);
+      line-height: 1.2;
+      letter-spacing: -.055em;
+      font-weight: 850;
+      overflow: visible;
     }
 
     .grad {
@@ -203,18 +227,19 @@
     }
 
     .lead {
-      color: #B5C7CB;
-      font-size: 16px;
-      line-height: 1.55;
+      color: #D5E4E6;
+      font-size: 15px;
+      line-height: 1.52;
       max-width: 610px;
-      margin: 18px 0 0;
+      min-height: 68px;
+      margin: 12px 0 0;
     }
 
     .hero-actions {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
-      margin-top: 24px;
+      margin-top: 18px;
     }
 
     .btn {
@@ -248,6 +273,19 @@
       box-shadow: 0 12px 42px rgba(255,138,61,.20);
     }
 
+    .explain-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 2px;
+      color: #BFEAE6;
+      font-weight: 800;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(46,230,200,.38);
+    }
+
+    .explain-link:hover { color: var(--teal); }
+
     .metrics {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -276,17 +314,19 @@
     }
 
     .visual {
-      min-height: 470px;
+      min-height: 410px;
       position: relative;
+      transform: scale(.92);
+      transform-origin: center right;
     }
 
     .orb {
       position: absolute;
       inset: 28px 30px 28px 40px;
-      border-radius: 46px;
+      border-radius: 42px;
       background:
-        radial-gradient(circle at 45% 30%, rgba(46,230,200,.16), transparent 32%),
-        linear-gradient(150deg, rgba(255,255,255,.105), rgba(255,255,255,.035));
+        radial-gradient(circle at 45% 30%, rgba(84,210,206,.14), transparent 32%),
+        linear-gradient(150deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
       border: 1px solid rgba(255,255,255,.12);
       box-shadow: var(--shadow);
       overflow: hidden;
@@ -319,7 +359,7 @@
       z-index: 5;
       border: 1px solid rgba(255,255,255,.13);
       border-radius: 22px;
-      background: rgba(6,18,20,.78);
+      background: rgba(5,42,48,.82);
       backdrop-filter: blur(18px);
       box-shadow: 0 18px 60px rgba(0,0,0,.35);
       overflow: hidden;
@@ -401,7 +441,7 @@
       background:
         linear-gradient(140deg, rgba(91,140,255,.20), rgba(46,230,200,.08)),
         radial-gradient(circle at 62% 36%, rgba(255,255,255,.18), transparent 24%),
-        #071315;
+        #08343B;
       position: relative;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,.09);
@@ -427,29 +467,35 @@
     }
 
     .section {
-      padding: 46px 0;
+      padding: 22px 0;
     }
 
     .section-title {
-      display: flex;
-      align-items: end;
-      justify-content: space-between;
-      gap: 28px;
-      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: minmax(260px, 0.82fr) minmax(520px, 1.18fr);
+      align-items: flex-start;
+      gap: 34px;
+      min-height: 78px;
+      margin-bottom: 14px;
     }
 
     h2 {
       margin: 0;
-      font-size: clamp(30px, 4vw, 54px);
-      line-height: 1.02;
-      letter-spacing: -.06em;
+      font-size: clamp(27px, 3.15vw, 42px);
+      line-height: 1.04;
+      letter-spacing: -.055em;
     }
 
     .section-title p {
-      max-width: 480px;
+      max-width: none;
+      height: 54px;
       color: var(--muted);
-      line-height: 1.6;
-      margin: 0;
+      line-height: 1.55;
+      margin: 2px 0 0;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
     }
 
     .cards {
@@ -465,6 +511,9 @@
       overflow: hidden;
       box-shadow: 0 18px 60px rgba(0,0,0,.20);
       transition: transform .2s ease, border-color .2s ease;
+      display: flex;
+      flex-direction: column;
+      height: 542px;
     }
 
     .dataset-card:hover {
@@ -473,25 +522,26 @@
     }
 
     .thumb {
-      height: 190px;
-      background: #071315;
+      height: 158px;
+      background: #08343B;
       position: relative;
       overflow: hidden;
       border-bottom: 1px solid rgba(255,255,255,.09);
+      flex: 0 0 auto;
     }
 
     .thumb.walk {
       background:
         radial-gradient(circle at 55% 45%, rgba(46,230,200,.32), transparent 24%),
         linear-gradient(135deg, rgba(91,140,255,.20), rgba(3,6,7,.7)),
-        #071315;
+        #08343B;
     }
 
     .thumb.factory {
       background:
         radial-gradient(circle at 30% 30%, rgba(255,138,61,.28), transparent 28%),
         linear-gradient(145deg, rgba(181,108,255,.18), rgba(3,6,7,.75)),
-        #071315;
+        #08343B;
     }
 
     .thumb.pressure {
@@ -499,7 +549,60 @@
         radial-gradient(circle at 42% 50%, rgba(255,138,61,.32), transparent 18%),
         radial-gradient(circle at 58% 52%, rgba(181,108,255,.30), transparent 18%),
         linear-gradient(145deg, rgba(46,230,200,.18), rgba(3,6,7,.75)),
-        #071315;
+        #08343B;
+    }
+
+
+    .thumb.jog {
+      background:
+        radial-gradient(circle at 58% 46%, rgba(55,215,202,.28), transparent 24%),
+        linear-gradient(135deg, rgba(101,167,216,.22), rgba(5,38,44,.78)),
+        #08343B;
+    }
+
+    .thumb.pirouette {
+      background:
+        radial-gradient(circle at 50% 48%, rgba(181,108,255,.30), transparent 25%),
+        conic-gradient(from 120deg, rgba(55,215,202,.16), rgba(5,38,44,.78), rgba(101,167,216,.14), rgba(5,38,44,.78)),
+        #08343B;
+    }
+
+    .thumb.jazz {
+      background:
+        radial-gradient(circle at 36% 36%, rgba(242,140,66,.25), transparent 24%),
+        radial-gradient(circle at 70% 58%, rgba(55,215,202,.20), transparent 26%),
+        linear-gradient(145deg, rgba(101,167,216,.18), rgba(5,38,44,.78)),
+        #08343B;
+    }
+
+    .thumb.radio {
+      background:
+        radial-gradient(circle at 50% 43%, rgba(55,215,202,.24), transparent 24%),
+        repeating-linear-gradient(45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 18px),
+        linear-gradient(145deg, rgba(255,255,255,.06), rgba(5,38,44,.78)),
+        #08343B;
+    }
+
+    .thumb.awa {
+      background:
+        radial-gradient(circle at 35% 45%, rgba(242,140,66,.30), transparent 26%),
+        radial-gradient(circle at 67% 45%, rgba(55,215,202,.22), transparent 24%),
+        linear-gradient(145deg, rgba(5,38,44,.40), rgba(5,38,44,.80)),
+        #08343B;
+    }
+
+    .thumb.sit {
+      background:
+        radial-gradient(circle at 50% 54%, rgba(55,215,202,.25), transparent 24%),
+        linear-gradient(145deg, rgba(255,255,255,.055), rgba(5,38,44,.82)),
+        #08343B;
+    }
+
+    .thumb.object {
+      background:
+        radial-gradient(circle at 62% 44%, rgba(242,140,66,.26), transparent 24%),
+        linear-gradient(145deg, rgba(101,167,216,.18), rgba(5,38,44,.82)),
+        #08343B;
     }
 
     .thumb svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -532,34 +635,51 @@
     .badge.orange { color: #FFC09C; }
 
     .card-body {
-      padding: 20px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
     }
 
     .card-body h3 {
       margin: 0;
-      font-size: 20px;
+      font-size: 21px;
+      line-height: 1.22;
       letter-spacing: -.035em;
+      height: 32px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      overflow: hidden;
     }
 
     .card-body p {
       color: var(--muted);
-      line-height: 1.58;
+      line-height: 1.52;
       font-size: 13px;
-      margin: 10px 0 18px;
+      margin: 7px 0 11px;
+      height: 60px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
     }
 
     .specs {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 9px;
-      margin-bottom: 18px;
+      gap: 7px;
+      margin-bottom: 10px;
+      height: 112px;
+      flex: 0 0 auto;
     }
 
     .spec {
       border: 1px solid rgba(255,255,255,.09);
       background: rgba(255,255,255,.04);
-      border-radius: 13px;
-      padding: 10px 11px;
+      border-radius: 12px;
+      padding: 8px 10px;
+      min-height: 52px;
     }
 
     .spec small {
@@ -582,7 +702,9 @@
       justify-content: space-between;
       gap: 10px;
       border-top: 1px solid rgba(255,255,255,.08);
-      padding-top: 16px;
+      padding-top: 10px;
+      height: 46px;
+      flex: 0 0 auto;
     }
 
     .tiny-link {
@@ -664,7 +786,7 @@
     .cta p { color: var(--muted); line-height: 1.65; margin: 16px 0 0; }
 
     .form {
-      background: rgba(3,6,7,.52);
+      background: rgba(5,38,44,.54);
       border: 1px solid rgba(255,255,255,.12);
       border-radius: 26px;
       padding: 22px;
@@ -776,9 +898,15 @@
     }
 
     .download-details {
-      margin-top: 14px;
+      margin-top: 4px;
       border-top: 1px solid rgba(255,255,255,.08);
-      padding-top: 14px;
+      padding-top: 7px;
+      height: 40px;
+      flex: 0 0 auto;
+    }
+
+    .download-details[open] {
+      height: auto;
     }
 
     .download-details summary {
@@ -788,14 +916,14 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 42px;
-      padding: 0 15px;
+      min-height: 30px;
+      padding: 0 14px;
       border-radius: 999px;
       color: #02100E;
       background: linear-gradient(135deg, var(--teal), #9AF7E9);
       font-weight: 900;
       font-size: 13px;
-      box-shadow: 0 12px 34px rgba(46,230,200,.18);
+      box-shadow: 0 10px 26px rgba(46,230,200,.16);
       width: 100%;
     }
 
@@ -804,7 +932,7 @@
     .request-box {
       margin-top: 12px;
       border: 1px solid rgba(255,255,255,.10);
-      background: rgba(3,6,7,.38);
+      background: rgba(5,38,44,.42);
       border-radius: 18px;
       padding: 14px;
     }
@@ -870,7 +998,7 @@
       .links { display: none; }
       .hero { grid-template-columns: 1fr; padding-top: 34px; }
       .dataset-peek { grid-template-columns: 1fr; }
-      .visual { min-height: 500px; }
+      .visual { min-height: 440px; transform: none; }
       .cards { grid-template-columns: 1fr; }
       .modalities { grid-template-columns: 1fr 1fr; }
       .cta { grid-template-columns: 1fr; }
@@ -880,16 +1008,197 @@
       .wrap { width: min(100% - 28px, 1180px); }
       .lang span:not(.active) { display:none; }
       .metrics, .field-row, .modalities, .dataset-peek { grid-template-columns: 1fr; }
-      .visual { min-height: 500px; }
+      .visual { min-height: 440px; transform: none; }
       .orb { inset: 30px 0; }
       .panel-motion { left: 0; top: 42px; width: 220px; }
       .panel-pressure { right: 0; bottom: 74px; width: 220px; }
       .panel-video { left: 8px; bottom: 2px; width: 230px; }
       .skeleton { width: 290px; opacity: .85; }
-      .section-title { display: block; }
-      .section-title p { margin-top: 14px; }
+      .section-title { display: block; min-height: auto; }
+      .section-title p { margin-top: 14px; white-space: normal; overflow: visible; }
       .cta { padding: 24px; border-radius: 26px; }
     }
+
+
+    /* v6 layout overrides */
+    .nav { height: 66px; }
+    .links { gap: 28px; }
+    .lang { gap: 4px; }
+    .lang button { padding: 6px 9px; }
+
+    .hero {
+      grid-template-columns: 1.08fr .92fr;
+      gap: 24px;
+      min-height: 505px;
+      padding: 20px 0 8px;
+    }
+
+    .hero-copy {
+      min-height: 410px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    h1 {
+      height: auto;
+      min-height: 252px;
+      padding: 0 0 14px;
+      overflow: visible;
+    }
+
+    .hero-main {
+      display: inline-block;
+      font-size: clamp(48px, 6.15vw, 86px);
+      line-height: 1.16;
+      padding-bottom: .20em;
+      overflow: visible;
+    }
+
+    .hero-sub {
+      display: block;
+      width: min(700px, 100%);
+      height: auto;
+      min-height: 142px;
+      margin-top: 0;
+      font-size: clamp(25px, 2.82vw, 39px);
+      line-height: 1.18;
+      overflow: visible;
+    }
+
+    .lead {
+      max-width: 660px;
+      min-height: 68px;
+      margin-top: 12px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+    }
+
+    .hero-actions {
+      gap: 18px;
+      margin-top: 20px;
+    }
+
+    .visual {
+      min-height: 372px;
+      transform: scale(.84);
+      transform-origin: center right;
+    }
+
+    .section { padding: 20px 0; }
+    .section-title {
+      min-height: 78px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .section-title p {
+      max-width: 660px;
+      height: 50px;
+      margin-top: 3px;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      white-space: normal;
+    }
+
+    .dataset-card { height: 540px; }
+    .thumb { height: 142px; flex: 0 0 auto; }
+    .card-body { padding: 14px; display: flex; flex-direction: column; flex: 1 1 auto; }
+    .card-body h3 {
+      height: 44px;
+      line-height: 1.22;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+    .card-body p {
+      height: 58px;
+      margin: 6px 0 8px;
+      line-height: 1.49;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+    }
+    .specs { height: 104px; gap: 7px; margin-bottom: 7px; flex: 0 0 auto; }
+    .spec { min-height: 48px; padding: 7px 9px; }
+    .spec small { margin-bottom: 3px; }
+    .card-footer { height: 40px; padding-top: 7px; flex: 0 0 auto; }
+    .download-details { height: 44px; margin-top: 5px; padding-top: 7px; flex: 0 0 auto; }
+    .download-details[open] { height: auto; }
+    .download-details summary { min-height: 32px; }
+
+    footer {
+      border-top: 1px solid rgba(255,255,255,.10);
+      background:
+        radial-gradient(circle at 18% 0%, rgba(84,210,206,.12), transparent 34%),
+        rgba(5,30,36,.40);
+      color: var(--muted-2);
+      font-size: 12px;
+      padding: 34px 0 30px;
+      margin-top: 18px;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.15fr .75fr .75fr;
+      gap: 28px;
+      align-items: start;
+    }
+    .footer-brand strong {
+      display: block;
+      color: var(--text);
+      font-size: 18px;
+      letter-spacing: -.03em;
+      margin-bottom: 8px;
+    }
+    .footer-brand p {
+      margin: 0;
+      max-width: 470px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .footer-col h4 {
+      margin: 0 0 10px;
+      color: #E8F3F4;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .footer-col a {
+      display: block;
+      color: var(--muted);
+      line-height: 1.9;
+    }
+    .footer-col a:hover { color: var(--teal); }
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+      border-top: 1px solid rgba(255,255,255,.08);
+      margin-top: 26px;
+      padding-top: 16px;
+      color: var(--muted-2);
+    }
+
+    @media (max-width: 980px) {
+      .visual { transform: none; }
+      .footer-grid { grid-template-columns: 1fr; }
+      .footer-bottom { display: block; }
+    }
+
+    @media (max-width: 640px) {
+      h1 { min-height: auto; }
+      .hero-sub { min-height: auto; }
+      .section-title p { height: auto; -webkit-line-clamp: 3; }
+    }
+
   </style>
 </head>
 <body>
@@ -902,31 +1211,25 @@
       <nav class="links" aria-label="Primary">
         <a href="#datasets" data-i18n="nav.datasets">Datasets</a>
         <a href="#modalities" data-i18n="nav.modalities">Data Modalities</a>
-        <a href="#usecases" data-i18n="nav.use_cases">Use Cases</a>
-        <a href="#datasets" data-i18n="nav.request_access">Request Access</a>
       </nav>
       <div class="lang" aria-label="Language selector">
         <button type="button" data-lang="en" class="active">EN</button>
-        <button type="button" data-lang="ja">JP</button>
+        <button type="button" data-lang="zh-CN">中</button>
+        <button type="button" data-lang="de">DE</button>
+        <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="ja">日</button>
       </div>
     </div>
   </header>
 
   <main>
     <section class="wrap hero">
-      <div>
-        <div class="eyebrow"><span class="dot"></span> <span data-i18n="hero.eyebrow">Physical AI Dataset Platform</span></div>
+      <div class="hero-copy">
         <h1 data-i18n-html="hero.title"><span class="grad">Human motion data</span><br>for Physical AI.</h1>
         <p class="lead" data-i18n="hero.lead">A teaser gallery of multimodal human behavior datasets captured with e-skin MEVA — motion, video, pressure and context for Physical AI.</p>
         <div class="hero-actions">
           <a class="btn primary" href="#datasets" data-i18n="hero.explore">Explore Dataset Gallery →</a>
-          <a class="btn" href="#modalities" data-i18n="hero.modalities">View Modalities</a>
-        </div>
-        <a class="scroll-cue" href="#datasets" data-i18n="hero.scroll">Scroll to featured datasets</a>
-        <div class="dataset-peek" aria-label="Dataset preview links">
-          <a class="peek-card" href="#datasets"><span data-i18n="peek.walk.title">Walking & Turning</span><span data-i18n="peek.walk.meta">Motion / Video / Pressure</span></a>
-          <a class="peek-card" href="#datasets"><span data-i18n="peek.factory.title">Factory Reach Task</span><span data-i18n="peek.factory.meta">Work / Context</span></a>
-          <a class="peek-card" href="#datasets"><span data-i18n="peek.pressure.title">Foot Pressure Motion</span><span data-i18n="peek.pressure.meta">Contact / Pressure</span></a>
+          <a class="explain-link" href="#modalities" data-i18n="hero.modalities">View modality explanation</a>
         </div>
       </div>
 
@@ -979,29 +1282,29 @@
 
     <section id="datasets" class="wrap section">
       <div class="section-title">
-        <h2 data-i18n="datasets.title">Featured datasets</h2>
-        <p data-i18n="datasets.lead">Each dataset has its own sample request flow. Click a card’s request button, enter an email address, agree to the privacy policy, and receive a time-limited link for that dataset only.</p>
+        <h2 data-i18n="capsules.title">MEVA Omni Capsules</h2>
+        <p data-i18n="capsules.lead">Each Omni Capsule packages motion, vision, contact and context as reusable human behavior data for Physical AI.</p>
       </div>
       <div class="cards">
         <article class="dataset-card">
           <div class="thumb walk">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">Motion</span><span class="badge blue" data-i18n="tag.video">Video</span><span class="badge purple" data-i18n="tag.pressure">Pressure</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M20 136 C82 62 137 156 202 90 C256 34 308 114 400 50" stroke="rgba(46,230,200,.55)" stroke-width="3" fill="none" stroke-dasharray="7 10"/><circle cx="210" cy="92" r="35" fill="rgba(46,230,200,.13)" stroke="rgba(46,230,200,.75)"/></svg>
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge purple" data-i18n="tag.pressure">pressure</span><span class="badge orange" data-i18n="tag.metadata">metadata</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M20 136 C82 62 137 156 202 90 C256 34 308 114 400 50" stroke="rgba(55,215,202,.62)" stroke-width="3" fill="none" stroke-dasharray="7 10"/><circle cx="210" cy="92" r="35" fill="rgba(55,215,202,.13)" stroke="rgba(55,215,202,.75)"/><path d="M85 132 L122 104 L164 128 L205 94 L248 122 L305 74" stroke="rgba(255,255,255,.23)" stroke-width="2" fill="none"/></svg>
           </div>
           <div class="card-body">
-            <h3 data-i18n="dataset.walk.title">Walking & Turning</h3>
-            <p data-i18n="dataset.walk.desc">Indoor gait samples with stops, turns and synchronized motion/video previews for robot learning and gait analysis.</p>
+            <h3 data-i18n="dataset.walk.title"></h3>
+            <p data-i18n="dataset.walk.desc"></p>
             <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.walk.subjects">3 people</b></div>
-              <div class="spec"><small data-i18n="spec.duration">Duration</small><b>12 min</b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b>BVH / CSV</b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="use.humanoid">Humanoid</b></div>
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.walk.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.walk.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.walk.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.walk.use"></b></div>
             </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="dataset.view_details">View details →</span><span class="access" data-i18n="access.sample">Sample</span></div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
             <details class="download-details">
-              <summary data-i18n="download.request_sample">Request this sample →</summary>
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
               <div class="request-box">
-                <p data-i18n-html="download.walk.text">Send a time-limited download link for <strong>Walking & Turning</strong>.</p>
+                <p data-i18n-html="download.walk.text"></p>
                 <div class="mini-fields">
                   <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
                   <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
@@ -1014,24 +1317,24 @@
         </article>
 
         <article class="dataset-card">
-          <div class="thumb factory">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">Motion</span><span class="badge orange" data-i18n="tag.work">Work</span><span class="badge blue" data-i18n="tag.context">Context</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><rect x="48" y="112" width="320" height="18" rx="9" fill="rgba(255,255,255,.08)"/><path d="M110 112 L162 70 L219 112 L272 62 L338 112" stroke="rgba(255,138,61,.72)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="162" cy="70" r="12" fill="rgba(255,138,61,.48)"/><circle cx="272" cy="62" r="12" fill="rgba(46,230,200,.48)"/></svg>
+          <div class="thumb jog">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.locomotion">locomotion</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M34 128 C88 82 130 112 174 78 C226 38 276 86 386 44" stroke="rgba(55,215,202,.65)" stroke-width="4" fill="none"/><path d="M42 148 C93 126 139 145 188 120 C240 92 290 122 382 92" stroke="rgba(101,167,216,.44)" stroke-width="2" fill="none" stroke-dasharray="5 8"/><circle cx="175" cy="78" r="10" fill="rgba(55,215,202,.75)"/><circle cx="276" cy="86" r="10" fill="rgba(242,140,66,.70)"/></svg>
           </div>
           <div class="card-body">
-            <h3 data-i18n="dataset.factory.title">Factory Reach Task</h3>
-            <p data-i18n="dataset.factory.desc">Upper-body reaching and handling movements with posture load indicators for ergonomics and work analysis.</p>
+            <h3 data-i18n="dataset.jog.title"></h3>
+            <p data-i18n="dataset.jog.desc"></p>
             <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.factory.subjects">2 people</b></div>
-              <div class="spec"><small data-i18n="spec.duration">Duration</small><b>8 min</b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b>CSV / MP4</b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="use.ergonomics">Ergonomics</b></div>
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.jog.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.jog.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.jog.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jog.use"></b></div>
             </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="dataset.view_details">View details →</span><span class="access" data-i18n="access.request">Request</span></div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
             <details class="download-details">
-              <summary data-i18n="download.request_sample">Request this sample →</summary>
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
               <div class="request-box">
-                <p data-i18n-html="download.factory.text">Send a time-limited download link for <strong>Factory Reach Task</strong>.</p>
+                <p data-i18n-html="download.jog.text"></p>
                 <div class="mini-fields">
                   <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
                   <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
@@ -1044,24 +1347,174 @@
         </article>
 
         <article class="dataset-card">
-          <div class="thumb pressure">
-            <div class="badge-row"><span class="badge purple" data-i18n="tag.pressure">Pressure</span><span class="badge teal" data-i18n="tag.motion">Motion</span><span class="badge orange" data-i18n="tag.contact">Contact</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><g opacity=".78"><circle cx="126" cy="102" r="38" fill="rgba(255,138,61,.28)"/><circle cx="278" cy="102" r="38" fill="rgba(181,108,255,.28)"/><circle cx="126" cy="102" r="18" fill="rgba(255,138,61,.78)"/><circle cx="278" cy="102" r="18" fill="rgba(181,108,255,.78)"/></g></svg>
+          <div class="thumb pirouette">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge purple" data-i18n="tag.balance">balance</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><circle cx="210" cy="95" r="56" fill="none" stroke="rgba(55,215,202,.55)" stroke-width="3" stroke-dasharray="8 10"/><circle cx="210" cy="95" r="24" fill="rgba(181,108,255,.22)" stroke="rgba(181,108,255,.70)"/><path d="M210 42 L210 95 L176 135 M210 95 L250 130 M184 72 L236 72" stroke="rgba(255,255,255,.46)" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
           </div>
           <div class="card-body">
-            <h3 data-i18n="dataset.pressure.title">Foot Pressure Motion</h3>
-            <p data-i18n="dataset.pressure.desc">Synchronized lower-body motion and pressure distribution for contact-rich movement understanding.</p>
+            <h3 data-i18n="dataset.pirouette.title"></h3>
+            <p data-i18n="dataset.pirouette.desc"></p>
             <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.pressure.subjects">4 people</b></div>
-              <div class="spec"><small data-i18n="spec.duration">Duration</small><b>15 min</b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b>CSV / PNG</b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="use.contact_ai">Contact AI</b></div>
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.pirouette.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.pirouette.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.pirouette.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.pirouette.use"></b></div>
             </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="dataset.view_details">View details →</span><span class="access" data-i18n="access.sample">Sample</span></div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
             <details class="download-details">
-              <summary data-i18n="download.request_sample">Request this sample →</summary>
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
               <div class="request-box">
-                <p data-i18n-html="download.pressure.text">Send a time-limited download link for <strong>Foot Pressure Motion</strong>.</p>
+                <p data-i18n-html="download.pirouette.text"></p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="dataset-card">
+          <div class="thumb jazz">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.dance">dance</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M60 135 C92 70 140 138 178 78 C218 22 252 128 306 62 C342 22 366 64 390 44" stroke="rgba(242,140,66,.62)" stroke-width="4" fill="none"/><path d="M110 125 L150 88 L190 122 L240 74 L310 118" stroke="rgba(55,215,202,.55)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.jazz.title"></h3>
+            <p data-i18n="dataset.jazz.desc"></p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.jazz.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.jazz.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.jazz.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jazz.use"></b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
+            <details class="download-details">
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
+              <div class="request-box">
+                <p data-i18n-html="download.jazz.text"></p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="dataset-card">
+          <div class="thumb radio">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.exercise">exercise</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M58 96 H362" stroke="rgba(255,255,255,.18)"/><path d="M210 50 L210 120 M160 80 L210 120 L260 80 M182 150 L210 120 L238 150" stroke="rgba(55,215,202,.70)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="210" cy="42" r="16" fill="rgba(55,215,202,.22)" stroke="rgba(55,215,202,.70)"/></svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.radio.title"></h3>
+            <p data-i18n="dataset.radio.desc"></p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.radio.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.radio.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.radio.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.radio.use"></b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
+            <details class="download-details">
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
+              <div class="request-box">
+                <p data-i18n-html="download.radio.text"></p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="dataset-card">
+          <div class="thumb awa">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.culture">culture</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M80 130 C118 92 150 130 188 92 C226 54 258 130 300 92 C332 64 360 72 388 52" stroke="rgba(242,140,66,.65)" stroke-width="4" fill="none"/><path d="M125 70 L165 110 L205 70 M220 70 L260 110 L300 70" stroke="rgba(55,215,202,.56)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="165" cy="110" r="9" fill="rgba(242,140,66,.72)"/><circle cx="260" cy="110" r="9" fill="rgba(55,215,202,.72)"/></svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.awa.title"></h3>
+            <p data-i18n="dataset.awa.desc"></p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.awa.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.awa.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.awa.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.awa.use"></b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
+            <details class="download-details">
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
+              <div class="request-box">
+                <p data-i18n-html="download.awa.text"></p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="dataset-card">
+          <div class="thumb sit">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.daily">daily</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><rect x="70" y="128" width="120" height="14" rx="7" fill="rgba(255,255,255,.18)"/><path d="M135 60 L155 98 L190 128 M155 98 L116 128 M145 76 L196 70" stroke="rgba(55,215,202,.62)" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M252 52 L252 116 L224 145 M252 116 L285 145 M222 76 L286 76" stroke="rgba(101,167,216,.52)" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.sit.title"></h3>
+            <p data-i18n="dataset.sit.desc"></p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.sit.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.sit.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.sit.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.sit.use"></b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
+            <details class="download-details">
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
+              <div class="request-box">
+                <p data-i18n-html="download.sit.text"></p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+          </div>
+        </article>
+
+        <article class="dataset-card">
+          <div class="thumb object">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.manipulation">manipulation</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><rect x="270" y="112" width="54" height="42" rx="8" fill="rgba(242,140,66,.36)" stroke="rgba(242,140,66,.72)"/><path d="M120 54 L140 102 L118 150 M140 102 L184 98 L270 126 M140 102 L178 150" stroke="rgba(55,215,202,.62)" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M184 98 C214 92 234 100 270 126" stroke="rgba(255,255,255,.22)" stroke-width="2" fill="none"/></svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.object.title"></h3>
+            <p data-i18n="dataset.object.desc"></p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.object.subjects"></b></div>
+              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.object.tasks"></b></div>
+              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.object.formats"></b></div>
+              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.object.use"></b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
+            <details class="download-details">
+              <summary data-i18n="capsule.request">Request this capsule →</summary>
+              <div class="request-box">
+                <p data-i18n-html="download.object.text"></p>
                 <div class="mini-fields">
                   <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
                   <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
@@ -1077,8 +1530,8 @@
 
     <section id="modalities" class="wrap section">
       <div class="section-title">
-        <h2 data-i18n="modalities.title">Multimodal by design</h2>
-        <p data-i18n="modalities.lead">MEVA Cloud should feel less like a file server and more like a structured human behavior data infrastructure.</p>
+        <h2 data-i18n="modalities.title">Multimodal Dataset</h2>
+        <p data-i18n="modalities.lead">Beyond motion, vision, contact and context. Multimodal behavior data gives Physical AI the ability to perceive.</p>
       </div>
       <div class="modalities">
         <div class="modality" style="--accent:#2EE6C8"><div class="icon">M</div><h3 data-i18n="modality.motion.title">Motion</h3><p data-i18n="modality.motion.desc">Skeleton, BVH, CSV and future SMPL-X style formats for movement learning.</p></div>
@@ -1092,8 +1545,30 @@
 
   <footer>
     <div class="wrap">
-      <span data-i18n="footer.copy">© Xenoma Inc. / MEVA Cloud visual concept</span>
-      <span>EN · JP</span>
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <strong>MEVA Cloud</strong>
+          <p data-i18n="footer.tagline">Beyond motion, vision, contact and context give Physical AI the ability to perceive.</p>
+        </div>
+        <div class="footer-col">
+          <h4 data-i18n="footer.service">Service</h4>
+          <a href="#datasets" data-i18n="footer.capsules">MEVA Omni Capsules</a>
+          <a href="#modalities" data-i18n="footer.modalities">Data Modalities</a>
+          <a href="#" data-i18n="footer.data_terms">Data Terms</a>
+          <a href="#datasets" data-i18n="footer.request">Request Sample</a>
+        </div>
+        <div class="footer-col">
+          <h4 data-i18n="footer.company">Company</h4>
+          <a href="https://xenoma.com/" target="_blank" rel="noopener" data-i18n="footer.operator">Xenoma Inc.</a>
+          <a href="https://xenoma.com/en/business/eskin-meva/" target="_blank" rel="noopener" data-meva-link data-i18n="footer.mevaproduct">e-skin MEVA</a>
+          <a href="#" data-i18n="footer.privacy">Privacy Policy</a>
+          <a href="mailto:info@xenoma.com" data-i18n="footer.contact">Contact</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span data-i18n="footer.operated">Operated by Xenoma Inc.</span>
+        <span>© 2026 Xenoma Inc. All rights reserved.</span>
+      </div>
     </div>
   </footer>
   <script src="assets/js/i18n.js"></script>
