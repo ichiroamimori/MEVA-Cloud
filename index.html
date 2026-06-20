@@ -192,7 +192,7 @@
     h1 {
       margin: 0;
       max-width: 700px;
-      height: 246px;
+      height: 252px;
       padding: 0 0 20px;
       overflow: visible;
     }
@@ -209,10 +209,10 @@
     .hero-sub {
       display: block;
       width: min(700px, 100%);
-      height: 142px;
+      height: 148px;
       margin-top: 0;
       color: #E7F3F4;
-      font-size: clamp(25px, 2.85vw, 39px);
+      font-size: clamp(24px, 2.75vw, 38px);
       line-height: 1.2;
       letter-spacing: -.055em;
       font-weight: 850;
@@ -643,13 +643,13 @@
 
     .card-body h3 {
       margin: 0;
-      font-size: 21px;
+      font-size: 20px;
       line-height: 1.22;
       letter-spacing: -.035em;
-      height: 32px;
+      height: 50px;
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
+      -webkit-line-clamp: 2;
       overflow: hidden;
     }
 
@@ -994,6 +994,15 @@
       flex-wrap: wrap;
     }
 
+
+    .footer-meta {
+      opacity: .78;
+      display: inline-flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      text-align: right;
+    }
+
     @media (max-width: 980px) {
       .links { display: none; }
       .hero { grid-template-columns: 1fr; padding-top: 34px; }
@@ -1179,6 +1188,7 @@
     .footer-bottom {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 18px;
       flex-wrap: wrap;
       border-top: 1px solid rgba(255,255,255,.08);
@@ -1566,8 +1576,10 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span data-i18n="footer.operated">Operated by Xenoma Inc.</span>
         <span>© 2026 Xenoma Inc. All rights reserved.</span>
+        <span class="footer-meta">
+          <span data-i18n="footer.data_updated">Data updated: 2026-06-20</span>
+        </span>
       </div>
     </div>
   </footer>

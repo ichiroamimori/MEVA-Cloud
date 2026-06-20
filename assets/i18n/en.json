@@ -141,10 +141,10 @@
   "footer.mevaproduct": "e-skin MEVA",
   "footer.privacy": "Privacy Policy",
   "footer.contact": "Contact",
-  "footer.operated": "Operated by Xenoma Inc.",
   "capsules.title": "MEVA Omni Capsules",
   "capsules.lead": "Each Omni Capsule packages motion, vision, contact and context as reusable human behavior data for Physical AI.",
   "capsule.view_details": "View capsule →",
   "capsule.request": "Request this capsule →",
-  "footer.capsules": "Omni Capsules"
+  "footer.capsules": "Omni Capsules",
+  "footer.data_updated": "Data updated: 2026-06-20"
 }
