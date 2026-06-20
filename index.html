@@ -598,6 +598,14 @@
         #08343B;
     }
 
+
+    .thumb.custom {
+      background:
+        radial-gradient(circle at 25% 30%, rgba(117,211,214,.30), transparent 32%),
+        radial-gradient(circle at 78% 70%, rgba(245,177,98,.20), transparent 34%),
+        linear-gradient(135deg, rgba(15, 99, 107, .95), rgba(13, 48, 55, .98));
+    }
+
     .thumb.object {
       background:
         radial-gradient(circle at 62% 44%, rgba(242,140,66,.26), transparent 24%),
@@ -1003,7 +1011,101 @@
       text-align: right;
     }
 
-    @media (max-width: 980px) {
+
+    .inquiry-strip {
+      margin: 22px 0 0;
+      padding: 16px 18px;
+      border: 1px solid rgba(117, 211, 214, .22);
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(31, 150, 159, .18), rgba(11, 45, 51, .42));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      box-shadow: 0 18px 45px rgba(0,0,0,.16);
+    }
+
+    .inquiry-strip p {
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.55;
+      letter-spacing: -.015em;
+    }
+
+    .inquiry-strip p span {
+      color: var(--muted);
+    }
+
+    .inquiry-strip .mini-cta {
+      flex: 0 0 auto;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.08);
+      color: #EAF9F9;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease;
+      white-space: nowrap;
+    }
+
+    .inquiry-strip .mini-cta:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,.13);
+      border-color: rgba(117,211,214,.42);
+    }
+
+
+    .nav-cta {
+      margin-left: 40px;
+      color: #C8D5D8;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+      white-space: nowrap;
+      opacity: .88;
+      transition: color .18s ease, opacity .18s ease;
+    }
+
+    .nav-cta:hover {
+      color: var(--teal);
+      opacity: 1;
+    }
+
+    .section-custom-link {
+      margin-top: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #DDF7F7;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .section-custom-link::after {
+      content: "→";
+      opacity: .75;
+      transition: transform .18s ease;
+    }
+
+    .section-custom-link:hover::after {
+      transform: translateX(3px);
+    }
+@media (max-width: 980px) {
+
+
+      .inquiry-strip {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 15px 16px;
+      }
+
       .links { display: none; }
       .hero { grid-template-columns: 1fr; padding-top: 34px; }
       .dataset-peek { grid-template-columns: 1fr; }
@@ -1221,7 +1323,8 @@
       <nav class="links" aria-label="Primary">
         <a href="#datasets" data-i18n="nav.datasets">Datasets</a>
         <a href="#modalities" data-i18n="nav.modalities">Data Modalities</a>
-      </nav>
+            <a class="nav-cta" href="#contact" data-i18n="nav.custom_data">Custom Data</a>
+    </nav>
       <div class="lang" aria-label="Language selector">
         <button type="button" data-lang="en" class="active">EN</button>
         <button type="button" data-lang="zh-CN">中</button>
@@ -1535,7 +1638,55 @@
             </details>
           </div>
         </article>
+
+        <article class="dataset-card custom-data-card">
+          <div class="thumb custom">
+            <div class="badge-row"><span class="badge teal" data-i18n="tag.custom">custom</span><span class="badge blue" data-i18n="tag.capture">capture</span><span class="badge purple" data-i18n="tag.consulting">consulting</span></div>
+            <svg viewBox="0 0 420 190" preserveAspectRatio="none">
+              <path d="M34 126 C78 72 128 89 165 118 C202 148 245 151 282 112 C319 73 365 72 392 108" fill="none" stroke="rgba(255,255,255,.36)" stroke-width="10" stroke-linecap="round"/>
+              <path d="M60 58 H178 M60 92 H138 M232 62 H360 M232 96 H322" stroke="rgba(117,211,214,.44)" stroke-width="9" stroke-linecap="round"/>
+              <circle cx="95" cy="142" r="20" fill="rgba(117,211,214,.34)"/>
+              <circle cx="210" cy="142" r="20" fill="rgba(245,177,98,.30)"/>
+              <circle cx="325" cy="142" r="20" fill="rgba(156,124,255,.28)"/>
+              <path d="M112 142 H190 M228 142 H305" stroke="rgba(255,255,255,.34)" stroke-width="7" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-body">
+            <h3 data-i18n="dataset.custom.title">Custom Data</h3>
+            <p data-i18n="dataset.custom.desc">Need a motion that is not listed here? We can capture new human behavior data with MEVA.</p>
+            <div class="specs">
+              <div class="spec"><small data-i18n="dataset.custom.subject_label">Subject</small><b data-i18n="dataset.custom.subject_value">your choice</b></div>
+              <div class="spec"><small data-i18n="dataset.custom.task_label">Task</small><b data-i18n="dataset.custom.task_value">your request</b></div>
+              <div class="spec"><small data-i18n="dataset.custom.format_label">Format</small><b data-i18n="dataset.custom.format_value">your request</b></div>
+              <div class="spec"><small data-i18n="dataset.custom.usecase_label">Use case</small><b data-i18n="dataset.custom.usecase_value">your request</b></div>
+            </div>
+            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.custom">Custom</span></div>
+            <details class="download-details">
+              <summary data-i18n="dataset.custom.request">Request custom data →</summary>
+              <div class="request-box">
+                <p data-i18n="dataset.custom.request_text">Tell us the behavior, subjects, formats and intended use you need. We will discuss a custom MEVA capture plan.</p>
+                <div class="mini-fields">
+                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
+                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
+                </div>
+                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
+                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
+              </div>
+            </details>
+
+
+          </div>
+        </article>
+
       </div>
+      <div class="inquiry-strip">
+        <p>
+          <strong data-i18n="capsule.inquiry_title">Need a motion that is not listed here?</strong>
+          <span data-i18n="capsule.inquiry_body"> We can capture new human behavior data with MEVA.</span>
+        </p>
+        <a class="mini-cta" href="#contact" data-i18n="capsule.inquiry_cta">Custom Data</a>
+      </div>
+
     </section>
 
     <section id="modalities" class="wrap section">
@@ -1553,7 +1704,7 @@
 
   </main>
 
-  <footer>
+  <footer id="contact">
     <div class="wrap">
       <div class="footer-grid">
         <div class="footer-brand">
