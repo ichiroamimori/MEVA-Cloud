@@ -775,6 +775,224 @@
     .modality h3 { margin: 0; font-size: 18px; }
     .modality p { color: var(--muted); line-height: 1.55; font-size: 13px; margin: 10px 0 0; }
 
+
+
+    /* Why MEVA section */
+    .why-meva-card {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
+      border-radius: var(--radius-xl);
+      box-shadow: 0 18px 60px rgba(0,0,0,.20);
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .why-flow {
+      display: grid;
+      grid-template-columns: minmax(320px, .96fr) 74px minmax(280px, .62fr);
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 18px;
+    }
+
+    .why-visual-box,
+    .why-ready-box {
+      min-height: 276px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 22% 20%, rgba(55,215,202,.16), transparent 34%),
+        radial-gradient(circle at 78% 72%, rgba(242,140,66,.12), transparent 34%),
+        rgba(5,38,44,.42);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .why-visual-box {
+      display: grid;
+      grid-template-columns: 1fr 1.05fr;
+      gap: 16px;
+      padding: 18px;
+      align-items: center;
+    }
+
+    .why-skeleton-wrap {
+      min-height: 228px;
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 24px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 24px);
+      border: 1px solid rgba(255,255,255,.08);
+      position: relative;
+    }
+
+    .why-skeleton-wrap svg { width: 100%; height: 100%; min-height: 228px; display: block; }
+
+    .imu-dot {
+      fill: var(--teal);
+      stroke: rgba(255,255,255,.92);
+      stroke-width: 1.5;
+      filter: drop-shadow(0 0 7px rgba(46,230,200,.72));
+    }
+
+    .why-data-stack {
+      display: grid;
+      gap: 9px;
+    }
+
+    .why-data-card {
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.055);
+      border-radius: 16px;
+      padding: 11px 12px;
+    }
+
+    .why-data-card strong {
+      display: block;
+      color: #ECF8F8;
+      font-size: 13px;
+      letter-spacing: -.01em;
+      margin-bottom: 4px;
+    }
+
+    .why-data-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .why-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--teal);
+      font-size: 54px;
+      font-weight: 900;
+      opacity: .92;
+      text-shadow: 0 0 22px rgba(46,230,200,.36);
+    }
+
+    .why-ready-box {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 28px;
+    }
+
+    .why-ready-box .chip {
+      width: fit-content;
+      margin-bottom: 16px;
+    }
+
+    .why-ready-box h3 {
+      margin: 0;
+      font-size: clamp(30px, 3.3vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -.055em;
+    }
+
+    .why-ready-box p {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+      margin: 14px 0 0;
+    }
+
+    .why-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 22px;
+      background: rgba(5,38,44,.36);
+    }
+
+    .why-table {
+      width: 100%;
+      min-width: 1040px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .why-table th,
+    .why-table td {
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      border-right: 1px solid rgba(255,255,255,.07);
+      padding: 14px 15px;
+      vertical-align: top;
+      line-height: 1.44;
+    }
+
+    .why-table th:last-child,
+    .why-table td:last-child { border-right: 0; }
+    .why-table tr:last-child td { border-bottom: 0; }
+
+    .why-table th {
+      color: #F3FCFC;
+      background: rgba(255,255,255,.075);
+      font-size: 14px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .why-table td:first-child {
+      width: 210px;
+      color: #DDEEEE;
+      font-weight: 800;
+      background: rgba(255,255,255,.035);
+    }
+
+    .why-table strong { color: #FFFFFF; }
+    .why-table .muted { color: var(--muted); font-size: 12px; }
+    .why-table .meva-col { background: rgba(46,230,200,.045); }
+
+    .score {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 9px;
+      margin-bottom: 5px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .score-good {
+      color: #06231E;
+      background: linear-gradient(135deg, #37D7CA, #A6F6EA);
+      box-shadow: 0 0 18px rgba(55,215,202,.18);
+    }
+
+    .score-bad {
+      color: #2A0408;
+      background: linear-gradient(135deg, #FF5E7A, #FFB1BE);
+      box-shadow: 0 0 18px rgba(255,94,122,.18);
+    }
+
+    .score-mid {
+      color: #241405;
+      background: linear-gradient(135deg, #FFD166, #FFE6A7);
+      box-shadow: 0 0 18px rgba(255,209,102,.14);
+    }
+
+    .score-neutral {
+      color: #EAF7F8;
+      background: rgba(255,255,255,.09);
+      border-color: rgba(255,255,255,.14);
+    }
+
+    .why-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      margin: 14px 4px 0;
+    }
+
+    .why-note strong { color: #ECF8F8; }
+
     .cta {
       border: 1px solid rgba(46,230,200,.22);
       background:
@@ -1113,6 +1331,10 @@
       .cards { grid-template-columns: 1fr; }
       .modalities { grid-template-columns: 1fr 1fr; }
       .cta { grid-template-columns: 1fr; }
+
+      .why-flow { grid-template-columns: 1fr; }
+      .why-arrow { transform: rotate(90deg); min-height: 42px; }
+      .why-visual-box { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 640px) {
@@ -1390,6 +1612,80 @@
             <span class="cell"></span><span class="cell low"></span><span class="cell mid"></span><span class="cell mid"></span><span class="cell low"></span><span class="cell mid"></span><span class="cell low"></span>
           </div>
         </div>
+      </div>
+    </section>
+
+
+    <section id="why-meva" class="wrap section">
+      <div class="section-title">
+        <h2 data-i18n="why.title">Why MEVA?</h2>
+        <p data-i18n="why.lead">MEVA captures accurate full-body motion and packages it with multimodal context for Physical AI-ready humanoid learning datasets.</p>
+      </div>
+
+      <div class="why-meva-card">
+        <div class="why-flow">
+          <div class="why-visual-box" aria-label="MEVA multimodal motion capture concept">
+            <div class="why-skeleton-wrap">
+              <svg viewBox="0 0 260 260" fill="none" aria-hidden="true">
+                <path d="M130 45 L130 82 L112 118 L94 168 L82 224" stroke="rgba(46,230,200,.88)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M130 82 L148 118 L166 168 L181 224" stroke="rgba(46,230,200,.88)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M130 82 L98 102 L72 142" stroke="rgba(101,167,216,.88)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M130 82 L164 102 L190 142" stroke="rgba(101,167,216,.88)" stroke-width="4" stroke-linecap="round"/>
+                <path d="M130 45 C128 58 128 70 130 82" stroke="rgba(255,255,255,.40)" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="130" cy="31" r="16" fill="rgba(46,230,200,.14)" stroke="rgba(46,230,200,.9)" stroke-width="3"/>
+                <circle class="imu-dot" cx="130" cy="50" r="5"/><circle class="imu-dot" cx="130" cy="82" r="5"/>
+                <circle class="imu-dot" cx="112" cy="118" r="5"/><circle class="imu-dot" cx="148" cy="118" r="5"/>
+                <circle class="imu-dot" cx="94" cy="168" r="5"/><circle class="imu-dot" cx="166" cy="168" r="5"/>
+                <circle class="imu-dot" cx="82" cy="224" r="5"/><circle class="imu-dot" cx="181" cy="224" r="5"/>
+                <circle class="imu-dot" cx="98" cy="102" r="5"/><circle class="imu-dot" cx="164" cy="102" r="5"/>
+                <circle class="imu-dot" cx="72" cy="142" r="5"/><circle class="imu-dot" cx="190" cy="142" r="5"/>
+                <path d="M24 222 C74 186 110 198 142 181 C177 162 203 128 236 112" stroke="rgba(242,140,66,.38)" stroke-width="2" stroke-dasharray="6 8"/>
+                <path d="M28 198 C76 146 120 163 157 138 C190 116 212 86 238 71" stroke="rgba(46,230,200,.30)" stroke-width="2" stroke-dasharray="4 8"/>
+              </svg>
+            </div>
+
+            <div class="why-data-stack">
+              <div class="why-data-card"><strong data-i18n="why.visual.motion.title">High-accuracy full-body mocap</strong><span data-i18n="why.visual.motion.desc">18 IMUs capture stable motion for humanoid learning.</span></div>
+              <div class="why-data-card"><strong data-i18n="why.visual.contact.title">Ground Contact Probability</strong><span data-i18n="why.visual.contact.desc">Contact timing for locomotion and robot control.</span></div>
+              <div class="why-data-card"><strong data-i18n="why.visual.multimodal.title">Video / Pressure / Metadata</strong><span data-i18n="why.visual.multimodal.desc">Behavior context packaged as a MEVA Omni Capsule.</span></div>
+            </div>
+          </div>
+
+          <div class="why-arrow" aria-hidden="true">→</div>
+
+          <div class="why-ready-box">
+            <span class="chip">MEVA Omni Capsule</span>
+            <h3 data-i18n="why.ready.title">Physical AI Ready!</h3>
+            <p data-i18n="why.ready.desc">Motion, contact, vision, pressure, and body metadata are organized as reusable human behavior data for humanoid learning pipelines.</p>
+          </div>
+        </div>
+
+        <div class="why-table-wrap">
+          <table class="why-table">
+            <thead>
+              <tr>
+                <th data-i18n="why.table.item">Item</th>
+                <th>Monocular AI</th>
+                <th>Multi-View Markerless</th>
+                <th>Simplified IMU</th>
+                <th class="meva-col">MEVA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td data-i18n="why.row.method">Capture method</td><td data-i18n="why.val.camera">Camera-based</td><td data-i18n="why.val.camera">Camera-based</td><td data-i18n="why.val.imu">IMU-based</td><td class="meva-col" data-i18n="why.val.imu">IMU-based</td></tr>
+              <tr><td data-i18n="why.row.sensors">Sensors / cameras</td><td data-i18n="why.val.one_camera">1 camera</td><td data-i18n="why.val.multi_camera">Multiple cameras</td><td data-i18n="why.val.simplified_imu_count">Approx. 6–12 IMUs</td><td class="meva-col" data-i18n-html="why.val.meva_imu_count"><span class="score score-good">18 IMUs</span></td></tr>
+              <tr><td data-i18n="why.row.accuracy">Full-body mocap accuracy</td><td data-i18n-html="why.val.mono_bad"><span class="score score-bad">Bad</span><br><span class="muted">Insufficient positional accuracy from monocular depth estimation</span></td><td data-i18n-html="why.val.multi_good"><span class="score score-good">Good</span><br><span class="muted">Accurate 3D reconstruction using calibrated multi-view cameras</span></td><td data-i18n-html="why.val.imu_bad"><span class="score score-bad">Bad</span><br><span class="muted">Not enough IMUs to cover the minimum 15 full-body segments</span></td><td class="meva-col" data-i18n-html="why.val.meva_good"><span class="score score-good">Good</span><br><span class="muted">Covers the required full-body segment structure</span></td></tr>
+              <tr><td data-i18n="why.row.unseen">Ability to capture unseen or non-standard motion</td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td class="meva-col" data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td></tr>
+              <tr><td data-i18n="why.row.studio">Dedicated studio requirement</td><td data-i18n-html="why.no_good"><span class="score score-good">No</span></td><td data-i18n-html="why.yes_bad"><span class="score score-bad">Yes</span></td><td data-i18n-html="why.no_good"><span class="score score-good">No</span></td><td class="meva-col" data-i18n-html="why.no_good"><span class="score score-good">No</span></td></tr>
+              <tr><td data-i18n="why.row.field">Real-world / field usability</td><td data-i18n-html="why.level.medium_mid"><span class="score score-mid">Medium</span></td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td><td class="meva-col" data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td></tr>
+              <tr><td data-i18n="why.row.setup">Setup complexity</td><td data-i18n-html="why.level.very_low_good"><span class="score score-good">Very low</span></td><td data-i18n-html="why.level.high_bad"><span class="score score-bad">High</span></td><td data-i18n-html="why.level.low_good"><span class="score score-good">Low</span></td><td class="meva-col" data-i18n-html="why.level.very_low_good"><span class="score score-good">Very low</span></td></tr>
+              <tr><td data-i18n="why.row.cost">Approx. system cost</td><td data-i18n="why.cost.free">Free / software-based</td><td><strong>US$60k–200k+</strong></td><td><strong>Approx. US$2k</strong></td><td class="meva-col"><strong>Approx. US$20k</strong></td></tr>
+              <tr><td data-i18n="why.row.effectiveness">Effectiveness for Physical AI</td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td data-i18n-html="why.effect.multi"><span class="score score-good">Good</span><br><span class="muted">but studio-bound</span></td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td class="meva-col" data-i18n-html="why.effect.meva"><span class="score score-good">Very good</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="why-note" data-i18n-html="why.note">For full-body humanoid learning, <strong>15 IMUs</strong> is the practical minimum for direct segment coverage. MEVA uses <strong>18 IMUs</strong> and adds video, ground-contact probability, pressure, and metadata as Physical AI-ready datasets.</p>
       </div>
     </section>
 
