@@ -470,6 +470,11 @@
       padding: 22px 0;
     }
 
+    #datasets,
+    #modalities {
+      padding-top: 34px;
+    }
+
     .section-title {
       display: grid;
       grid-template-columns: minmax(260px, 0.82fr) minmax(520px, 1.18fr);
@@ -513,7 +518,7 @@
       transition: transform .2s ease, border-color .2s ease;
       display: flex;
       flex-direction: column;
-      height: 542px;
+      height: 522px;
     }
 
     .dataset-card:hover {
@@ -1252,6 +1257,9 @@
     }
 
     .inquiry-strip .mini-cta {
+      appearance: none;
+      cursor: pointer;
+      font-family: inherit;
       flex: 0 0 auto;
       padding: 10px 16px;
       border-radius: 999px;
@@ -1435,7 +1443,7 @@
       white-space: normal;
     }
 
-    .dataset-card { height: 540px; }
+    .dataset-card { height: 520px; }
     .thumb { height: 142px; flex: 0 0 auto; }
     .card-body { padding: 14px; display: flex; flex-direction: column; flex: 1 1 auto; }
     .card-body h3 {
@@ -1529,6 +1537,291 @@
       .section-title p { height: auto; -webkit-line-clamp: 3; }
     }
 
+
+    .download-details.request-details {
+      height: 34px;
+      margin-bottom: -4px;
+      padding-top: 5px;
+      overflow: visible;
+    }
+
+    .request-trigger {
+      appearance: none;
+      border: 0;
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 30px;
+      padding: 0 14px;
+      border-radius: 999px;
+      color: #02100E;
+      background: linear-gradient(135deg, var(--teal), #9AF7E9);
+      font-weight: 900;
+      font-size: 13px;
+      font-family: inherit;
+      box-shadow: 0 10px 26px rgba(46,230,200,.16);
+      width: 100%;
+    }
+
+    .request-trigger:hover { filter: brightness(1.04); }
+
+    .inquiry-strip .request-trigger {
+      width: auto;
+      min-width: 220px;
+      padding: 0 22px;
+      flex: 0 0 auto;
+    }
+
+    .links .nav-cta.request-trigger {
+      width: auto;
+      min-width: 0;
+      min-height: auto;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      color: #C8D5D8;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+      opacity: .88;
+    }
+
+    .links .nav-cta.request-trigger:hover {
+      color: var(--teal);
+      opacity: 1;
+      filter: none;
+    }
+
+    .inquiry-strip p {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .request-modal[hidden] { display: none; }
+
+    .request-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+    }
+
+    .request-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 17, 20, .72);
+      backdrop-filter: blur(10px);
+    }
+
+    .request-dialog {
+      position: relative;
+      z-index: 1;
+      width: min(560px, 100%);
+      max-height: min(760px, calc(100vh - 44px));
+      overflow: auto;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 28px;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(55,215,202,.16), transparent 32%),
+        linear-gradient(180deg, rgba(10,63,73,.96), rgba(5,38,44,.98));
+      box-shadow: 0 30px 100px rgba(0,0,0,.54);
+      padding: 24px;
+    }
+
+    .request-dialog-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .request-dialog h3 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.12;
+      letter-spacing: -.04em;
+    }
+
+    .request-dialog .dataset-name {
+      display: inline-flex;
+      margin-top: 8px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .01em;
+    }
+
+    .request-close {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.12);
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 22px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .request-lead {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.58;
+    }
+
+    .request-form {
+      display: grid;
+      gap: 13px;
+    }
+
+    .request-form label {
+      margin: 0;
+    }
+
+    .request-label-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: #E8F4F4;
+      font-size: 12px;
+      font-weight: 850;
+      margin-bottom: 7px;
+    }
+
+    .request-optional {
+      color: var(--muted-2);
+      font-weight: 750;
+    }
+
+    .request-form textarea {
+      width: 100%;
+      min-height: 108px;
+      height: 108px;
+      resize: vertical;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      padding: 12px 14px;
+      outline: none;
+      font: inherit;
+      line-height: 1.45;
+    }
+
+    .request-form input:focus,
+    .request-form textarea:focus {
+      border-color: rgba(55,215,202,.58);
+      box-shadow: 0 0 0 3px rgba(55,215,202,.12);
+    }
+
+    .terms-box {
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.045);
+      border-radius: 18px;
+      padding: 13px 14px;
+      max-height: 150px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(55,215,202,.55) rgba(255,255,255,.08);
+    }
+
+    .terms-box::-webkit-scrollbar { width: 8px; }
+    .terms-box::-webkit-scrollbar-track { background: rgba(255,255,255,.08); border-radius: 999px; }
+    .terms-box::-webkit-scrollbar-thumb { background: rgba(55,215,202,.55); border-radius: 999px; }
+
+    .terms-box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #EAFDFC;
+      font-size: 13px;
+    }
+
+    .terms-box p,
+    .terms-box ul {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .terms-box ul {
+      padding-left: 1.2em;
+    }
+
+    .terms-box li + li {
+      margin-top: 4px;
+    }
+
+    .custom-only { display: none; }
+    .request-modal[data-request-kind="custom"] .custom-only { display: block; }
+    .request-modal[data-request-kind="custom"] .standard-purpose { display: none; }
+
+    .request-consent {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.52;
+    }
+
+    .request-consent input {
+      width: 18px;
+      height: 18px;
+      margin: 1px 0 0;
+      flex: 0 0 auto;
+      accent-color: var(--teal);
+    }
+
+    .request-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .request-actions button {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.14);
+      min-height: 42px;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: var(--text);
+      background: rgba(255,255,255,.07);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .request-actions button[type="submit"] {
+      border: 0;
+      color: #02100E;
+      background: linear-gradient(135deg, var(--teal), #9AF7E9);
+    }
+
+    .request-status {
+      min-height: 18px;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .request-status.error { color: var(--danger); }
+
+
   </style>
 </head>
 <body>
@@ -1541,7 +1834,7 @@
       <nav class="links" aria-label="Primary">
         <a href="#datasets" data-i18n="nav.datasets">Datasets</a>
         <a href="#modalities" data-i18n="nav.modalities">Data Modalities</a>
-            <a class="nav-cta" href="#contact" data-i18n="nav.custom_data">Custom Data</a>
+            <a class="nav-cta request-trigger" href="#" data-dataset-id="custom" data-request-kind="custom" data-dataset-title-key="dataset.custom.title" data-request-text-key="dataset.custom.request_text" data-i18n="nav.custom_data">Custom Data</a>
     </nav>
       <div class="lang" aria-label="Language selector">
         <button type="button" data-lang="en" class="active">EN</button>
@@ -1707,18 +2000,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.walk.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.walk.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="walking" data-dataset-title-key="dataset.walk.title" data-request-text-key="download.walk.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1737,18 +2021,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jog.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.jog.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="jogging" data-dataset-title-key="dataset.jog.title" data-request-text-key="download.jog.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1767,18 +2042,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.pirouette.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.pirouette.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="pirouette" data-dataset-title-key="dataset.pirouette.title" data-request-text-key="download.pirouette.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1797,18 +2063,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jazz.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.jazz.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="jazz" data-dataset-title-key="dataset.jazz.title" data-request-text-key="download.jazz.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1827,18 +2084,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.radio.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.radio.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="radio" data-dataset-title-key="dataset.radio.title" data-request-text-key="download.radio.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1857,18 +2105,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.awa.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.awa.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="awa" data-dataset-title-key="dataset.awa.title" data-request-text-key="download.awa.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1887,18 +2126,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.sit.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.sit.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="sit" data-dataset-title-key="dataset.sit.title" data-request-text-key="download.sit.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1917,18 +2147,9 @@
               <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.object.use"></b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
-            <details class="download-details">
-              <summary data-i18n="capsule.request">Request this capsule →</summary>
-              <div class="request-box">
-                <p data-i18n-html="download.object.text"></p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="object" data-dataset-title-key="dataset.object.title" data-request-text-key="download.object.text" data-i18n="capsule.request">Request this capsule →</button>
+            </div>
           </div>
         </article>
 
@@ -1954,18 +2175,9 @@
               <div class="spec"><small data-i18n="dataset.custom.usecase_label">Use case</small><b data-i18n="dataset.custom.usecase_value">your request</b></div>
             </div>
             <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.custom">Custom</span></div>
-            <details class="download-details">
-              <summary data-i18n="dataset.custom.request">Request custom data →</summary>
-              <div class="request-box">
-                <p data-i18n="dataset.custom.request_text">Tell us the behavior, subjects, formats and intended use you need. We will discuss a custom MEVA capture plan.</p>
-                <div class="mini-fields">
-                  <input type="email" data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com" />
-                  <input type="text" data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization" />
-                </div>
-                <div class="mini-consent"><span class="box"></span><span data-i18n="download.consent">I agree to the Privacy Policy and receive this dataset download link.</span></div>
-                <a class="mini-submit" href="#" data-i18n="download.submit">Send dataset link</a>
-              </div>
-            </details>
+            <div class="download-details request-details">
+              <button type="button" class="request-trigger" data-dataset-id="custom" data-request-kind="custom" data-dataset-title-key="dataset.custom.title" data-request-text-key="dataset.custom.request_text" data-i18n="dataset.custom.request">Request this capsule →</button>
+            </div>
 
 
           </div>
@@ -1977,7 +2189,7 @@
           <strong data-i18n="capsule.inquiry_title">Need a motion that is not listed here?</strong>
           <span data-i18n="capsule.inquiry_body"> We can capture new human behavior data with MEVA.</span>
         </p>
-        <a class="mini-cta" href="#contact" data-i18n="capsule.inquiry_cta">Custom Data</a>
+        <button type="button" class="mini-cta request-trigger" data-dataset-id="custom" data-request-kind="custom" data-dataset-title-key="dataset.custom.title" data-request-text-key="dataset.custom.request_text" data-i18n="capsule.inquiry_cta">Custom Data</button>
       </div>
 
     </section>
@@ -2027,6 +2239,62 @@
       </div>
     </div>
   </footer>
+
+
+  <div class="request-modal" data-request-modal hidden>
+    <div class="request-modal-backdrop" data-request-cancel></div>
+    <div class="request-dialog" role="dialog" aria-modal="true" aria-labelledby="requestModalTitle">
+      <div class="request-dialog-head">
+        <div>
+          <h3 id="requestModalTitle" data-request-modal-title data-i18n="request.modal.title">Request download link</h3>
+          <span class="dataset-name" data-request-dataset-name></span>
+        </div>
+        <button type="button" class="request-close" data-request-cancel aria-label="Close">×</button>
+      </div>
+      <p class="request-lead" data-request-modal-lead data-i18n="request.modal.lead">Enter your email address and accept the dataset terms. We will send a time-limited download link to your email.</p>
+      <form class="request-form" data-request-form novalidate>
+        <input type="hidden" name="dataset_id" data-request-dataset-id>
+        <label>
+          <span class="request-label-row"><span data-i18n="request.field.email">Email</span><span>*</span></span>
+          <input type="email" name="email" data-request-email required data-i18n-placeholder="download.email_placeholder" placeholder="name@company.com">
+        </label>
+        <label>
+          <span class="request-label-row"><span data-i18n="request.field.organization">Affiliation</span><span class="request-optional" data-i18n="request.field.optional">Optional</span></span>
+          <input type="text" name="organization" data-request-organization data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization">
+        </label>
+        <label class="standard-purpose">
+          <span class="request-label-row"><span data-i18n="request.field.purpose">Intended use</span><span class="request-optional" data-i18n="request.field.optional">Optional</span></span>
+          <textarea name="purpose" data-request-purpose data-i18n-placeholder="request.placeholder.purpose" placeholder="Humanoid learning, research, evaluation, etc."></textarea>
+        </label>
+        <label class="custom-only">
+          <span class="request-label-row"><span data-i18n="custom.field.details">Request details</span><span>*</span></span>
+          <textarea name="custom_details" data-custom-details data-i18n-placeholder="custom.placeholder.details" placeholder="Subjects, task, format, use case, target schedule, etc."></textarea>
+        </label>
+        <div class="terms-box">
+          <strong data-i18n="request.terms.title">Dataset Terms</strong>
+          <div data-i18n-html="request.terms.body">
+            <p>This dataset may be used for internal evaluation, research, and Physical AI development. Redistribution of the dataset itself is not permitted without written permission from Xenoma.</p>
+            <ul>
+              <li>Do not redistribute, resell, or publish the original data files.</li>
+              <li>Use appropriate care when handling human motion, video, pressure, and metadata.</li>
+              <li>Xenoma provides the dataset as-is and may update the terms for future releases.</li>
+            </ul>
+          </div>
+        </div>
+        <label class="request-consent">
+          <input type="checkbox" name="terms_agreed" data-request-consent required>
+          <span data-i18n="request.consent">I have reviewed and agree to the dataset terms.</span>
+        </label>
+        <div class="request-status" data-request-status></div>
+        <div class="request-actions">
+          <button type="button" data-request-cancel data-i18n="request.cancel">Cancel</button>
+          <button type="submit" data-i18n="request.submit">Send request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/download-request.js"></script>
 </body>
 </html>

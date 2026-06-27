@@ -25,6 +25,8 @@ async function loadMessages(lang) {
 }
 
 function applyMessages(messages, lang) {
+  window.MEVA_MESSAGES = messages;
+  window.MEVA_LANG = lang;
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
@@ -53,6 +55,7 @@ function applyMessages(messages, lang) {
   document.querySelectorAll('[data-lang]').forEach((button) => {
     button.classList.toggle('active', button.getAttribute('data-lang') === lang);
   });
+  window.dispatchEvent(new CustomEvent('meva:language-applied', { detail: { lang, messages } }));
 }
 
 async function setLanguage(lang) {

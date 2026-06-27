@@ -2,6 +2,7 @@
 Thumbs.db
 node_modules/
 dist/
+設計/
 .env
 *.zip
 *.pptx
