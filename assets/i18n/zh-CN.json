@@ -240,5 +240,15 @@
   "custom.field.details": "申请内容",
   "custom.placeholder.details": "受试者、任务、格式、用途、期望时间等",
   "custom.error.details_required": "请输入定制数据的申请内容。",
-  "custom.success.mock": "测试模式：定制数据申请已受理。实际运行时我们将通过电子邮件联系您。"
+  "custom.success.mock": "测试模式：定制数据申请已受理。实际运行时我们将通过电子邮件联系您。",
+  "request.status.submitting": "正在发送申请...",
+  "request.success.sent": "您的申请已发送。审核后，我们将通过电子邮件发送下载链接。",
+  "custom.success.sent": "您的定制数据申请已发送。我们将通过电子邮件联系您。",
+  "request.error.submit_failed": "无法发送申请。请稍后再试。",
+  "category.basic": "basic",
+  "category.dance": "dance",
+  "category.working": "working",
+  "datatype.motion_bvh": "motion/bvh",
+  "datatype.gcp_csv": "gcp/csv",
+  "datatype.exo_mp4": "exo/mp4"
 }

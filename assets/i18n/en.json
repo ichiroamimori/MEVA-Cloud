@@ -240,5 +240,15 @@
   "custom.field.details": "Request details",
   "custom.placeholder.details": "Subjects, task, format, use case, target schedule, etc.",
   "custom.error.details_required": "Please enter your custom data request details.",
-  "custom.success.mock": "Test mode: custom data request accepted. We would contact you by email."
+  "custom.success.mock": "Test mode: custom data request accepted. We would contact you by email.",
+  "request.status.submitting": "Sending request...",
+  "request.success.sent": "Your request has been sent. We will email the download link after review.",
+  "custom.success.sent": "Your custom data request has been sent. We will contact you by email.",
+  "request.error.submit_failed": "Could not send the request. Please try again later.",
+  "category.basic": "basic",
+  "category.dance": "dance",
+  "category.working": "working",
+  "datatype.motion_bvh": "motion/bvh",
+  "datatype.gcp_csv": "gcp/csv",
+  "datatype.exo_mp4": "exo/mp4"
 }

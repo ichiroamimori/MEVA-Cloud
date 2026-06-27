@@ -1,0 +1,94 @@
+{
+  "id": "object",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.dummy",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "object",
+  "tags": [
+    {
+      "key": "tag.motion",
+      "class": "teal"
+    },
+    {
+      "key": "tag.video",
+      "class": "blue"
+    },
+    {
+      "key": "tag.manipulation",
+      "class": "orange"
+    }
+  ],
+  "title": {
+    "en": "Object Picking",
+    "zh-CN": "物体抓取",
+    "de": "Objektgreifen",
+    "fr": "Saisie d’objet",
+    "es": "Recoger objetos",
+    "ja": "物体把持"
+  },
+  "description": {
+    "en": "Placeholder dataset for reaching, picking and handling objects in a simple physical task.",
+    "zh-CN": "面向操作任务的伸手、抓取与搬运动作数据。",
+    "de": "Greifen, Aufnehmen und Tragen von Objekten für manipulative Aufgaben.",
+    "fr": "Atteindre, saisir et transporter des objets pour des tâches de manipulation.",
+    "es": "Dataset provisional para alcanzar, recoger y manipular objetos en una tarea física simple.",
+    "ja": "手を伸ばす、拾う、持ち替えるなどの単純な物体操作タスクを想定したダミーデータセット。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Dummy",
+        "zh-CN": "Dummy",
+        "de": "Dummy",
+        "fr": "Dummy",
+        "es": "Dummy",
+        "ja": "Dummy"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Reach / Pick",
+        "zh-CN": "Reach / Pick",
+        "de": "Reach / Pick",
+        "fr": "Reach / Pick",
+        "es": "Reach / Pick",
+        "ja": "リーチ / ピック"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "BVH / CSV / MP4",
+        "zh-CN": "BVH / CSV / MP4",
+        "de": "BVH / CSV / MP4",
+        "fr": "BVH / CSV / MP4",
+        "es": "BVH / CSV / MP4",
+        "ja": "BVH / CSV / MP4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Manipulation",
+        "zh-CN": "Manipulation",
+        "de": "Manipulation",
+        "fr": "Manipulation",
+        "es": "Manipulation",
+        "ja": "操作動作"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Object Picking Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Object Picking Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Object Picking Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Object Picking Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Object Picking Dataset</strong>.",
+    "ja": "<strong>物体ピッキングデータセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "id": "lettuce_selection",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.dummy",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "lettuce_selection",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    },
+    {
+      "key": "datatype.exo_mp4",
+      "class": "blue"
+    }
+  ],
+  "title": {
+    "en": "Lettuce Sorting",
+    "zh-CN": "Lettuce Sorting",
+    "de": "Lettuce Sorting",
+    "fr": "Lettuce Sorting",
+    "es": "Lettuce Sorting",
+    "ja": "レタス選別"
+  },
+  "description": {
+    "en": "A lettuce sorting task for post-harvest or in-process handling, including observing, selecting, lifting and placing lettuce heads.",
+    "zh-CN": "A lettuce sorting task for post-harvest or in-process handling, including observing, selecting, lifting and placing lettuce heads.",
+    "de": "A lettuce sorting task for post-harvest or in-process handling, including observing, selecting, lifting and placing lettuce heads.",
+    "fr": "A lettuce sorting task for post-harvest or in-process handling, including observing, selecting, lifting and placing lettuce heads.",
+    "es": "A lettuce sorting task for post-harvest or in-process handling, including observing, selecting, lifting and placing lettuce heads.",
+    "ja": "収穫後または工程内のレタス選別を想定したタスク。対象物を見て選び、持ち上げ、置く一連の動作を含みます。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Observe / Select / Place",
+        "zh-CN": "Observe / Select / Place",
+        "de": "Observe / Select / Place",
+        "fr": "Observe / Select / Place",
+        "es": "Observe / Select / Place",
+        "ja": "Observe / Select / Place"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv / exo/mp4",
+        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
+        "de": "motion/bvh / gcp/csv / exo/mp4",
+        "fr": "motion/bvh / gcp/csv / exo/mp4",
+        "es": "motion/bvh / gcp/csv / exo/mp4",
+        "ja": "motion/bvh / gcp/csv / exo/mp4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Agricultural sorting",
+        "zh-CN": "Agricultural sorting",
+        "de": "Agricultural sorting",
+        "fr": "Agricultural sorting",
+        "es": "Agricultural sorting",
+        "ja": "Agricultural sorting"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Lettuce Sorting Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Lettuce Sorting Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Lettuce Sorting Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Lettuce Sorting Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Lettuce Sorting Dataset</strong>.",
+    "ja": "<strong>レタス選別データセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/lettuce_selection.png",
+  "category": "working",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    },
+    {
+      "kind": "exo",
+      "format": "mp4"
+    }
+  ]
+}

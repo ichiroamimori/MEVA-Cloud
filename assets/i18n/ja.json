@@ -240,5 +240,15 @@
   "custom.field.details": "依頼内容",
   "custom.placeholder.details": "被験者、タスク、形式、用途、希望時期など",
   "custom.error.details_required": "カスタムデータの依頼内容を入力してください。",
-  "custom.success.mock": "テストモード：カスタムデータ依頼を受け付けました。実運用ではメールでご連絡します。"
+  "custom.success.mock": "テストモード：カスタムデータ依頼を受け付けました。実運用ではメールでご連絡します。",
+  "request.status.submitting": "リクエストを送信しています...",
+  "request.success.sent": "リクエストを送信しました。確認後、ダウンロードリンクをメールでお送りします。",
+  "custom.success.sent": "カスタムデータ依頼を送信しました。メールでご連絡します。",
+  "request.error.submit_failed": "リクエストを送信できませんでした。時間をおいて再度お試しください。",
+  "category.basic": "basic",
+  "category.dance": "dance",
+  "category.working": "working",
+  "datatype.motion_bvh": "motion/bvh",
+  "datatype.gcp_csv": "gcp/csv",
+  "datatype.exo_mp4": "exo/mp4"
 }

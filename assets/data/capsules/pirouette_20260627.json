@@ -1,0 +1,111 @@
+{
+  "id": "pirouette",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.sample",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "pirouette",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    },
+    {
+      "key": "datatype.exo_mp4",
+      "class": "blue"
+    }
+  ],
+  "title": {
+    "en": "Pirouette",
+    "zh-CN": "单脚旋转",
+    "de": "Pirouette",
+    "fr": "Pirouette",
+    "es": "Pirouette",
+    "ja": "ピルエット"
+  },
+  "description": {
+    "en": "Rotational balance and full-body coordination data captured from pirouette movements.",
+    "zh-CN": "包含旋转、平衡与全身协调的芭蕾式动作数据。",
+    "de": "Daten zu Rotation, Balance und Ganzkörperkoordination in pirouettenartigen Bewegungen.",
+    "fr": "Données de rotation, d’équilibre et de coordination du corps entier autour de mouvements de pirouette.",
+    "es": "Datos de equilibrio rotacional y coordinación de cuerpo completo capturados a partir de movimientos tipo pirouette.",
+    "ja": "回転・バランス・全身協調を含むピルエット動作データ。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Spin / Balance",
+        "zh-CN": "Spin / Balance",
+        "de": "Spin / Balance",
+        "fr": "Spin / Balance",
+        "es": "Spin / Balance",
+        "ja": "回転 / バランス"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv / exo/mp4",
+        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
+        "de": "motion/bvh / gcp/csv / exo/mp4",
+        "fr": "motion/bvh / gcp/csv / exo/mp4",
+        "es": "motion/bvh / gcp/csv / exo/mp4",
+        "ja": "motion/bvh / gcp/csv / exo/mp4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Balance",
+        "zh-CN": "Balance",
+        "de": "Balance",
+        "fr": "Balance",
+        "es": "Balance",
+        "ja": "バランス"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Pirouette Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Pirouette Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Pirouette Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Pirouette Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Pirouette Dataset</strong>.",
+    "ja": "<strong>ピルエットデータセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/pirouette.png",
+  "category": "dance",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    },
+    {
+      "kind": "exo",
+      "format": "mp4"
+    }
+  ]
+}

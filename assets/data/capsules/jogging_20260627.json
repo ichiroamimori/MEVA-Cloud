@@ -1,0 +1,111 @@
+{
+  "id": "jogging",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.sample",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "jog",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    },
+    {
+      "key": "datatype.exo_mp4",
+      "class": "blue"
+    }
+  ],
+  "title": {
+    "en": "Jogging",
+    "zh-CN": "慢跑",
+    "de": "Joggen",
+    "fr": "Jogging",
+    "es": "Jogging",
+    "ja": "ジョギング"
+  },
+  "description": {
+    "en": "Light running and jogging motions for studying faster human locomotion and body dynamics.",
+    "zh-CN": "记录轻跑与慢跑动作，面向更快移动时的身体动态分析。",
+    "de": "Leichte Lauf- und Joggingbewegungen für Körperdynamik bei schnellerer Fortbewegung.",
+    "fr": "Mouvements de course légère et de jogging pour analyser la dynamique corporelle lors de déplacements plus rapides.",
+    "es": "Movimientos de carrera ligera y jogging para estudiar la locomoción humana rápida y la dinámica corporal.",
+    "ja": "軽走・ジョギング動作を収録し、歩行より速い移動時の身体ダイナミクスを扱うデータセット。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Jog / Pace change",
+        "zh-CN": "Jog / Pace change",
+        "de": "Jog / Pace change",
+        "fr": "Jog / Pace change",
+        "es": "Jog / Pace change",
+        "ja": "ジョギング / ペース変化"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv / exo/mp4",
+        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
+        "de": "motion/bvh / gcp/csv / exo/mp4",
+        "fr": "motion/bvh / gcp/csv / exo/mp4",
+        "es": "motion/bvh / gcp/csv / exo/mp4",
+        "ja": "motion/bvh / gcp/csv / exo/mp4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Locomotion",
+        "zh-CN": "Locomotion",
+        "de": "Locomotion",
+        "fr": "Locomotion",
+        "es": "Locomotion",
+        "ja": "移動動作"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Jogging Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Jogging Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Jogging Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Jogging Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Jogging Dataset</strong>.",
+    "ja": "<strong>ジョギングデータセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/jogging.png",
+  "category": "basic",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    },
+    {
+      "kind": "exo",
+      "format": "mp4"
+    }
+  ]
+}

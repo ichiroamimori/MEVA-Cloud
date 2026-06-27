@@ -1,0 +1,123 @@
+{
+  "id": "custom",
+  "catalog_version": "2026-06-27",
+  "dataset_version": null,
+  "status_key": "access.custom",
+  "request_enabled": true,
+  "request_kind": "custom",
+  "request_button_key": "dataset.custom.request",
+  "thumb_class": "custom",
+  "tags": [
+    {
+      "key": "tag.custom",
+      "class": "teal"
+    },
+    {
+      "key": "tag.capture",
+      "class": "blue"
+    },
+    {
+      "key": "tag.consulting",
+      "class": "purple"
+    }
+  ],
+  "title": {
+    "en": "Custom Data",
+    "zh-CN": "定制数据",
+    "de": "Custom Data",
+    "fr": "Données sur mesure",
+    "es": "Datos personalizados",
+    "ja": "カスタムデータ"
+  },
+  "description": {
+    "en": "Need a motion that is not listed here? We can capture new human behavior data with MEVA.",
+    "zh-CN": "没有找到想要的动作数据？我们可以使用MEVA采集新的人的行为数据。",
+    "de": "Ist die gesuchte Bewegung nicht dabei? Wir können neue menschliche Verhaltensdaten mit MEVA erfassen.",
+    "fr": "Le mouvement recherché n’est pas listé ? Nous pouvons capturer de nouvelles données de comportement humain avec MEVA.",
+    "es": "¿Necesita un movimiento que no aparece aquí? Podemos capturar nuevos datos de comportamiento humano con MEVA.",
+    "ja": "探している動作データが見つかりませんか？ MEVAで新しい行動データを収集できます。"
+  },
+  "specs": [
+    {
+      "label": {
+        "en": "Subject",
+        "zh-CN": "受试者",
+        "de": "Probanden",
+        "fr": "Sujets",
+        "es": "Sujeto",
+        "ja": "被験者"
+      },
+      "value": {
+        "en": "your choice",
+        "zh-CN": "由您选择",
+        "de": "Ihre Wahl",
+        "fr": "votre choix",
+        "es": "su elección",
+        "ja": "あなたのチョイス"
+      }
+    },
+    {
+      "label": {
+        "en": "Task",
+        "zh-CN": "任务",
+        "de": "Aufgabe",
+        "fr": "Tâche",
+        "es": "Tarea",
+        "ja": "タスク"
+      },
+      "value": {
+        "en": "your request",
+        "zh-CN": "按您的需求",
+        "de": "nach Wunsch",
+        "fr": "selon vos besoins",
+        "es": "su solicitud",
+        "ja": "あなたの希望"
+      }
+    },
+    {
+      "label": {
+        "en": "Format",
+        "zh-CN": "格式",
+        "de": "Format",
+        "fr": "Format",
+        "es": "Formato",
+        "ja": "形式"
+      },
+      "value": {
+        "en": "your request",
+        "zh-CN": "按您的需求",
+        "de": "nach Wunsch",
+        "fr": "selon vos besoins",
+        "es": "su solicitud",
+        "ja": "あなたの希望"
+      }
+    },
+    {
+      "label": {
+        "en": "Use case",
+        "zh-CN": "用途",
+        "de": "Zweck",
+        "fr": "Usage",
+        "es": "Caso de uso",
+        "ja": "用途"
+      },
+      "value": {
+        "en": "your request",
+        "zh-CN": "按您的需求",
+        "de": "nach Wunsch",
+        "fr": "selon vos besoins",
+        "es": "su solicitud",
+        "ja": "あなたの希望"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Tell us the behavior, subjects, formats and intended use you need. We will discuss a custom MEVA capture plan.",
+    "zh-CN": "请告诉我们所需动作、受试者、格式和用途。我们将讨论MEVA定制采集方案。",
+    "de": "Nennen Sie uns Bewegung, Probanden, Formate und Einsatzzweck. Wir besprechen einen MEVA-Capture-Plan.",
+    "fr": "Indiquez le mouvement, les sujets, les formats et l’usage souhaités. Nous discuterons d’un plan de capture MEVA.",
+    "es": "Cuéntenos el comportamiento, sujetos, formatos y uso previsto que necesita. Conversaremos sobre un plan de captura MEVA personalizado.",
+    "ja": "必要な動作、被験者、形式、用途をお知らせください。MEVAでのカスタム収集プランをご相談します。"
+  },
+  "thumbnail": "assets/images/capsules/custom.png"
+}

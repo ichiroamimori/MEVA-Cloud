@@ -240,5 +240,15 @@
   "custom.field.details": "Anfragedetails",
   "custom.placeholder.details": "Personen, Aufgabe, Format, Use Case, Zeitplan usw.",
   "custom.error.details_required": "Bitte geben Sie die Details Ihrer Custom-Data-Anfrage ein.",
-  "custom.success.mock": "Testmodus: Custom-Data-Anfrage angenommen. Wir würden Sie per E-Mail kontaktieren."
+  "custom.success.mock": "Testmodus: Custom-Data-Anfrage angenommen. Wir würden Sie per E-Mail kontaktieren.",
+  "request.status.submitting": "Anfrage wird gesendet...",
+  "request.success.sent": "Ihre Anfrage wurde gesendet. Nach Prüfung senden wir den Download-Link per E-Mail.",
+  "custom.success.sent": "Ihre Custom-Data-Anfrage wurde gesendet. Wir kontaktieren Sie per E-Mail.",
+  "request.error.submit_failed": "Die Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.",
+  "category.basic": "basic",
+  "category.dance": "dance",
+  "category.working": "working",
+  "datatype.motion_bvh": "motion/bvh",
+  "datatype.gcp_csv": "gcp/csv",
+  "datatype.exo_mp4": "exo/mp4"
 }

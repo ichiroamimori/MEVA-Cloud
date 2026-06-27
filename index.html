@@ -604,6 +604,23 @@
     }
 
 
+
+    .thumb.lettuce_transplant {
+      background:
+        radial-gradient(circle at 35% 45%, rgba(99,220,151,.28), transparent 28%),
+        radial-gradient(circle at 70% 58%, rgba(242,140,66,.20), transparent 26%),
+        linear-gradient(145deg, rgba(22,78,48,.38), rgba(5,38,44,.82)),
+        #08343B;
+    }
+
+    .thumb.lettuce_selection {
+      background:
+        radial-gradient(circle at 50% 52%, rgba(99,220,151,.30), transparent 30%),
+        repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 2px, transparent 2px 18px),
+        linear-gradient(145deg, rgba(20,92,56,.35), rgba(5,38,44,.82)),
+        #08343B;
+    }
+
     .thumb.custom {
       background:
         radial-gradient(circle at 25% 30%, rgba(117,211,214,.30), transparent 32%),
@@ -619,6 +636,14 @@
     }
 
     .thumb svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .thumb .capsule-thumbnail {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
 
     .badge-row {
       position: absolute;
@@ -646,6 +671,14 @@
     .badge.blue { color: #9DB7FF; }
     .badge.purple { color: #D3AEFF; }
     .badge.orange { color: #FFC09C; }
+    .badge.category {
+      color: rgba(255,255,255,.9);
+      border-color: rgba(255,255,255,.28);
+      background: rgba(255,255,255,.10);
+    }
+    .badge.category.basic { color: var(--teal); }
+    .badge.category.dance { color: #FFC09C; }
+    .badge.category.working { color: #9EE6B7; }
 
     .card-body {
       padding: 15px;
@@ -1984,205 +2017,8 @@
         <h2 data-i18n="capsules.title">MEVA Omni Capsules</h2>
         <p data-i18n="capsules.lead">Each Omni Capsule packages motion, vision, contact and context as reusable human behavior data for Physical AI.</p>
       </div>
-      <div class="cards">
-        <article class="dataset-card">
-          <div class="thumb walk">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge purple" data-i18n="tag.pressure">pressure</span><span class="badge orange" data-i18n="tag.metadata">metadata</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M20 136 C82 62 137 156 202 90 C256 34 308 114 400 50" stroke="rgba(55,215,202,.62)" stroke-width="3" fill="none" stroke-dasharray="7 10"/><circle cx="210" cy="92" r="35" fill="rgba(55,215,202,.13)" stroke="rgba(55,215,202,.75)"/><path d="M85 132 L122 104 L164 128 L205 94 L248 122 L305 74" stroke="rgba(255,255,255,.23)" stroke-width="2" fill="none"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.walk.title"></h3>
-            <p data-i18n="dataset.walk.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.walk.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.walk.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.walk.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.walk.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="walking" data-dataset-title-key="dataset.walk.title" data-request-text-key="download.walk.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb jog">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.locomotion">locomotion</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M34 128 C88 82 130 112 174 78 C226 38 276 86 386 44" stroke="rgba(55,215,202,.65)" stroke-width="4" fill="none"/><path d="M42 148 C93 126 139 145 188 120 C240 92 290 122 382 92" stroke="rgba(101,167,216,.44)" stroke-width="2" fill="none" stroke-dasharray="5 8"/><circle cx="175" cy="78" r="10" fill="rgba(55,215,202,.75)"/><circle cx="276" cy="86" r="10" fill="rgba(242,140,66,.70)"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.jog.title"></h3>
-            <p data-i18n="dataset.jog.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.jog.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.jog.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.jog.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jog.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="jogging" data-dataset-title-key="dataset.jog.title" data-request-text-key="download.jog.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb pirouette">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge purple" data-i18n="tag.balance">balance</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><circle cx="210" cy="95" r="56" fill="none" stroke="rgba(55,215,202,.55)" stroke-width="3" stroke-dasharray="8 10"/><circle cx="210" cy="95" r="24" fill="rgba(181,108,255,.22)" stroke="rgba(181,108,255,.70)"/><path d="M210 42 L210 95 L176 135 M210 95 L250 130 M184 72 L236 72" stroke="rgba(255,255,255,.46)" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.pirouette.title"></h3>
-            <p data-i18n="dataset.pirouette.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.pirouette.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.pirouette.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.pirouette.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.pirouette.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="pirouette" data-dataset-title-key="dataset.pirouette.title" data-request-text-key="download.pirouette.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb jazz">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.dance">dance</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M60 135 C92 70 140 138 178 78 C218 22 252 128 306 62 C342 22 366 64 390 44" stroke="rgba(242,140,66,.62)" stroke-width="4" fill="none"/><path d="M110 125 L150 88 L190 122 L240 74 L310 118" stroke="rgba(55,215,202,.55)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.jazz.title"></h3>
-            <p data-i18n="dataset.jazz.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.jazz.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.jazz.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.jazz.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.jazz.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="jazz" data-dataset-title-key="dataset.jazz.title" data-request-text-key="download.jazz.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb radio">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.exercise">exercise</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M58 96 H362" stroke="rgba(255,255,255,.18)"/><path d="M210 50 L210 120 M160 80 L210 120 L260 80 M182 150 L210 120 L238 150" stroke="rgba(55,215,202,.70)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="210" cy="42" r="16" fill="rgba(55,215,202,.22)" stroke="rgba(55,215,202,.70)"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.radio.title"></h3>
-            <p data-i18n="dataset.radio.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.radio.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.radio.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.radio.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.radio.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="radio" data-dataset-title-key="dataset.radio.title" data-request-text-key="download.radio.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb awa">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.culture">culture</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><path d="M80 130 C118 92 150 130 188 92 C226 54 258 130 300 92 C332 64 360 72 388 52" stroke="rgba(242,140,66,.65)" stroke-width="4" fill="none"/><path d="M125 70 L165 110 L205 70 M220 70 L260 110 L300 70" stroke="rgba(55,215,202,.56)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="165" cy="110" r="9" fill="rgba(242,140,66,.72)"/><circle cx="260" cy="110" r="9" fill="rgba(55,215,202,.72)"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.awa.title"></h3>
-            <p data-i18n="dataset.awa.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.awa.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.awa.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.awa.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.awa.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.sample">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="awa" data-dataset-title-key="dataset.awa.title" data-request-text-key="download.awa.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb sit">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.daily">daily</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><rect x="70" y="128" width="120" height="14" rx="7" fill="rgba(255,255,255,.18)"/><path d="M135 60 L155 98 L190 128 M155 98 L116 128 M145 76 L196 70" stroke="rgba(55,215,202,.62)" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M252 52 L252 116 L224 145 M252 116 L285 145 M222 76 L286 76" stroke="rgba(101,167,216,.52)" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.sit.title"></h3>
-            <p data-i18n="dataset.sit.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.sit.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.sit.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.sit.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.sit.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="sit" data-dataset-title-key="dataset.sit.title" data-request-text-key="download.sit.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card">
-          <div class="thumb object">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.motion">motion</span><span class="badge blue" data-i18n="tag.video">video</span><span class="badge orange" data-i18n="tag.manipulation">manipulation</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none"><rect x="270" y="112" width="54" height="42" rx="8" fill="rgba(242,140,66,.36)" stroke="rgba(242,140,66,.72)"/><path d="M120 54 L140 102 L118 150 M140 102 L184 98 L270 126 M140 102 L178 150" stroke="rgba(55,215,202,.62)" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M184 98 C214 92 234 100 270 126" stroke="rgba(255,255,255,.22)" stroke-width="2" fill="none"/></svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.object.title"></h3>
-            <p data-i18n="dataset.object.desc"></p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="spec.subjects">Subjects</small><b data-i18n="dataset.object.subjects"></b></div>
-              <div class="spec"><small data-i18n="spec.tasks">Tasks</small><b data-i18n="dataset.object.tasks"></b></div>
-              <div class="spec"><small data-i18n="spec.formats">Formats</small><b data-i18n="dataset.object.formats"></b></div>
-              <div class="spec"><small data-i18n="spec.use">Use</small><b data-i18n="dataset.object.use"></b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.dummy">Sample</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="object" data-dataset-title-key="dataset.object.title" data-request-text-key="download.object.text" data-i18n="capsule.request">Request this capsule →</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="dataset-card custom-data-card">
-          <div class="thumb custom">
-            <div class="badge-row"><span class="badge teal" data-i18n="tag.custom">custom</span><span class="badge blue" data-i18n="tag.capture">capture</span><span class="badge purple" data-i18n="tag.consulting">consulting</span></div>
-            <svg viewBox="0 0 420 190" preserveAspectRatio="none">
-              <path d="M34 126 C78 72 128 89 165 118 C202 148 245 151 282 112 C319 73 365 72 392 108" fill="none" stroke="rgba(255,255,255,.36)" stroke-width="10" stroke-linecap="round"/>
-              <path d="M60 58 H178 M60 92 H138 M232 62 H360 M232 96 H322" stroke="rgba(117,211,214,.44)" stroke-width="9" stroke-linecap="round"/>
-              <circle cx="95" cy="142" r="20" fill="rgba(117,211,214,.34)"/>
-              <circle cx="210" cy="142" r="20" fill="rgba(245,177,98,.30)"/>
-              <circle cx="325" cy="142" r="20" fill="rgba(156,124,255,.28)"/>
-              <path d="M112 142 H190 M228 142 H305" stroke="rgba(255,255,255,.34)" stroke-width="7" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="card-body">
-            <h3 data-i18n="dataset.custom.title">Custom Data</h3>
-            <p data-i18n="dataset.custom.desc">Need a motion that is not listed here? We can capture new human behavior data with MEVA.</p>
-            <div class="specs">
-              <div class="spec"><small data-i18n="dataset.custom.subject_label">Subject</small><b data-i18n="dataset.custom.subject_value">your choice</b></div>
-              <div class="spec"><small data-i18n="dataset.custom.task_label">Task</small><b data-i18n="dataset.custom.task_value">your request</b></div>
-              <div class="spec"><small data-i18n="dataset.custom.format_label">Format</small><b data-i18n="dataset.custom.format_value">your request</b></div>
-              <div class="spec"><small data-i18n="dataset.custom.usecase_label">Use case</small><b data-i18n="dataset.custom.usecase_value">your request</b></div>
-            </div>
-            <div class="card-footer"><span class="tiny-link" data-i18n="capsule.view_details">View capsule →</span><span class="access" data-i18n="access.custom">Custom</span></div>
-            <div class="download-details request-details">
-              <button type="button" class="request-trigger" data-dataset-id="custom" data-request-kind="custom" data-dataset-title-key="dataset.custom.title" data-request-text-key="dataset.custom.request_text" data-i18n="dataset.custom.request">Request this capsule →</button>
-            </div>
-
-
-          </div>
-        </article>
-
+      <div class="cards" id="capsuleCards" data-capsule-cards>
+        <p class="capsule-loading">Loading capsules...</p>
       </div>
       <div class="inquiry-strip">
         <p>
@@ -2260,7 +2096,7 @@
         </label>
         <label>
           <span class="request-label-row"><span data-i18n="request.field.organization">Affiliation</span><span class="request-optional" data-i18n="request.field.optional">Optional</span></span>
-          <input type="text" name="organization" data-request-organization data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization">
+          <input type="text" name="affiliation" data-request-affiliation data-i18n-placeholder="download.company_placeholder" placeholder="Company / Organization">
         </label>
         <label class="standard-purpose">
           <span class="request-label-row"><span data-i18n="request.field.purpose">Intended use</span><span class="request-optional" data-i18n="request.field.optional">Optional</span></span>
@@ -2295,6 +2131,7 @@
   </div>
 
   <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/capsule-renderer.js"></script>
   <script src="assets/js/download-request.js"></script>
 </body>
 </html>

@@ -8,15 +8,23 @@
   const datasetNameEl = modal.querySelector('[data-request-dataset-name]');
   const datasetIdInput = modal.querySelector('[data-request-dataset-id]');
   const emailInput = modal.querySelector('[data-request-email]');
-  const organizationInput = modal.querySelector('[data-request-organization]');
+  const affiliationInput = modal.querySelector('[data-request-affiliation], [data-request-organization]');
   const purposeInput = modal.querySelector('[data-request-purpose]');
   const customDetailsInput = modal.querySelector('[data-custom-details]');
   const consentInput = modal.querySelector('[data-request-consent]');
   const statusEl = modal.querySelector('[data-request-status]');
+  const submitButton = form.querySelector('button[type="submit"]');
   const dialogEl = modal.querySelector('.request-dialog');
   const termsBoxEl = modal.querySelector('.terms-box');
 
+  // In production, set one of these from the hosting page or a tiny config script:
+  // window.MEVA_REQUEST_ENDPOINT = '/api/download-request';
+  // The endpoint receives dataset_id and requester metadata only. It should resolve
+  // the actual Dropbox Transfer / S3 signed URL server-side and email it to the user.
+  const REQUEST_ENDPOINT = window.MEVA_REQUEST_ENDPOINT || form.getAttribute('data-request-endpoint') || '';
+
   let lastFocused = null;
+  let isSubmitting = false;
 
   function t(key, fallback) {
     return (window.MEVA_MESSAGES && window.MEVA_MESSAGES[key]) || fallback || key;
@@ -35,14 +43,24 @@
   }
 
   function setStatus(message, isError = false) {
+    if (!statusEl) return;
     statusEl.textContent = message || '';
     statusEl.classList.toggle('error', Boolean(isError));
   }
 
+  function setSubmitting(nextValue) {
+    isSubmitting = Boolean(nextValue);
+    if (submitButton) submitButton.disabled = isSubmitting;
+    form.classList.toggle('is-submitting', isSubmitting);
+  }
+
   function getDatasetName(button) {
+    const directTitle = button.getAttribute('data-dataset-title');
+    if (directTitle) return directTitle;
     const titleKey = button.getAttribute('data-dataset-title-key');
-    const translated = t(titleKey, '');
+    const translated = titleKey ? t(titleKey, '') : '';
     if (translated && translated !== titleKey) return translated;
+    if ((button.getAttribute('data-dataset-id') || '') === 'custom') return t('nav.custom_data', 'Custom Data');
     const card = button.closest('.dataset-card');
     const h3 = card ? card.querySelector('h3') : null;
     return h3 ? h3.textContent.trim() : button.getAttribute('data-dataset-id');
@@ -54,6 +72,7 @@
     const datasetName = getDatasetName(button);
     const kind = button.getAttribute('data-request-kind') || 'dataset';
     form.reset();
+    setSubmitting(false);
     datasetIdInput.value = datasetId;
     datasetNameEl.textContent = datasetName;
     modal.setAttribute('data-request-kind', kind);
@@ -83,17 +102,69 @@
   }
 
   function closeModal() {
+    if (isSubmitting) return;
     modal.hidden = true;
     document.body.style.overflow = '';
     setStatus('');
     if (lastFocused) lastFocused.focus();
   }
 
-  document.querySelectorAll('[data-dataset-id].request-trigger').forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      openModal(button);
+  function buildPayload(kind, email, customDetails) {
+    const payload = {
+      dataset_id: datasetIdInput.value,
+      email,
+      affiliation: affiliationInput ? affiliationInput.value.trim() : '',
+      consent: consentInput.checked,
+      language: window.MEVA_LANG || document.documentElement.lang || 'en',
+      request_kind: kind
+    };
+
+    if (kind === 'custom') {
+      payload.request_details = customDetails;
+    } else {
+      payload.intended_use = purposeInput ? purposeInput.value.trim() : '';
+    }
+
+    return payload;
+  }
+
+  async function submitToEndpoint(payload) {
+    const response = await fetch(REQUEST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
+
+    let body = null;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => null);
+    }
+
+    if (!response.ok) {
+      const message = body && (body.error || body.message);
+      throw new Error(message || `Request failed: ${response.status}`);
+    }
+
+    return body;
+  }
+
+  function storeMockRequest(payload) {
+    const stored = JSON.parse(localStorage.getItem('mevaCloudMockRequests') || '[]');
+    stored.push({
+      ...payload,
+      dataset_name: datasetNameEl.textContent,
+      requested_at: new Date().toISOString(),
+      mode: 'frontend-mock'
+    });
+    localStorage.setItem('mevaCloudMockRequests', JSON.stringify(stored));
+  }
+
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-dataset-id].request-trigger');
+    if (!button) return;
+    event.preventDefault();
+    openModal(button);
   });
 
   modal.querySelectorAll('[data-request-cancel]').forEach((button) => {
@@ -108,8 +179,10 @@
     emailInput.value = normalizeEmail(emailInput.value);
   });
 
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (isSubmitting) return;
+
     const email = normalizeEmail(emailInput.value);
     emailInput.value = email;
 
@@ -139,25 +212,28 @@
       return;
     }
 
-    const request = {
-      dataset_id: datasetIdInput.value,
-      dataset_name: datasetNameEl.textContent,
-      email,
-      organization: organizationInput.value.trim(),
-      purpose: purposeInput ? purposeInput.value.trim() : '',
-      custom_details: customDetails,
-      request_kind: kind,
-      language: window.MEVA_LANG || document.documentElement.lang || 'en',
-      requested_at: new Date().toISOString(),
-      mode: 'frontend-mock'
-    };
+    const payload = buildPayload(kind, email, customDetails);
 
-    const stored = JSON.parse(localStorage.getItem('mevaCloudMockRequests') || '[]');
-    stored.push(request);
-    localStorage.setItem('mevaCloudMockRequests', JSON.stringify(stored));
+    setSubmitting(true);
+    setStatus(t('request.status.submitting', 'Sending request...'));
 
-    setStatus(kind === 'custom'
-      ? t('custom.success.mock', 'Test mode: custom data request accepted. We would contact you by email.')
-      : t('request.success.mock', 'Test mode: request accepted. A download link would be sent by email.'));
+    try {
+      if (REQUEST_ENDPOINT) {
+        await submitToEndpoint(payload);
+        setStatus(kind === 'custom'
+          ? t('custom.success.sent', 'Your custom data request has been sent. We will contact you by email.')
+          : t('request.success.sent', 'Your request has been sent. We will email the download link after review.'));
+      } else {
+        storeMockRequest(payload);
+        setStatus(kind === 'custom'
+          ? t('custom.success.mock', 'Test mode: custom data request accepted. We would contact you by email.')
+          : t('request.success.mock', 'Test mode: request accepted. A download link would be sent by email.'));
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus(t('request.error.submit_failed', 'Could not send the request. Please try again later.'), true);
+    } finally {
+      setSubmitting(false);
+    }
   });
 })();

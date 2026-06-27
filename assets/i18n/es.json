@@ -240,5 +240,15 @@
   "custom.field.details": "Detalles de la solicitud",
   "custom.placeholder.details": "Sujetos, tarea, formato, caso de uso, calendario deseado, etc.",
   "custom.error.details_required": "Ingrese los detalles de su solicitud de datos personalizados.",
-  "custom.success.mock": "Modo de prueba: solicitud de datos personalizados aceptada. Nos pondríamos en contacto por correo electrónico."
+  "custom.success.mock": "Modo de prueba: solicitud de datos personalizados aceptada. Nos pondríamos en contacto por correo electrónico.",
+  "request.status.submitting": "Enviando solicitud...",
+  "request.success.sent": "Su solicitud ha sido enviada. Tras la revisión, enviaremos el enlace de descarga por correo electrónico.",
+  "custom.success.sent": "Su solicitud de datos personalizados ha sido enviada. Nos pondremos en contacto por correo electrónico.",
+  "request.error.submit_failed": "No se pudo enviar la solicitud. Inténtelo de nuevo más tarde.",
+  "category.basic": "basic",
+  "category.dance": "dance",
+  "category.working": "working",
+  "datatype.motion_bvh": "motion/bvh",
+  "datatype.gcp_csv": "gcp/csv",
+  "datatype.exo_mp4": "exo/mp4"
 }

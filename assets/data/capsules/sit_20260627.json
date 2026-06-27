@@ -1,0 +1,94 @@
+{
+  "id": "sit",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.dummy",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "sit",
+  "tags": [
+    {
+      "key": "tag.motion",
+      "class": "teal"
+    },
+    {
+      "key": "tag.video",
+      "class": "blue"
+    },
+    {
+      "key": "tag.daily",
+      "class": "orange"
+    }
+  ],
+  "title": {
+    "en": "Sit-to-Stand",
+    "zh-CN": "坐立动作",
+    "de": "Aufstehen und Hinsetzen",
+    "fr": "Assis-debout",
+    "es": "Sentarse y levantarse",
+    "ja": "立ち座り"
+  },
+  "description": {
+    "en": "Placeholder dataset for daily transfer motions such as sitting, standing and balance recovery.",
+    "zh-CN": "从坐姿到站姿的日常动作，用于姿势转换和支撑控制学习。",
+    "de": "Alltagsbewegungen vom Sitzen zum Stehen für das Lernen von Übergängen und Stabilität.",
+    "fr": "Mouvement quotidien de passage de la position assise à debout pour l’apprentissage des transitions posturales.",
+    "es": "Dataset provisional para movimientos cotidianos de transferencia, como sentarse, levantarse y recuperar el equilibrio.",
+    "ja": "立ち上がり、着座、バランス回復などの日常移動動作を想定したダミーデータセット。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Dummy",
+        "zh-CN": "Dummy",
+        "de": "Dummy",
+        "fr": "Dummy",
+        "es": "Dummy",
+        "ja": "Dummy"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Sit / Stand",
+        "zh-CN": "Sit / Stand",
+        "de": "Sit / Stand",
+        "fr": "Sit / Stand",
+        "es": "Sit / Stand",
+        "ja": "着座 / 起立"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "BVH / CSV",
+        "zh-CN": "BVH / CSV",
+        "de": "BVH / CSV",
+        "fr": "BVH / CSV",
+        "es": "BVH / CSV",
+        "ja": "BVH / CSV"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Daily motion",
+        "zh-CN": "Daily motion",
+        "de": "Daily motion",
+        "fr": "Daily motion",
+        "es": "Daily motion",
+        "ja": "日常動作"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Sit-to-Stand Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Sit-to-Stand Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Sit-to-Stand Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Sit-to-Stand Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Sit-to-Stand Dataset</strong>.",
+    "ja": "<strong>立ち座りデータセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  }
+}

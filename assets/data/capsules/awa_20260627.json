@@ -1,0 +1,103 @@
+{
+  "id": "awa",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.sample",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "awa",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    }
+  ],
+  "title": {
+    "en": "Awa Odori",
+    "zh-CN": "阿波舞",
+    "de": "Awa Odori",
+    "fr": "Awa Odori",
+    "es": "Awa Odori",
+    "ja": "阿波踊り"
+  },
+  "description": {
+    "en": "Traditional Japanese festival dance data with rhythmic stepping and characteristic upper-body gestures.",
+    "zh-CN": "包含节奏步伐和特征性上肢动作的日本传统祭典舞蹈数据。",
+    "de": "Traditionelle japanische Festtanzdaten mit rhythmischen Schritten und charakteristischen Armbewegungen.",
+    "fr": "Danse traditionnelle japonaise avec pas rythmiques et gestes caractéristiques du haut du corps.",
+    "es": "Datos de danza tradicional japonesa de festival con pasos rítmicos y gestos característicos de la parte superior del cuerpo.",
+    "ja": "リズム歩行と特徴的な上肢動作を含む、日本の伝統的な祭り踊りデータ。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Festival dance",
+        "zh-CN": "Festival dance",
+        "de": "Festival dance",
+        "fr": "Festival dance",
+        "es": "Festival dance",
+        "ja": "祭り踊り"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv",
+        "zh-CN": "motion/bvh / gcp/csv",
+        "de": "motion/bvh / gcp/csv",
+        "fr": "motion/bvh / gcp/csv",
+        "es": "motion/bvh / gcp/csv",
+        "ja": "motion/bvh / gcp/csv"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Cultural motion",
+        "zh-CN": "Cultural motion",
+        "de": "Cultural motion",
+        "fr": "Cultural motion",
+        "es": "Cultural motion",
+        "ja": "文化的動作"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Awa Odori Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Awa Odori Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Awa Odori Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Awa Odori Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Awa Odori Dataset</strong>.",
+    "ja": "<strong>阿波踊りデータセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/awa.png",
+  "category": "dance",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    }
+  ]
+}

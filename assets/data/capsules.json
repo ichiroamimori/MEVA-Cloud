@@ -1,0 +1,58 @@
+{
+  "capsules": [
+    {
+      "id": "walking",
+      "file": "capsules/walking_20260627.json",
+      "enabled": true,
+      "order": 10
+    },
+    {
+      "id": "jogging",
+      "file": "capsules/jogging_20260627.json",
+      "enabled": true,
+      "order": 20
+    },
+    {
+      "id": "pirouette",
+      "file": "capsules/pirouette_20260627.json",
+      "enabled": true,
+      "order": 30
+    },
+    {
+      "id": "jazz",
+      "file": "capsules/jazz_20260627.json",
+      "enabled": true,
+      "order": 40
+    },
+    {
+      "id": "radio",
+      "file": "capsules/radio_20260627.json",
+      "enabled": true,
+      "order": 50
+    },
+    {
+      "id": "awa",
+      "file": "capsules/awa_20260627.json",
+      "enabled": true,
+      "order": 60
+    },
+    {
+      "id": "lettuce_transplant",
+      "file": "capsules/lettuce_transplant_20260627.json",
+      "enabled": true,
+      "order": 70
+    },
+    {
+      "id": "lettuce_selection",
+      "file": "capsules/lettuce_selection_20260627.json",
+      "enabled": true,
+      "order": 80
+    },
+    {
+      "id": "custom",
+      "file": "capsules/custom_20260627.json",
+      "enabled": true,
+      "order": 90
+    }
+  ]
+}

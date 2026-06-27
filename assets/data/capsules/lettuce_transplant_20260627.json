@@ -1,0 +1,111 @@
+{
+  "id": "lettuce_transplant",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.dummy",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "lettuce_transplant",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    },
+    {
+      "key": "datatype.exo_mp4",
+      "class": "blue"
+    }
+  ],
+  "title": {
+    "en": "Lettuce Transplanting",
+    "zh-CN": "Lettuce Transplanting",
+    "de": "Lettuce Transplanting",
+    "fr": "Lettuce Transplanting",
+    "es": "Lettuce Transplanting",
+    "ja": "レタス移植"
+  },
+  "description": {
+    "en": "A lettuce seedling transplanting task for plant-factory and agricultural workflows, including work posture, reaching motion and foot contact information for Physical AI.",
+    "zh-CN": "A lettuce seedling transplanting task for plant-factory and agricultural workflows, including work posture, reaching motion and foot contact information for Physical AI.",
+    "de": "A lettuce seedling transplanting task for plant-factory and agricultural workflows, including work posture, reaching motion and foot contact information for Physical AI.",
+    "fr": "A lettuce seedling transplanting task for plant-factory and agricultural workflows, including work posture, reaching motion and foot contact information for Physical AI.",
+    "es": "A lettuce seedling transplanting task for plant-factory and agricultural workflows, including work posture, reaching motion and foot contact information for Physical AI.",
+    "ja": "植物工場や農業現場を想定したレタス苗の移植タスク。作業姿勢、手の到達、足元接地を含むPhysical AI向けの行動データです。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Pick / Transplant / Place",
+        "zh-CN": "Pick / Transplant / Place",
+        "de": "Pick / Transplant / Place",
+        "fr": "Pick / Transplant / Place",
+        "es": "Pick / Transplant / Place",
+        "ja": "Pick / Transplant / Place"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv / exo/mp4",
+        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
+        "de": "motion/bvh / gcp/csv / exo/mp4",
+        "fr": "motion/bvh / gcp/csv / exo/mp4",
+        "es": "motion/bvh / gcp/csv / exo/mp4",
+        "ja": "motion/bvh / gcp/csv / exo/mp4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Agricultural work",
+        "zh-CN": "Agricultural work",
+        "de": "Agricultural work",
+        "fr": "Agricultural work",
+        "es": "Agricultural work",
+        "ja": "Agricultural work"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Lettuce Transplanting Dataset</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Lettuce Transplanting Dataset</strong>.",
+    "de": "Send a time-limited download link for <strong>Lettuce Transplanting Dataset</strong>.",
+    "fr": "Send a time-limited download link for <strong>Lettuce Transplanting Dataset</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Lettuce Transplanting Dataset</strong>.",
+    "ja": "<strong>レタス移植データセット</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/lettuce_transplant.png",
+  "category": "working",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    },
+    {
+      "kind": "exo",
+      "format": "mp4"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "id": "radio",
+  "catalog_version": "2026-06-27",
+  "dataset_version": "0.1.0",
+  "status_key": "access.sample",
+  "request_enabled": true,
+  "request_kind": "dataset",
+  "request_button_key": "capsule.request",
+  "thumb_class": "radio",
+  "tags": [
+    {
+      "key": "datatype.motion_bvh",
+      "class": "teal"
+    },
+    {
+      "key": "datatype.gcp_csv",
+      "class": "purple"
+    },
+    {
+      "key": "datatype.exo_mp4",
+      "class": "blue"
+    }
+  ],
+  "title": {
+    "en": "Radio Calisthenics",
+    "zh-CN": "广播体操",
+    "de": "Radiogymnastik",
+    "fr": "Gymnastique radio",
+    "es": "Radio calisthenics",
+    "ja": "ラジオ体操"
+  },
+  "description": {
+    "en": "A standard Japanese exercise routine with structured full-body movements, presented as a repeatable motion sequence.",
+    "zh-CN": "日本标准体操动作，作为可重复的结构化动作序列采集。",
+    "de": "Eine standardisierte japanische Übungsroutine als wiederholbare Bewegungssequenz.",
+    "fr": "Routine d’exercices japonaise standardisée, enregistrée comme séquence de mouvements reproductible.",
+    "es": "Rutina japonesa estándar de ejercicios con movimientos estructurados de cuerpo completo, presentada como una secuencia repetible.",
+    "ja": "日本で広く行われている標準的な体操動作を、再現性のある定型動作シーケンスとして収録します。"
+  },
+  "specs": [
+    {
+      "label_key": "spec.subjects",
+      "value": {
+        "en": "Pilot",
+        "zh-CN": "Pilot",
+        "de": "Pilot",
+        "fr": "Pilot",
+        "es": "Pilot",
+        "ja": "Pilot"
+      }
+    },
+    {
+      "label_key": "spec.tasks",
+      "value": {
+        "en": "Exercise routine",
+        "zh-CN": "Exercise routine",
+        "de": "Exercise routine",
+        "fr": "Exercise routine",
+        "es": "Exercise routine",
+        "ja": "体操シーケンス"
+      }
+    },
+    {
+      "label_key": "spec.formats",
+      "value": {
+        "en": "motion/bvh / gcp/csv / exo/mp4",
+        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
+        "de": "motion/bvh / gcp/csv / exo/mp4",
+        "fr": "motion/bvh / gcp/csv / exo/mp4",
+        "es": "motion/bvh / gcp/csv / exo/mp4",
+        "ja": "motion/bvh / gcp/csv / exo/mp4"
+      }
+    },
+    {
+      "label_key": "spec.use",
+      "value": {
+        "en": "Structured motion",
+        "zh-CN": "Structured motion",
+        "de": "Structured motion",
+        "fr": "Structured motion",
+        "es": "Structured motion",
+        "ja": "定型動作"
+      }
+    }
+  ],
+  "request_text": {
+    "en": "Send a time-limited download link for <strong>Radio Calisthenics No.1</strong>.",
+    "zh-CN": "Send a time-limited download link for <strong>Radio Calisthenics No.1</strong>.",
+    "de": "Send a time-limited download link for <strong>Radio Calisthenics No.1</strong>.",
+    "fr": "Send a time-limited download link for <strong>Radio Calisthenics No.1</strong>.",
+    "es": "Enviar un enlace de descarga temporal para <strong>Radio Calisthenics No.1</strong>.",
+    "ja": "<strong>ラジオ体操第一</strong> の期限付きダウンロードリンクをメールで送信します。"
+  },
+  "thumbnail": "assets/images/capsules/radio.png",
+  "category": "dance",
+  "metadata_included": true,
+  "data_types": [
+    {
+      "kind": "motion",
+      "format": "bvh"
+    },
+    {
+      "kind": "gcp",
+      "format": "csv"
+    },
+    {
+      "kind": "exo",
+      "format": "mp4"
+    }
+  ]
+}
