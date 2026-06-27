@@ -208,12 +208,12 @@
 
     .hero-sub {
       display: block;
-      width: min(700px, 100%);
+      width: min(760px, 100%);
       height: 148px;
       margin-top: 0;
       color: #E7F3F4;
-      font-size: clamp(24px, 2.75vw, 38px);
-      line-height: 1.2;
+      font-size: clamp(23px, 2.55vw, 36px);
+      line-height: 1.18;
       letter-spacing: -.055em;
       font-weight: 850;
       overflow: visible;
@@ -908,18 +908,18 @@
 
     .why-table {
       width: 100%;
-      min-width: 1040px;
+      min-width: 980px;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: 13.5px;
     }
 
     .why-table th,
     .why-table td {
       border-bottom: 1px solid rgba(255,255,255,.08);
       border-right: 1px solid rgba(255,255,255,.07);
-      padding: 14px 15px;
+      padding: 13px 14px;
       vertical-align: top;
-      line-height: 1.44;
+      line-height: 1.42;
     }
 
     .why-table th:last-child,
@@ -929,13 +929,13 @@
     .why-table th {
       color: #F3FCFC;
       background: rgba(255,255,255,.075);
-      font-size: 14px;
+      font-size: 13.5px;
       text-align: left;
       white-space: nowrap;
     }
 
     .why-table td:first-child {
-      width: 210px;
+      width: 190px;
       color: #DDEEEE;
       font-weight: 800;
       background: rgba(255,255,255,.035);
@@ -951,44 +951,40 @@
       justify-content: center;
       min-height: 24px;
       padding: 4px 9px;
-      margin-bottom: 5px;
       border-radius: 999px;
       font-size: 12px;
       font-weight: 900;
+      line-height: 1;
       letter-spacing: .01em;
+      margin-bottom: 5px;
       white-space: nowrap;
-      border: 1px solid transparent;
     }
 
     .score-good {
-      color: #06231E;
-      background: linear-gradient(135deg, #37D7CA, #A6F6EA);
-      box-shadow: 0 0 18px rgba(55,215,202,.18);
+      color: #082C24;
+      background: linear-gradient(135deg, #52E6C8, #B8FFE9);
+      box-shadow: 0 0 18px rgba(82,230,200,.14);
     }
 
     .score-bad {
-      color: #2A0408;
-      background: linear-gradient(135deg, #FF5E7A, #FFB1BE);
-      box-shadow: 0 0 18px rgba(255,94,122,.18);
+      color: #3A0710;
+      background: linear-gradient(135deg, #FF6B83, #FFC1CA);
+      box-shadow: 0 0 18px rgba(255,94,122,.12);
     }
 
     .score-mid {
-      color: #241405;
-      background: linear-gradient(135deg, #FFD166, #FFE6A7);
-      box-shadow: 0 0 18px rgba(255,209,102,.14);
-    }
-
-    .score-neutral {
-      color: #EAF7F8;
-      background: rgba(255,255,255,.09);
-      border-color: rgba(255,255,255,.14);
+      color: #2D2100;
+      background: linear-gradient(135deg, #FFD166, #FFE9A6);
+      box-shadow: 0 0 18px rgba(255,209,102,.12);
     }
 
     .why-note {
       color: var(--muted);
       font-size: 13px;
       line-height: 1.55;
-      margin: 14px 4px 0;
+      margin: 14px auto 0;
+      max-width: 880px;
+      text-align: center;
     }
 
     .why-note strong { color: #ECF8F8; }
@@ -1390,11 +1386,11 @@
 
     .hero-sub {
       display: block;
-      width: min(700px, 100%);
+      width: min(760px, 100%);
       height: auto;
       min-height: 142px;
       margin-top: 0;
-      font-size: clamp(25px, 2.82vw, 39px);
+      font-size: clamp(24px, 2.55vw, 36px);
       line-height: 1.18;
       overflow: visible;
     }
@@ -1552,6 +1548,7 @@
         <button type="button" data-lang="zh-CN">中</button>
         <button type="button" data-lang="de">DE</button>
         <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="es">ES</button>
         <button type="button" data-lang="ja">日</button>
       </div>
     </div>
@@ -1674,7 +1671,7 @@
             <tbody>
               <tr><td data-i18n="why.row.method">Capture method</td><td data-i18n="why.val.camera">Camera-based</td><td data-i18n="why.val.camera">Camera-based</td><td data-i18n="why.val.imu">IMU-based</td><td class="meva-col" data-i18n="why.val.imu">IMU-based</td></tr>
               <tr><td data-i18n="why.row.sensors">Sensors / cameras</td><td data-i18n="why.val.one_camera">1 camera</td><td data-i18n="why.val.multi_camera">Multiple cameras</td><td data-i18n="why.val.simplified_imu_count">Approx. 6–12 IMUs</td><td class="meva-col" data-i18n-html="why.val.meva_imu_count"><span class="score score-good">18 IMUs</span></td></tr>
-              <tr><td data-i18n="why.row.accuracy">Full-body mocap accuracy</td><td data-i18n-html="why.val.mono_bad"><span class="score score-bad">Bad</span><br><span class="muted">Insufficient positional accuracy from monocular depth estimation</span></td><td data-i18n-html="why.val.multi_good"><span class="score score-good">Good</span><br><span class="muted">Accurate 3D reconstruction using calibrated multi-view cameras</span></td><td data-i18n-html="why.val.imu_bad"><span class="score score-bad">Bad</span><br><span class="muted">Not enough IMUs to cover the minimum 15 full-body segments</span></td><td class="meva-col" data-i18n-html="why.val.meva_good"><span class="score score-good">Good</span><br><span class="muted">Covers the required full-body segment structure</span></td></tr>
+              <tr><td data-i18n="why.row.accuracy">Full-body mocap accuracy</td><td data-i18n-html="why.val.mono_bad"><strong>Bad</strong><br><span class="muted">Insufficient positional accuracy from monocular depth estimation</span></td><td data-i18n-html="why.val.multi_good"><strong>Good</strong><br><span class="muted">Accurate 3D reconstruction using calibrated multi-view cameras</span></td><td data-i18n-html="why.val.imu_bad"><strong>Bad</strong><br><span class="muted">Not enough IMUs to cover the minimum 15 full-body segments</span></td><td class="meva-col" data-i18n-html="why.val.meva_good"><strong>Good</strong><br><span class="muted">Covers the required full-body segment structure</span></td></tr>
               <tr><td data-i18n="why.row.unseen">Ability to capture unseen or non-standard motion</td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td class="meva-col" data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td></tr>
               <tr><td data-i18n="why.row.studio">Dedicated studio requirement</td><td data-i18n-html="why.no_good"><span class="score score-good">No</span></td><td data-i18n-html="why.yes_bad"><span class="score score-bad">Yes</span></td><td data-i18n-html="why.no_good"><span class="score score-good">No</span></td><td class="meva-col" data-i18n-html="why.no_good"><span class="score score-good">No</span></td></tr>
               <tr><td data-i18n="why.row.field">Real-world / field usability</td><td data-i18n-html="why.level.medium_mid"><span class="score score-mid">Medium</span></td><td data-i18n-html="why.level.limited_bad"><span class="score score-bad">Limited</span></td><td data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td><td class="meva-col" data-i18n-html="why.level.good_good"><span class="score score-good">Good</span></td></tr>

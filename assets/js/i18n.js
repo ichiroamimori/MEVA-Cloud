@@ -1,4 +1,4 @@
-const SUPPORTED_LANGS = ['en', 'zh-CN', 'de', 'fr', 'ja'];
+const SUPPORTED_LANGS = ['en', 'zh-CN', 'de', 'fr', 'es', 'ja'];
 const DEFAULT_LANG = 'en';
 
 function getInitialLang() {
@@ -14,6 +14,7 @@ function getInitialLang() {
   if (browser.startsWith('zh')) return 'zh-CN';
   if (browser.startsWith('de')) return 'de';
   if (browser.startsWith('fr')) return 'fr';
+  if (browser.startsWith('es')) return 'es';
   return DEFAULT_LANG;
 }
 
