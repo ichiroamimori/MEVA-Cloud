@@ -2,7 +2,6 @@
   "id": "custom",
   "catalog_version": "2026-06-27",
   "dataset_version": null,
-  "status_key": "access.custom",
   "request_enabled": true,
   "request_kind": "custom",
   "request_button_key": "dataset.custom.request",
@@ -39,75 +38,18 @@
   },
   "specs": [
     {
-      "label": {
-        "en": "Subject",
-        "zh-CN": "受试者",
-        "de": "Probanden",
-        "fr": "Sujets",
-        "es": "Sujeto",
-        "ja": "被験者"
-      },
-      "value": {
-        "en": "your choice",
-        "zh-CN": "由您选择",
-        "de": "Ihre Wahl",
-        "fr": "votre choix",
-        "es": "su elección",
-        "ja": "あなたのチョイス"
-      }
+      "label_key": "spec.scale",
+      "value": "Custom scope"
     },
     {
-      "label": {
-        "en": "Task",
-        "zh-CN": "任务",
-        "de": "Aufgabe",
-        "fr": "Tâche",
-        "es": "Tarea",
-        "ja": "タスク"
-      },
+      "label_key": "spec.use_case",
       "value": {
-        "en": "your request",
-        "zh-CN": "按您的需求",
-        "de": "nach Wunsch",
-        "fr": "selon vos besoins",
-        "es": "su solicitud",
-        "ja": "あなたの希望"
-      }
-    },
-    {
-      "label": {
-        "en": "Format",
-        "zh-CN": "格式",
-        "de": "Format",
-        "fr": "Format",
-        "es": "Formato",
-        "ja": "形式"
-      },
-      "value": {
-        "en": "your request",
-        "zh-CN": "按您的需求",
-        "de": "nach Wunsch",
-        "fr": "selon vos besoins",
-        "es": "su solicitud",
-        "ja": "あなたの希望"
-      }
-    },
-    {
-      "label": {
-        "en": "Use case",
-        "zh-CN": "用途",
-        "de": "Zweck",
-        "fr": "Usage",
-        "es": "Caso de uso",
-        "ja": "用途"
-      },
-      "value": {
-        "en": "your request",
-        "zh-CN": "按您的需求",
-        "de": "nach Wunsch",
-        "fr": "selon vos besoins",
-        "es": "su solicitud",
-        "ja": "あなたの希望"
+        "en": "Custom data capture",
+        "ja": "用途別データ収集",
+        "zh-CN": "定制数据采集",
+        "de": "Benutzerdefinierte Datenerfassung",
+        "fr": "Capture de données sur mesure",
+        "es": "Captura de datos personalizada"
       }
     }
   ],
@@ -119,5 +61,14 @@
     "es": "Cuéntenos el comportamiento, sujetos, formatos y uso previsto que necesita. Conversaremos sobre un plan de captura MEVA personalizado.",
     "ja": "必要な動作、被験者、形式、用途をお知らせください。MEVAでのカスタム収集プランをご相談します。"
   },
-  "thumbnail": "assets/images/capsules/custom.png"
+  "thumbnail": "assets/images/capsules/custom.png",
+  "scale": "Custom scope",
+  "use_case": {
+    "en": "Custom data capture",
+    "ja": "用途別データ収集",
+    "zh-CN": "定制数据采集",
+    "de": "Benutzerdefinierte Datenerfassung",
+    "fr": "Capture de données sur mesure",
+    "es": "Captura de datos personalizada"
+  }
 }

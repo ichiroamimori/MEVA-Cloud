@@ -2,7 +2,6 @@
   "id": "awa",
   "catalog_version": "2026-06-27",
   "dataset_version": "0.1.0",
-  "status_key": "access.sample",
   "request_enabled": true,
   "request_kind": "dataset",
   "request_button_key": "capsule.request",
@@ -35,47 +34,18 @@
   },
   "specs": [
     {
-      "label_key": "spec.subjects",
-      "value": {
-        "en": "Pilot",
-        "zh-CN": "Pilot",
-        "de": "Pilot",
-        "fr": "Pilot",
-        "es": "Pilot",
-        "ja": "Pilot"
-      }
+      "label_key": "spec.scale",
+      "value": "Pilot / TBD trials"
     },
     {
-      "label_key": "spec.tasks",
+      "label_key": "spec.use_case",
       "value": {
-        "en": "Festival dance",
-        "zh-CN": "Festival dance",
-        "de": "Festival dance",
-        "fr": "Festival dance",
-        "es": "Festival dance",
-        "ja": "祭り踊り"
-      }
-    },
-    {
-      "label_key": "spec.formats",
-      "value": {
-        "en": "motion/bvh / gcp/csv",
-        "zh-CN": "motion/bvh / gcp/csv",
-        "de": "motion/bvh / gcp/csv",
-        "fr": "motion/bvh / gcp/csv",
-        "es": "motion/bvh / gcp/csv",
-        "ja": "motion/bvh / gcp/csv"
-      }
-    },
-    {
-      "label_key": "spec.use",
-      "value": {
-        "en": "Cultural motion",
-        "zh-CN": "Cultural motion",
-        "de": "Cultural motion",
-        "fr": "Cultural motion",
-        "es": "Cultural motion",
-        "ja": "文化的動作"
+        "en": "Rhythmic motion",
+        "ja": "リズム動作",
+        "zh-CN": "节律动作",
+        "de": "Rhythmische Bewegung",
+        "fr": "Mouvement rythmique",
+        "es": "Movimiento rítmico"
       }
     }
   ],
@@ -99,5 +69,14 @@
       "kind": "gcp",
       "format": "csv"
     }
-  ]
+  ],
+  "scale": "Pilot / TBD trials",
+  "use_case": {
+    "en": "Rhythmic motion",
+    "ja": "リズム動作",
+    "zh-CN": "节律动作",
+    "de": "Rhythmische Bewegung",
+    "fr": "Mouvement rythmique",
+    "es": "Movimiento rítmico"
+  }
 }

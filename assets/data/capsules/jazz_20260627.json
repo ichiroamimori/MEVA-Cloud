@@ -2,7 +2,6 @@
   "id": "jazz",
   "catalog_version": "2026-06-27",
   "dataset_version": "0.1.0",
-  "status_key": "access.sample",
   "request_enabled": true,
   "request_kind": "dataset",
   "request_button_key": "capsule.request",
@@ -39,47 +38,18 @@
   },
   "specs": [
     {
-      "label_key": "spec.subjects",
-      "value": {
-        "en": "Pilot",
-        "zh-CN": "Pilot",
-        "de": "Pilot",
-        "fr": "Pilot",
-        "es": "Pilot",
-        "ja": "Pilot"
-      }
+      "label_key": "spec.scale",
+      "value": "Pilot / TBD trials"
     },
     {
-      "label_key": "spec.tasks",
-      "value": {
-        "en": "Dance sequence",
-        "zh-CN": "Dance sequence",
-        "de": "Dance sequence",
-        "fr": "Dance sequence",
-        "es": "Dance sequence",
-        "ja": "ダンスシーケンス"
-      }
-    },
-    {
-      "label_key": "spec.formats",
-      "value": {
-        "en": "motion/bvh / gcp/csv / exo/mp4",
-        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
-        "de": "motion/bvh / gcp/csv / exo/mp4",
-        "fr": "motion/bvh / gcp/csv / exo/mp4",
-        "es": "motion/bvh / gcp/csv / exo/mp4",
-        "ja": "motion/bvh / gcp/csv / exo/mp4"
-      }
-    },
-    {
-      "label_key": "spec.use",
+      "label_key": "spec.use_case",
       "value": {
         "en": "Expressive motion",
-        "zh-CN": "Expressive motion",
-        "de": "Expressive motion",
-        "fr": "Expressive motion",
-        "es": "Expressive motion",
-        "ja": "表現動作"
+        "ja": "表現動作",
+        "zh-CN": "表现性动作",
+        "de": "Ausdrucksbewegung",
+        "fr": "Mouvement expressif",
+        "es": "Movimiento expresivo"
       }
     }
   ],
@@ -107,5 +77,14 @@
       "kind": "exo",
       "format": "mp4"
     }
-  ]
+  ],
+  "scale": "Pilot / TBD trials",
+  "use_case": {
+    "en": "Expressive motion",
+    "ja": "表現動作",
+    "zh-CN": "表现性动作",
+    "de": "Ausdrucksbewegung",
+    "fr": "Mouvement expressif",
+    "es": "Movimiento expresivo"
+  }
 }

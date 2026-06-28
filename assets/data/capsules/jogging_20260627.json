@@ -2,7 +2,6 @@
   "id": "jogging",
   "catalog_version": "2026-06-27",
   "dataset_version": "0.1.0",
-  "status_key": "access.sample",
   "request_enabled": true,
   "request_kind": "dataset",
   "request_button_key": "capsule.request",
@@ -39,47 +38,18 @@
   },
   "specs": [
     {
-      "label_key": "spec.subjects",
-      "value": {
-        "en": "Pilot",
-        "zh-CN": "Pilot",
-        "de": "Pilot",
-        "fr": "Pilot",
-        "es": "Pilot",
-        "ja": "Pilot"
-      }
+      "label_key": "spec.scale",
+      "value": "Pilot / TBD trials"
     },
     {
-      "label_key": "spec.tasks",
+      "label_key": "spec.use_case",
       "value": {
-        "en": "Jog / Pace change",
-        "zh-CN": "Jog / Pace change",
-        "de": "Jog / Pace change",
-        "fr": "Jog / Pace change",
-        "es": "Jog / Pace change",
-        "ja": "ジョギング / ペース変化"
-      }
-    },
-    {
-      "label_key": "spec.formats",
-      "value": {
-        "en": "motion/bvh / gcp/csv / exo/mp4",
-        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
-        "de": "motion/bvh / gcp/csv / exo/mp4",
-        "fr": "motion/bvh / gcp/csv / exo/mp4",
-        "es": "motion/bvh / gcp/csv / exo/mp4",
-        "ja": "motion/bvh / gcp/csv / exo/mp4"
-      }
-    },
-    {
-      "label_key": "spec.use",
-      "value": {
-        "en": "Locomotion",
-        "zh-CN": "Locomotion",
-        "de": "Locomotion",
-        "fr": "Locomotion",
-        "es": "Locomotion",
-        "ja": "移動動作"
+        "en": "Dynamic locomotion",
+        "ja": "動的移動",
+        "zh-CN": "动态移动",
+        "de": "Dynamische Lokomotion",
+        "fr": "Locomotion dynamique",
+        "es": "Locomoción dinámica"
       }
     }
   ],
@@ -107,5 +77,14 @@
       "kind": "exo",
       "format": "mp4"
     }
-  ]
+  ],
+  "scale": "Pilot / TBD trials",
+  "use_case": {
+    "en": "Dynamic locomotion",
+    "ja": "動的移動",
+    "zh-CN": "动态移动",
+    "de": "Dynamische Lokomotion",
+    "fr": "Locomotion dynamique",
+    "es": "Locomoción dinámica"
+  }
 }

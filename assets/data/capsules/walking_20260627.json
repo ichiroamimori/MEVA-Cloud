@@ -2,7 +2,6 @@
   "id": "walking",
   "catalog_version": "2026-06-27",
   "dataset_version": "1.0.0",
-  "status_key": "access.sample",
   "request_enabled": true,
   "request_kind": "dataset",
   "request_button_key": "capsule.request",
@@ -39,47 +38,18 @@
   },
   "specs": [
     {
-      "label_key": "spec.subjects",
-      "value": {
-        "en": "30 people",
-        "zh-CN": "30 people",
-        "de": "30 people",
-        "fr": "30 people",
-        "es": "30 personas",
-        "ja": "30名"
-      }
+      "label_key": "spec.scale",
+      "value": "30 participants / 30 trials"
     },
     {
-      "label_key": "spec.tasks",
+      "label_key": "spec.use_case",
       "value": {
-        "en": "Walk / Stop / Turn",
-        "zh-CN": "Walk / Stop / Turn",
-        "de": "Walk / Stop / Turn",
-        "fr": "Walk / Stop / Turn",
-        "es": "Walk / Stop / Turn",
-        "ja": "歩行 / 停止 / 方向転換"
-      }
-    },
-    {
-      "label_key": "spec.formats",
-      "value": {
-        "en": "motion/bvh / gcp/csv / exo/mp4",
-        "zh-CN": "motion/bvh / gcp/csv / exo/mp4",
-        "de": "motion/bvh / gcp/csv / exo/mp4",
-        "fr": "motion/bvh / gcp/csv / exo/mp4",
-        "es": "motion/bvh / gcp/csv / exo/mp4",
-        "ja": "motion/bvh / gcp/csv / exo/mp4"
-      }
-    },
-    {
-      "label_key": "spec.use",
-      "value": {
-        "en": "Locomotion",
-        "zh-CN": "Locomotion",
-        "de": "Locomotion",
-        "fr": "Locomotion",
-        "es": "Locomotion",
-        "ja": "移動動作"
+        "en": "Humanoid locomotion",
+        "ja": "ヒューマノイド歩行",
+        "zh-CN": "人形机器人行走",
+        "de": "Humanoide Lokomotion",
+        "fr": "Locomotion humanoïde",
+        "es": "Locomoción humanoide"
       }
     }
   ],
@@ -107,5 +77,14 @@
       "kind": "exo",
       "format": "mp4"
     }
-  ]
+  ],
+  "scale": "30 participants / 30 trials",
+  "use_case": {
+    "en": "Humanoid locomotion",
+    "ja": "ヒューマノイド歩行",
+    "zh-CN": "人形机器人行走",
+    "de": "Humanoide Lokomotion",
+    "fr": "Locomotion humanoïde",
+    "es": "Locomoción humanoide"
+  }
 }

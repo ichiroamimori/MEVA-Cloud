@@ -3,7 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MEVA Cloud — Visual Sample EN/JP</title>
+  <title>MEVA Cloud — Multimodal Behavior Data for Physical AI</title>
+  <link rel="icon" href="assets/images/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/images/icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/images/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="site.webmanifest" />
+  <meta name="theme-color" content="#05262C" />
   <style>
     :root {
       --bg-0: #05262C;
@@ -87,32 +93,17 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
-      letter-spacing: -.02em;
-      min-width: 210px;
+      letter-spacing: -.01em;
+      min-width: 140px;
     }
 
-    .brand-mark {
-      width: 34px;
-      height: 34px;
-      border-radius: 11px;
-      background:
-        linear-gradient(135deg, rgba(46,230,200,1), rgba(91,140,255,.92));
-      position: relative;
-      box-shadow: 0 0 30px rgba(46,230,200,.35);
+    .brand-title {
+      display: block;
+      color: var(--text);
+      font-size: 19px;
+      font-weight: 720;
+      line-height: 1;
     }
-
-    .brand-mark::after {
-      content: "";
-      position: absolute;
-      inset: 8px;
-      border-radius: 50%;
-      border: 2px solid rgba(3,6,7,.72);
-      border-left-color: transparent;
-    }
-
-    .brand strong { font-size: 18px; }
-    .brand span { color: var(--muted); font-size: 12px; display: block; margin-top: 1px; }
 
     .links {
       display: flex;
@@ -503,6 +494,11 @@
       overflow: hidden;
     }
 
+    #datasets .section-title p {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
     .cards {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -518,7 +514,7 @@
       transition: transform .2s ease, border-color .2s ease;
       display: flex;
       flex-direction: column;
-      height: 522px;
+      height: 452px;
     }
 
     .dataset-card:hover {
@@ -716,7 +712,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 7px;
       margin-bottom: 10px;
-      height: 112px;
+      height: 58px;
       flex: 0 0 auto;
     }
 
@@ -740,32 +736,6 @@
     .spec b {
       font-size: 13px;
       color: #E9F5F5;
-    }
-
-    .card-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      border-top: 1px solid rgba(255,255,255,.08);
-      padding-top: 10px;
-      height: 46px;
-      flex: 0 0 auto;
-    }
-
-    .tiny-link {
-      color: var(--teal);
-      font-weight: 800;
-      font-size: 13px;
-    }
-
-    .access {
-      color: #0A1111;
-      background: #EAFDFC;
-      padding: 7px 9px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 900;
     }
 
     .modalities {
@@ -982,6 +952,13 @@
     .why-table strong { color: #FFFFFF; }
     .why-table .muted { color: var(--muted); font-size: 12px; }
     .why-table .meva-col { background: rgba(46,230,200,.045); }
+    .why-table th.meva-col {
+      color: #F4FFFC;
+      background: rgba(46,230,200,.13);
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: .015em;
+    }
 
     .score {
       display: inline-flex;
@@ -1021,7 +998,7 @@
       font-size: 13px;
       line-height: 1.55;
       margin: 14px auto 0;
-      max-width: 880px;
+      max-width: 1060px;
       text-align: center;
     }
 
@@ -1476,7 +1453,7 @@
       white-space: normal;
     }
 
-    .dataset-card { height: 520px; }
+    .dataset-card { height: 450px; }
     .thumb { height: 142px; flex: 0 0 auto; }
     .card-body { padding: 14px; display: flex; flex-direction: column; flex: 1 1 auto; }
     .card-body h3 {
@@ -1496,10 +1473,9 @@
       -webkit-line-clamp: 3;
       overflow: hidden;
     }
-    .specs { height: 104px; gap: 7px; margin-bottom: 7px; flex: 0 0 auto; }
+    .specs { height: 56px; gap: 7px; margin-bottom: 7px; flex: 0 0 auto; }
     .spec { min-height: 48px; padding: 7px 9px; }
     .spec small { margin-bottom: 3px; }
-    .card-footer { height: 40px; padding-top: 7px; flex: 0 0 auto; }
     .download-details { height: 44px; margin-top: 5px; padding-top: 7px; flex: 0 0 auto; }
     .download-details[open] { height: auto; }
     .download-details summary { min-height: 32px; }
@@ -1860,9 +1836,8 @@
 <body>
   <header>
     <div class="wrap nav">
-      <a class="brand" href="#">
-        <span class="brand-mark"></span>
-        <span><strong>MEVA Cloud</strong><span data-i18n="brand.by">by Xenoma</span></span>
+      <a class="brand" href="#" aria-label="MEVA Cloud">
+        <strong class="brand-title">MEVA Cloud</strong>
       </a>
       <nav class="links" aria-label="Primary">
         <a href="#datasets" data-i18n="nav.datasets">Datasets</a>
@@ -2057,7 +2032,7 @@
           <a href="#datasets" data-i18n="footer.capsules">MEVA Omni Capsules</a>
           <a href="#modalities" data-i18n="footer.modalities">Data Modalities</a>
           <a href="#" data-i18n="footer.data_terms">Data Terms</a>
-          <a href="#datasets" data-i18n="footer.request">Request Sample</a>
+          <a href="#datasets" data-i18n="footer.request">Request data</a>
         </div>
         <div class="footer-col">
           <h4 data-i18n="footer.company">Company</h4>

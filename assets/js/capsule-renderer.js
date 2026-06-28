@@ -58,7 +58,6 @@
     const description = localize(capsule.description, lang);
     const requestKind = capsule.request_kind || 'dataset';
     const requestButtonKey = capsule.request_button_key || 'capsule.request';
-    const statusKey = capsule.status_key || 'access.sample';
     const category = capsule.category
       ? `<span class="badge category ${escapeHtml(capsule.category)}">${escapeHtml(t(`category.${capsule.category}`, capsule.category))}</span>`
       : '';
@@ -96,7 +95,6 @@
           <h3>${escapeHtml(title)}</h3>
           <p>${escapeHtml(description)}</p>
           <div class="specs">${specs}</div>
-          <div class="card-footer"><span class="tiny-link">${escapeHtml(t('capsule.view_details', 'View capsule →'))}</span><span class="access">${escapeHtml(t(statusKey, 'Sample'))}</span></div>
           <div class="download-details request-details">
             <button type="button" class="request-trigger" data-dataset-id="${escapeHtml(capsule.id)}"${requestKindAttr} data-dataset-title="${escapeHtml(title)}">${escapeHtml(t(requestButtonKey, 'Request this capsule →'))}</button>
           </div>
