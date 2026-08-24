@@ -7,3 +7,19 @@ dist/
 *.zip
 *.pptx
 *.pdf
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local MEVA Cloud workspace data
+workspace/users/*
+!workspace/users/.gitkeep
+
+# Runtime-generated files
+server/uploads/
+server/outputs/
+README_RETARGET_WEB.txt
+SPATIAL_DIRECTION_IMPLEMENTATION.md
+VIEWER_IMPLEMENTATION.md
+workspace/

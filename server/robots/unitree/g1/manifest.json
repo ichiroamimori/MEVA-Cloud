@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+
+  "manufacturer": {
+    "id": "unitree",
+    "name": "Unitree Robotics"
+  },
+
+  "robot": {
+    "id": "g1",
+    "name": "Unitree G1"
+  },
+
+  "vendor_directory": "vendor",
+
+  "variants": [
+    {
+      "id": "g1_29dof",
+      "name": "Unitree G1 29DoF",
+      "short_name": "29DoF",
+      "dof": 29,
+      "model": {
+        "format": "mujoco",
+        "file": "vendor/g1_29dof.xml"
+      },
+      "source": {
+        "urdf": "vendor/g1_29dof.urdf"
+      },
+      "enabled": true
+    },
+    {
+      "id": "g1_23dof",
+      "name": "Unitree G1 23DoF",
+      "short_name": "23DoF",
+      "dof": 23,
+      "model": {
+        "format": "mujoco",
+        "file": "vendor/g1_23dof.xml"
+      },
+      "source": {
+        "urdf": "vendor/g1_23dof.urdf"
+      },
+      "enabled": true
+    },
+    {
+      "id": "g1_23dof_rev_1_0",
+      "name": "Unitree G1 23DoF Rev 1.0",
+      "short_name": "23DoF Rev 1.0",
+      "dof": 23,
+      "model": {
+        "format": "mujoco",
+        "file": "vendor/g1_23dof_rev_1_0.xml"
+      },
+      "source": {
+        "urdf": "vendor/g1_23dof_rev_1_0.urdf"
+      },
+      "enabled": true
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 const SUPPORTED_LANGS = ['en', 'zh-CN', 'de', 'fr', 'es', 'ja'];
 const DEFAULT_LANG = 'en';
+const I18N_SCRIPT_URL = document.currentScript ? document.currentScript.src : new URL('assets/js/i18n.js', window.location.href).href;
 
 function getInitialLang() {
   const params = new URLSearchParams(window.location.search);
@@ -19,7 +20,8 @@ function getInitialLang() {
 }
 
 async function loadMessages(lang) {
-  const response = await fetch(`assets/i18n/${lang}.json`);
+  const languageUrl = new URL(`../i18n/${lang}.json`, I18N_SCRIPT_URL);
+  const response = await fetch(languageUrl);
   if (!response.ok) throw new Error(`Failed to load language: ${lang}`);
   return response.json();
 }
@@ -43,7 +45,13 @@ function applyMessages(messages, lang) {
     if (messages[key] !== undefined) el.setAttribute('placeholder', messages[key]);
   });
 
-  if (messages['meta.title']) document.title = messages['meta.title'];
+  const pageTitleKey = document.documentElement.getAttribute('data-i18n-title');
+  const preserveTitle = document.documentElement.getAttribute('data-preserve-title') === 'true';
+  if (pageTitleKey && messages[pageTitleKey] !== undefined) {
+    document.title = messages[pageTitleKey];
+  } else if (!preserveTitle && messages['meta.title']) {
+    document.title = messages['meta.title'];
+  }
 
   const mevaLink = document.querySelector('[data-meva-link]');
   if (mevaLink) {

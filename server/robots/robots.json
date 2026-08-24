@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "robots": [
+    {
+      "manufacturer_id": "unitree",
+      "manufacturer_name": "Unitree Robotics",
+      "robot_id": "g1",
+      "robot_name": "Unitree G1",
+      "manifest": "unitree/g1/manifest.json",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# MEVA Cloud runtime dependencies
+# Python: 3.13
+# Keep this list limited to packages imported/used directly by this project.
+fastapi==0.141.1
+uvicorn[standard]==0.48.0
+pydantic==2.13.4
+numpy==2.5.2
+mujoco==3.11.0
+mink==1.2.0

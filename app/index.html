@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Capsules | MEVA Cloud</title>
+<style>
+:root{--bg:#f4f7f8;--panel:#fff;--ink:#113438;--muted:#6d858a;--line:#dce7e9;--brand:#0d9994;--brand2:#087a77;--soft:#eaf8f7}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--ink)}
+header{height:76px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.brand{font-size:21px;font-weight:800;display:flex;gap:11px;align-items:center;text-decoration:none;color:inherit}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#21b9b4,#087976)}
+.user{color:var(--muted);font-size:14px}.shell{max-width:1180px;margin:auto;padding:30px 32px 56px}
+h1{font-size:34px;margin:0 0 6px}.lead{color:var(--muted);margin-bottom:22px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.card{display:block;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;text-decoration:none;color:inherit;box-shadow:0 8px 24px rgba(20,65,70,.045)}
+.card:hover{border-color:#a9d6d3}.k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}
+.title{font-size:20px;font-weight:800;margin:7px 0}.meta{font-size:13px;color:var(--muted)}
+.pill{display:inline-block;margin-top:14px;padding:5px 9px;border-radius:999px;background:var(--soft);color:var(--brand2);font-size:11px;font-weight:800}
+</style>
+</head>
+<body>
+<header><a class="brand" href="./"><span class="brand-mark"></span>MEVA Cloud</a><div class="user">Local user</div></header>
+<main class="shell">
+  <h1>My Capsules</h1>
+  <div class="lead">暫定のログイン後トップです。Capsuleを選択するとCapsuleページへ進みます。</div>
+  <div class="grid">
+    <a class="card" href="./capsule/?capsule=2606050001&title=%E3%83%8F%E3%83%B3%E3%83%A4%E7%AF%80">
+      <div class="k">Capsule 2606050001</div>
+      <div class="title">ハンヤ節</div>
+      <div class="meta">MEVA motion / local prototype</div>
+      <span class="pill">Open Capsule</span>
+    </a>
+  </div>
+</main>
+</body>
+</html>
