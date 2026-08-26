@@ -1315,7 +1315,9 @@ input[type="checkbox"]{
 .region.collapsed>:not(.region-title),.region>[hidden]{display:none !important}
 .symmetric-setting{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:0;text-transform:none;color:#536b81}
 .collision-pair-details{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
-.collision-pair-details summary{cursor:pointer;font-size:11px;font-weight:850;color:#526a80}
+.collision-pair-details summary{position:relative;cursor:pointer;font-size:11px;font-weight:850;color:#526a80;padding-right:92px}
+.collision-auto-toggle{position:absolute;right:3px;top:0;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-weight:750;cursor:pointer}
+.collision-auto-toggle input{margin:0}
 .collision-pair-list{max-height:230px;overflow:auto;padding:7px 2px}
 .collision-pair{display:flex;align-items:center;gap:7px;padding:4px 3px;font-size:10px;color:#526a80}
 .collision-pair input{flex:0 0 auto}
@@ -1481,7 +1483,7 @@ input[type="checkbox"]{
               <div class="setting-control"><label for="selfCollisionMinimumGain">Min gain</label><input id="selfCollisionMinimumGain" type="number" min="0.01" max="1" step="0.05" value="0.05"></div>
               <div class="setting-control"><label for="selfCollisionMinimumStepScale">Min step ratio</label><input id="selfCollisionMinimumStepScale" type="number" min="0.001" max="1" step="0.01" value="0.01" title="Smallest multiplier allowed for a backtracked IK step."></div>
             </div>
-            <details class="collision-pair-details"><summary>Collision GEOM pairs <span id="selfCollisionPairCount">0 selected</span></summary><div id="selfCollisionPairs" class="collision-pair-list"></div></details>
+            <details class="collision-pair-details"><summary>Collision GEOM pairs <span id="selfCollisionPairCount">0 / 0 selected</span><label class="collision-auto-toggle"><input id="selfCollisionAuto" type="checkbox"> Auto</label></summary><div id="selfCollisionPairs" class="collision-pair-list"></div></details>
           </div>
         </div>
       </div>
@@ -2265,6 +2267,7 @@ input[type="checkbox"]{
   const pelvisLeftFootDirectionCost = document.getElementById("pelvisLeftFootDirectionCost");
   const pelvisRightFootDirectionCost = document.getElementById("pelvisRightFootDirectionCost");
   const selfCollisionEnabled = document.getElementById("selfCollisionEnabled");
+  const selfCollisionAuto = document.getElementById("selfCollisionAuto");
   const selfCollisionZone = document.getElementById("selfCollisionZone");
   const selfCollisionBaseCost = document.getElementById("selfCollisionBaseCost");
   const selfCollisionMaxCost = document.getElementById("selfCollisionMaxCost");
@@ -2555,6 +2558,24 @@ input[type="checkbox"]{
     updateSelfCollisionParent();
   }
 
+  function bindSelfCollisionAuto(root=document){
+    const auto = root.querySelector('[id="selfCollisionAuto"], [data-source-id="selfCollisionAuto"]');
+    if(!auto || auto._selfCollisionAutoBound) return;
+    auto._selfCollisionAutoBound = true;
+    const stopToggle = event => event.stopPropagation();
+    auto.addEventListener("click", stopToggle);
+    auto.closest("label")?.addEventListener("click", stopToggle);
+    auto.addEventListener("change",()=>{
+      const scope = auto.closest(".self-collision-card") || root;
+      if(auto.checked){
+        scope.querySelectorAll(".collision-pair-check").forEach(input=>input.checked=true);
+      }
+      updateSelfCollisionParent(root);
+      if(root === document) refreshChangedState();
+      else refreshMainChangedState();
+    });
+  }
+
   function setupModelDrivenUi(metadata){
     robotModelMetadata = metadata || robotModelMetadata;
     const ikGrid = [...document.querySelectorAll("#tab-mapping .ik-condition-grid")].find(grid =>
@@ -2576,6 +2597,7 @@ input[type="checkbox"]{
       if(convergence) ikGrid.prepend(convergence);
     }
     renderCollisionPairs(workingConfig.self_collision_avoidance?.selected_pairs || []);
+    bindSelfCollisionAuto();
 
     const byName = new Map((robotModelMetadata.joints || []).map(j=>[j.name,j]));
     document.querySelectorAll("#tab-mapping .joint-row").forEach(row=>{
@@ -2777,6 +2799,7 @@ input[type="checkbox"]{
     }
     const selfCollision = cfg.self_collision_avoidance || {};
     if(selfCollisionEnabled) selfCollisionEnabled.checked = Boolean(selfCollision.enabled ?? false);
+    if(selfCollisionAuto) selfCollisionAuto.checked = String(selfCollision.mode || "manual").toLowerCase() === "auto";
     if(selfCollisionZone) selfCollisionZone.value = Number(selfCollision.damping?.limit_zone_m ?? 0.005);
     if(selfCollisionBaseCost) selfCollisionBaseCost.value = Number(selfCollision.damping?.base_cost ?? 0.01);
     if(selfCollisionMaxCost) selfCollisionMaxCost.value = Number(selfCollision.damping?.max_cost ?? 0.2);
@@ -2957,6 +2980,7 @@ input[type="checkbox"]{
     const selectedSelfCollisionPairs = [...(selfCollisionPairs?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length > 0,
+      mode: selfCollisionAuto?.checked ? "auto" : "manual",
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
       backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
@@ -3238,7 +3262,7 @@ input[type="checkbox"]{
       "maxIterations", "convergenceJointDeltaDeg",
       "convergenceConsecutiveIterations",
       "pelvisFootDirectionEnabled", "pelvisLeftFootDirectionCost", "pelvisRightFootDirectionCost",
-      "selfCollisionEnabled", "selfCollisionZone", "selfCollisionBaseCost", "selfCollisionMaxCost",
+      "selfCollisionEnabled", "selfCollisionAuto", "selfCollisionZone", "selfCollisionBaseCost", "selfCollisionMaxCost",
       "selfCollisionBacktrackingFactor", "selfCollisionMinimumStepScale",
       "selfCollisionInitialGain", "selfCollisionMinimumGain",
       "accelerationWeightAt2x",
@@ -3317,6 +3341,7 @@ input[type="checkbox"]{
     setValue("pelvisRightFootDirectionCost", Number(spatial.right_cost ?? 0.1));
     const collision = cfg.self_collision_avoidance || {};
     setChecked("selfCollisionEnabled", collision.enabled ?? false);
+    setChecked("selfCollisionAuto", String(collision.mode || "manual").toLowerCase() === "auto");
     setValue("selfCollisionZone", Number(collision.damping?.limit_zone_m ?? 0.005));
     setValue("selfCollisionBaseCost", Number(collision.damping?.base_cost ?? 0.01));
     setValue("selfCollisionMaxCost", Number(collision.damping?.max_cost ?? 0.2));
@@ -3418,6 +3443,7 @@ input[type="checkbox"]{
       updateSelfCollisionParent(mainInheritedSnapshot);
     });
     mainInheritedSnapshot.querySelectorAll(".collision-pair-check").forEach(input=>input.addEventListener("change",()=>updateSelfCollisionParent(mainInheritedSnapshot)));
+    bindSelfCollisionAuto(mainInheritedSnapshot);
     mainInheritedSnapshot.querySelectorAll("input,select").forEach(control => {
       if(control.dataset.mainDirtyBound) return;
       control.dataset.mainDirtyBound = "1";
@@ -3603,6 +3629,7 @@ input[type="checkbox"]{
     const selectedSelfCollisionPairs=[...(mainInheritedSnapshot?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length>0,
+      mode: Boolean(control("selfCollisionAuto")?.checked) ? "auto" : "manual",
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
       backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
@@ -4450,6 +4477,7 @@ input[type="checkbox"]{
     selfCollisionPairs?.querySelectorAll(".collision-pair-check").forEach(input=>input.checked=checked);
     updateSelfCollisionParent();refreshChangedState();
   });
+  bindSelfCollisionAuto();
   for(const input of [selfCollisionZone,selfCollisionBaseCost,selfCollisionMaxCost,selfCollisionInitialGain,selfCollisionBacktrackingFactor,selfCollisionMinimumGain,selfCollisionMinimumStepScale]) input?.addEventListener("input",refreshChangedState);
   async function activateStageTab(name){
     const btn = document.querySelector(`.stage-tab[data-tab="${name}"]`);

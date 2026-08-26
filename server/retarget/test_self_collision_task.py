@@ -7,8 +7,13 @@ import mujoco
 import numpy as np
 
 from ik_solver import (
+    IKFrameSpec,
+    PreparedIKFrame,
     SelfCollisionDampingTask,
+    SolverSettings,
+    _activate_broadphase_collision_pairs,
     _integrate_with_collision_backtracking,
+    solve_ik_sequence,
 )
 
 
@@ -146,6 +151,64 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
         )
         self.assertEqual(scale, 0.0)
         self.assertAlmostEqual(self._distance(configuration), before)
+
+    def test_auto_broadphase_activates_near_pair_and_keeps_it_active(self) -> None:
+        configuration = self._configuration(0.02)  # +10 mm signed distance.
+        active = set()
+        self.assertTrue(_activate_broadphase_collision_pairs(
+            self.model, configuration.data, self.geom_pair, active, 0.01
+        ))
+        self.assertEqual(active, {0})
+
+        configuration = self._configuration(1.0)
+        self.assertFalse(_activate_broadphase_collision_pairs(
+            self.model, configuration.data, self.geom_pair, active, 0.01
+        ))
+        self.assertEqual(active, {0})
+
+    def test_auto_broadphase_leaves_far_pair_inactive(self) -> None:
+        configuration = self._configuration(1.0)
+        active = set()
+        self.assertFalse(_activate_broadphase_collision_pairs(
+            self.model, configuration.data, self.geom_pair, active, 0.01
+        ))
+        self.assertEqual(active, set())
+
+    def test_auto_mode_runs_through_common_sequence_solver(self) -> None:
+        configuration = self._configuration(0.02)
+        pair_key = f"{self.geom_pair[0][0]}:{self.geom_pair[0][1]}"
+        settings = SolverSettings(
+            solver_name="daqp", dt_s=0.02, global_damping=1e-8,
+            max_iterations=2, convergence_joint_delta_deg=0.01,
+            convergence_consecutive_iterations=1, output_frame_dt_s=0.01,
+            enforce_hard_xml_limits=False, joint_limit_avoidance={},
+            velocity_limit_enabled=False, velocity_limit_default_rad_s=1.0,
+            velocity_limit_by_joint={}, acceleration_limit_enabled=False,
+            acceleration_limit_by_joint={}, acceleration_weight_at_2x_limit=0.1,
+            self_collision_avoidance={
+                "enabled": True, "mode": "auto", "selected_pairs": [pair_key],
+                "damping": {
+                    "limit_zone_m": 0.005, "base_cost": 0.01, "max_cost": 5.0,
+                },
+                "backtracking": {
+                    "initial_gain": 0.2, "factor": 0.8,
+                    "minimum_gain": 0.05, "minimum_step_scale": 0.01,
+                },
+            },
+            temporal_regularization_enabled=False,
+            temporal_regularization_cost=0.0,
+        )
+        result = solve_ik_sequence(
+            model=self.model,
+            initial_configuration=configuration,
+            frame_specs=[IKFrameSpec(
+                source_frame=0,
+                prepare=lambda _configuration: PreparedIKFrame(tasks=[]),
+            )],
+            solver_settings=settings,
+            diagnostic_keys=[],
+        )
+        self.assertEqual(result.qpos.shape, (1, self.model.nq))
 
 
 if __name__ == "__main__":

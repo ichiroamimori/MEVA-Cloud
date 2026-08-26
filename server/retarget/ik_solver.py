@@ -465,6 +465,31 @@ def _integrate_with_collision_backtracking(
     return 0.0
 
 
+def _activate_broadphase_collision_pairs(
+    model,
+    data,
+    geom_pairs,
+    active_indices,
+    activation_distance_m,
+):
+    """Add bounding-sphere-near candidate pairs to a frame-local active set."""
+    added = False
+    margin = float(activation_distance_m)
+    for index, (geom_a, geom_b) in enumerate(geom_pairs):
+        if index in active_indices:
+            continue
+        center_distance = float(np.linalg.norm(
+            data.geom_xpos[geom_b] - data.geom_xpos[geom_a]
+        ))
+        broadphase_distance = center_distance - float(
+            model.geom_rbound[geom_a] + model.geom_rbound[geom_b]
+        )
+        if broadphase_distance <= margin:
+            active_indices.add(index)
+            added = True
+    return added
+
+
 def resolve_joint_velocity_limit(model, velocity_cfg):
     velocity_cfg = dict(velocity_cfg or {})
     enabled = bool(velocity_cfg.get("enabled", True))
@@ -580,6 +605,13 @@ def solve_ik_sequence(
             solver_settings.acceleration_weight_at_2x_limit,
         )
     collision_damping_task = None
+    collision_limit = None
+    collision_candidate_pairs = []
+    collision_mode = "manual"
+    collision_zone = 0.005
+    collision_detection_distance = 0.01
+    collision_base_cost = 0.01
+    collision_max_cost = 0.2
     collision_initial_gain = 0.2
     collision_minimum_gain = 0.05
     collision_backtracking_factor = 0.8
@@ -587,7 +619,9 @@ def solve_ik_sequence(
     collision_cfg = dict(solver_settings.self_collision_avoidance or {})
     selected_collision_pairs = list(collision_cfg.get("selected_pairs", []))
     if collision_cfg.get("enabled", False) and selected_collision_pairs:
-        geom_pairs = []
+        collision_mode = str(collision_cfg.get("mode", "manual")).strip().lower()
+        if collision_mode not in {"manual", "auto"}:
+            raise ValueError("self_collision_avoidance.mode must be manual or auto")
         for key in selected_collision_pairs:
             try:
                 geom_a, geom_b = (int(x) for x in str(key).split(":", 1))
@@ -595,10 +629,13 @@ def solve_ik_sequence(
                 raise ValueError(f"bad self-collision pair key: {key}") from exc
             if not (0 <= geom_a < model.ngeom and 0 <= geom_b < model.ngeom):
                 raise ValueError(f"self-collision geom id out of range: {key}")
-            geom_pairs.append(((geom_a,), (geom_b,)))
-        zone = float(collision_cfg.get("damping", {}).get("limit_zone_m", 0.005))
-        base_cost = float(collision_cfg.get("damping", {}).get("base_cost", 0.01))
-        max_cost = float(collision_cfg.get("damping", {}).get("max_cost", 0.2))
+            collision_candidate_pairs.append((geom_a, geom_b))
+        collision_zone = float(collision_cfg.get("damping", {}).get("limit_zone_m", 0.005))
+        collision_base_cost = float(collision_cfg.get("damping", {}).get("base_cost", 0.01))
+        collision_max_cost = float(collision_cfg.get("damping", {}).get("max_cost", 0.2))
+        collision_detection_distance = max(
+            collision_zone * 2.0, collision_zone + 1e-4
+        )
         backtracking_cfg = dict(collision_cfg.get("backtracking", {}))
         collision_backtracking_factor = float(
             backtracking_cfg.get("factor", 0.8)
@@ -608,9 +645,9 @@ def solve_ik_sequence(
         collision_minimum_step_scale = float(
             backtracking_cfg.get("minimum_step_scale", 0.01)
         )
-        if not np.isfinite(zone) or zone < 0.0:
+        if not np.isfinite(collision_zone) or collision_zone < 0.0:
             raise ValueError("self_collision_avoidance.damping.limit_zone_m must be non-negative")
-        if not np.isfinite(base_cost) or base_cost < 0.0 or not np.isfinite(max_cost) or max_cost < base_cost:
+        if not np.isfinite(collision_base_cost) or collision_base_cost < 0.0 or not np.isfinite(collision_max_cost) or collision_max_cost < collision_base_cost:
             raise ValueError("self-collision damping costs must satisfy 0 <= base_cost <= max_cost")
         if (
             not np.isfinite(collision_backtracking_factor)
@@ -629,16 +666,6 @@ def solve_ik_sequence(
             or not 0.0 < collision_minimum_step_scale <= 1.0
         ):
             raise ValueError("self-collision minimum step scale must be in (0, 1]")
-        collision_damping_task = SelfCollisionDampingTask(
-            model, [(pair[0][0], pair[1][0]) for pair in geom_pairs],
-            zone, base_cost, max_cost, gain=collision_initial_gain,
-        )
-        limits.append(mink.CollisionAvoidanceLimit(
-            model,
-            geom_pairs=geom_pairs,
-            minimum_distance_from_collisions=zone,
-            collision_detection_distance=max(zone * 2.0, zone + 1e-4),
-        ))
 
     qpos = []
     diag = []
@@ -706,8 +733,48 @@ def solve_ik_sequence(
                 source_frame=source_frame,
             ) from exc
         solve_tasks_base = list(prepared.tasks)
-        if collision_damping_task is not None:
-            solve_tasks_base.append(collision_damping_task)
+        frame_active_collision_indices = (
+            set(range(len(collision_candidate_pairs)))
+            if collision_mode == "manual" else set()
+        )
+        collision_components_dirty = bool(frame_active_collision_indices)
+        collision_damping_task = None
+        collision_limit = None
+
+        def activate_auto_collision_pairs():
+            nonlocal collision_components_dirty
+            if collision_mode != "auto" or not collision_candidate_pairs:
+                return False
+            added = _activate_broadphase_collision_pairs(
+                model, conf.data, collision_candidate_pairs,
+                frame_active_collision_indices, collision_detection_distance,
+            )
+            collision_components_dirty = collision_components_dirty or added
+            return added
+
+        def rebuild_collision_components_if_needed():
+            nonlocal collision_components_dirty, collision_damping_task, collision_limit
+            if not collision_components_dirty:
+                return
+            active_pairs = [
+                collision_candidate_pairs[index]
+                for index in sorted(frame_active_collision_indices)
+            ]
+            if active_pairs:
+                collision_damping_task = SelfCollisionDampingTask(
+                    model, active_pairs, collision_zone, collision_base_cost,
+                    collision_max_cost, gain=collision_adaptive_gain,
+                )
+                collision_limit = mink.CollisionAvoidanceLimit(
+                    model,
+                    geom_pairs=[((geom_a,), (geom_b,)) for geom_a, geom_b in active_pairs],
+                    minimum_distance_from_collisions=collision_zone,
+                    collision_detection_distance=collision_detection_distance,
+                )
+            else:
+                collision_damping_task = None
+                collision_limit = None
+            collision_components_dirty = False
         if q_previous is not None and temporal_posture is not None:
             solve_tasks_base.append(temporal_posture)
 
@@ -743,6 +810,8 @@ def solve_ik_sequence(
         collision_adaptive_gain = collision_initial_gain
 
         for iteration_index in range(1, solver_settings.max_iterations + 1):
+            activate_auto_collision_pairs()
+            rebuild_collision_components_if_needed()
             q_before_iteration = conf.q.copy()
             joint_limit_cost = joint_limit_damping_cost(
                 model, conf.q, solver_settings.joint_limit_avoidance
@@ -754,6 +823,10 @@ def solve_ik_sequence(
             solve_tasks = list(solve_tasks_base)
             if collision_damping_task is not None:
                 collision_damping_task.gain = collision_adaptive_gain
+                solve_tasks.append(collision_damping_task)
+            solve_limits = list(limits)
+            if collision_limit is not None:
+                solve_limits.append(collision_limit)
             if np.any(joint_limit_cost > 0.0):
                 solve_tasks.append(mink.DampingTask(model, cost=joint_limit_cost))
             if (
@@ -768,7 +841,7 @@ def solve_ik_sequence(
                     dt=solver_settings.dt_s,
                     solver=solver_settings.solver_name,
                     damping=solver_settings.global_damping,
-                    limits=limits,
+                    limits=solve_limits,
                     safety_break=True,
                 )
             except NoSolutionFound as exc:
@@ -823,6 +896,7 @@ def solve_ik_sequence(
                     source_frame=source_frame,
                 )
             iterations_used = iteration_index
+            activated_after_step = activate_auto_collision_pairs()
 
             per_joint_delta_deg = {}
             for joint_name, qadr in hinges:
@@ -844,7 +918,9 @@ def solve_ik_sequence(
                         "abs_delta_deg": abs(delta_deg),
                     })
             collect_iteration(iteration_index)
-            if final_max_joint_delta_deg <= solver_settings.convergence_joint_delta_deg:
+            if activated_after_step:
+                convergence_hits = 0
+            elif final_max_joint_delta_deg <= solver_settings.convergence_joint_delta_deg:
                 convergence_hits += 1
             else:
                 convergence_hits = 0

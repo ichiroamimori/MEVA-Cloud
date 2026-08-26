@@ -161,6 +161,7 @@
   },
   "self_collision_avoidance": {
     "enabled": false,
+    "mode": "manual",
     "selected_pairs": [],
     "damping": {
       "limit_zone_m": 0.005,
