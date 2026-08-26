@@ -4,7 +4,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import pickle
 import struct
 from pathlib import Path
 from typing import Any
@@ -14,10 +13,13 @@ import numpy as np
 
 try:
     from .main_calibration import foot_contact_geom_ids
+    from .motion_io import load_motion
 except ImportError:
     from main_calibration import foot_contact_geom_ids
+    from motion_io import load_motion
 
-MAGIC = b"MEVAVW01"
+LEGACY_MAGIC = b"MEVAVW01"
+MAGIC = b"MEVAVW02"
 FORMAT_VERSION = 5
 
 MEVA_SEGMENTS = [
@@ -44,7 +46,10 @@ MEVA_JOINTS = [
 def _read_header(path: Path) -> dict[str, Any] | None:
     try:
         with path.open("rb") as f:
-            if f.read(8) != MAGIC:
+            magic = f.read(8)
+            if magic == MAGIC:
+                struct.unpack("<I", f.read(4))[0]  # fixed-header format version
+            elif magic != LEGACY_MAGIC:
                 return None
             header_len = struct.unpack("<I", f.read(4))[0]
             return json.loads(f.read(header_len).decode("utf-8"))
@@ -77,27 +82,35 @@ def _serialize_bin(metadata: dict[str, Any], arrays: dict[str, np.ndarray]) -> b
     payloads = []
     for name, arr0 in arrays.items():
         arr = np.ascontiguousarray(arr0)
-        if arr.dtype.kind in "iu":
+        if arr.dtype == np.uint8:
+            arr = arr.astype("u1", copy=False)
+            dtype = "uint8"
+        elif arr.dtype.kind in "iu":
             arr = arr.astype("<i4", copy=False)
             dtype = "int32"
         else:
             arr = arr.astype("<f4", copy=False)
             dtype = "float32"
         raw = arr.tobytes(order="C")
-        blocks.append({
+        descriptor = {
             "name": name,
             "dtype": dtype,
             "shape": list(arr.shape),
             "offset": offset,
             "nbytes": len(raw),
-        })
+        }
+        descriptor.update(dict(metadata.get("array_metadata", {}).get(name, {})))
+        blocks.append(descriptor)
         payloads.append(raw)
         offset += len(raw)
 
     header = {
+        **metadata,
         "format": "MEVA Viewer Binary",
         "format_version": FORMAT_VERSION,
-        **metadata,
+        "schema_version": str(metadata.get("schema_version", "1.0")),
+        "endianness": "little",
+        "array_offset_basis": "payload_start",
         "blocks": blocks,
     }
     header_raw = json.dumps(
@@ -106,6 +119,7 @@ def _serialize_bin(metadata: dict[str, Any], arrays: dict[str, np.ndarray]) -> b
 
     out = io.BytesIO()
     out.write(MAGIC)
+    out.write(struct.pack("<I", FORMAT_VERSION))
     out.write(struct.pack("<I", len(header_raw)))
     out.write(header_raw)
     for raw in payloads:
@@ -120,6 +134,14 @@ def _write_bin(path: Path, metadata: dict[str, Any], arrays: dict[str, np.ndarra
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_bytes(raw)
     tmp.replace(path)
+
+
+def write_viewer_bin(
+    path: Path, metadata: dict[str, Any], arrays: dict[str, np.ndarray]
+) -> Path:
+    """Persist one self-describing viewer binary atomically."""
+    _write_bin(path, metadata, arrays)
+    return path
 
 
 def _hinge_info(model: mujoco.MjModel):
@@ -149,7 +171,7 @@ def build_retarget_viewer_bytes(
     stage: str = "primary",
     main_id: str = "legacy",
 ) -> bytes:
-    """Build Primary/Main viewer bytes from PKL in memory; no viewer file is written."""
+    """Build legacy/Main viewer bytes from canonical NPZ or legacy PKL."""
     stage = str(stage).strip().lower()
     if stage not in {"primary", "main"}:
         raise ValueError(f"Unsupported retarget viewer stage: {stage}")
@@ -165,14 +187,17 @@ def build_retarget_viewer_bytes(
         legacy = run_dir / "main" / main_id
         run_dir = preferred if preferred.exists() or not legacy.exists() else legacy
         file_id = main_id
-    pkl_path = run_dir / f"{file_id}_{stage}.pkl"
-    if not pkl_path.exists() and stage == "primary":
-        legacy = run_dir / "primary.pkl"
-        if legacy.exists():
-            pkl_path = legacy
-    if not pkl_path.exists():
+    motion_path = run_dir / f"{file_id}_{stage}.npz"
+    if not motion_path.exists():
+        legacy_candidates = [run_dir / f"{file_id}_{stage}.pkl"]
+        if stage == "primary":
+            legacy_candidates.append(run_dir / "primary.pkl")
+        legacy = next((path for path in legacy_candidates if path.exists()), None)
+        if legacy is not None:
+            motion_path = legacy
+    if not motion_path.exists():
         raise FileNotFoundError(
-            f"Retarget PKL not found for stage '{stage}': {pkl_path}"
+            f"Retarget motion not found for stage '{stage}': {motion_path}"
         )
 
     config_path = (
@@ -194,8 +219,7 @@ def build_retarget_viewer_bytes(
 
     with config_path.open("r", encoding="utf-8") as f:
         cfg = json.load(f)
-    with pkl_path.open("rb") as f:
-        pkl = pickle.load(f)
+    pkl = load_motion(motion_path)
 
     root_pos = np.asarray(pkl["root_pos"], dtype=np.float32)
     root_rot = np.asarray(pkl["root_rot"], dtype=np.float32)
@@ -254,7 +278,7 @@ def build_retarget_viewer_bytes(
     hinges = _hinge_info(model)
     if len(hinges) != dof_pos.shape[1]:
         raise ValueError(
-            f"PKL dof count {dof_pos.shape[1]} does not match "
+            f"Motion dof count {dof_pos.shape[1]} does not match "
             f"MJCF hinge count {len(hinges)}"
         )
 
@@ -300,15 +324,15 @@ def build_retarget_viewer_bytes(
     # Viewer orientation comparison needs the same MEVA->robot frame
     # conversion used by Primary.  Persist the run's offset snapshot in
     # metadata so browser-side Roll/Pitch/Yaw compares like with like.
-    offsets_path = primary_run_dir / f"{run_id}_offsets.json"
     mapping_offsets = {}
-    if offsets_path.exists():
-        try:
-            with offsets_path.open("r", encoding="utf-8") as f:
-                offset_asset = json.load(f)
-            mapping_offsets = offset_asset.get("offsets_wxyz_by_link", {})
-        except Exception:
-            mapping_offsets = {}
+    try:
+        from .check_offsets import compute_offsets
+        _, offsets_path, _ = compute_offsets(config_path)
+        with offsets_path.open("r", encoding="utf-8") as f:
+            offset_asset = json.load(f)
+        mapping_offsets = offset_asset.get("offsets_wxyz_by_link", {})
+    except Exception:
+        mapping_offsets = {}
 
     world_alignment = (
         cfg.get("world_alignment", {})

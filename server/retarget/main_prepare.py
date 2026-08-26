@@ -2,7 +2,6 @@
 """Prepare Main initial motion, Pelvis targets, and Foot Sole IK tasks."""
 from __future__ import annotations
 
-import pickle
 import json
 import csv
 from copy import deepcopy
@@ -45,6 +44,7 @@ from main_calibration import (
 from check_offsets import compute_offsets
 from support_state import SupportState
 from main_target import load_main_target
+from motion_io import load_motion
 
 
 @dataclass
@@ -75,7 +75,7 @@ class MainPreparation:
 
 @dataclass
 class MainIKPreparation:
-    """Solver inputs whose only motion sources are Primary PKL and Main target NPZ."""
+    """Solver inputs whose only motion sources are Primary motion and Main target NPZ."""
     model: Any
     initial_configuration: Any
     solver_frame_specs: list[IKFrameSpec]
@@ -221,8 +221,7 @@ class GeomZTask(mink.Task):
 
 
 def load_pickle(path: Path) -> dict:
-    with path.open("rb") as f:
-        obj = pickle.load(f)
+    obj = load_motion(path)
     if not isinstance(obj, dict):
         raise TypeError(f"Expected dict in {path}, got {type(obj).__name__}")
     return obj
@@ -352,9 +351,7 @@ def prepare_main(
     *,
     config_path: Path,
     primary_pkl: Path,
-    primary_post_csv: Path,
     primary_target_npz: Path | None,
-    meva_csv: Path,
     robot_xml: Path,
     cfg: dict,
     calibration_settings: CalibrationSettings,
@@ -370,15 +367,12 @@ def prepare_main(
     primary = load_pickle(primary_pkl)
     rows, summary, contact_geometry = analyze_main_calibration(
         primary_motion=primary,
-        meva_csv=meva_csv,
+        meva_csv=None,
         primary_target_npz=primary_target_npz,
         robot_xml=robot_xml,
         settings=calibration_settings,
         config=cfg,
         progress_callback=progress_callback,
-    )
-    primary_post_rows = _read_primary_post(
-        primary_post_csv, [int(row["source_frame"]) for row in rows]
     )
     if not (
         np.isfinite(flying_min_percent)
@@ -388,10 +382,10 @@ def prepare_main(
         raise ValueError("Flying percentages require 0 <= min <= max <= 100")
     fps = float(primary.get("fps", cfg.get("source", {}).get("sampling_rate_hz", 100.0)))
     left_raw = np.asarray([
-        float(row["MEVA_LeftFoot_GCP_selected_raw"]) for row in primary_post_rows
+        float(row["Left_selected_GCP_raw"]) for row in rows
     ])
     right_raw = np.asarray([
-        float(row["MEVA_RightFoot_GCP_selected_raw"]) for row in primary_post_rows
+        float(row["Right_selected_GCP_raw"]) for row in rows
     ])
     left_smoothed, left_corrected, _ = preprocess_gcp(
         left_raw,
@@ -409,19 +403,13 @@ def prepare_main(
         max_offset=calibration_settings.gcp_max_offset,
         power_number=calibration_settings.gcp_power_number,
     )
-    for index, (row, post_row) in enumerate(zip(rows, primary_post_rows)):
+    for index, row in enumerate(rows):
         row["Left_selected_GCP_raw"] = float(left_raw[index])
         row["Right_selected_GCP_raw"] = float(right_raw[index])
         row["Left_selected_GCP_smoothed"] = float(left_smoothed[index])
         row["Right_selected_GCP_smoothed"] = float(right_smoothed[index])
         row["Left_selected_GCP_corrected"] = float(left_corrected[index])
         row["Right_selected_GCP_corrected"] = float(right_corrected[index])
-        row["MEVA_Left_Pelvis_to_Foot_vertical_angle_deg"] = float(
-            post_row["MEVA_Left_Pelvis_to_Foot_vertical_angle_deg"]
-        )
-        row["MEVA_Right_Pelvis_to_Foot_vertical_angle_deg"] = float(
-            post_row["MEVA_Right_Pelvis_to_Foot_vertical_angle_deg"]
-        )
     primary_metadata = dict(primary.get("metadata", {}))
     postprocess = dict(primary_metadata.get("primary_postprocess", {}))
     saved_scale = dict(
@@ -446,14 +434,15 @@ def prepare_main(
         if "primary_post_pelvis_shifts_z" in primary
         else "main_input_pelvis_shifts_z"
     )
-    has_primary_postprocess = (
+    has_primary_postprocess = bool(primary_metadata.get("canonical_motion_npz")) or (
         post_root_key in primary
         and post_targets_key in primary
         and post_shifts_key in primary
         and bool(postprocess.get("completed", False))
     )
     primary_root_shift_applied = bool(
-        has_primary_postprocess and postprocess.get("root_pos_shift_applied", False)
+        primary_metadata.get("canonical_motion_npz")
+        or (has_primary_postprocess and postprocess.get("root_pos_shift_applied", False))
     )
     meva_ground = float(
         postprocess.get(
@@ -473,7 +462,7 @@ def prepare_main(
     if len(root_pos) != len(rows):
         raise ValueError("Calibration row count does not match Primary frame count")
     initial_motion = deepcopy(primary)
-    if has_primary_postprocess:
+    if has_primary_postprocess and not primary_metadata.get("canonical_motion_npz"):
         pelvis_targets = np.asarray(primary[post_targets_key], dtype=np.float64).copy()
         if primary_root_shift_applied:
             out_root_pos = root_pos.copy()
@@ -777,7 +766,7 @@ def prepare_main_ik_from_target(
     cfg: dict,
     sole_position_weights: dict,
 ) -> MainIKPreparation:
-    """Build Main solver frames without reading MEVA or primary_target data."""
+    """Build Main solver frames from Primary motion + Main target only."""
     primary = load_pickle(primary_pkl)
     n = len(np.asarray(primary["root_pos"]))
     primary_fps = float(primary.get("fps", 30.0))
@@ -993,7 +982,7 @@ def prepare_main_ik_from_target(
 def apply_main_ik_result(
     preparation: MainPreparation, result: IKSequenceResult
 ) -> dict:
-    """Convert common-Solver qpos to the existing motion PKL representation."""
+    """Convert common-Solver qpos to the in-memory motion representation."""
     primary = preparation.primary_motion
     output = deepcopy(primary)
     order = str(primary.get("metadata", {}).get("root_rot_order", "xyzw"))

@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from server.api.capsule_api import router as capsule_router
 from server.api.retarget_api import router as retarget_router
 
 
@@ -12,6 +13,7 @@ APP_DIR = ROOT / "app"
 app = FastAPI(title="MEVA Cloud Local")
 
 # Register API first; the static "/" mount must come last.
+app.include_router(capsule_router)
 app.include_router(retarget_router)
 
 app.mount(

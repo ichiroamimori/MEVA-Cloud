@@ -78,6 +78,19 @@ class IKSequenceResult:
     diagnostic_hinges: list[tuple[str, int]] | None
 
 
+class IKSequenceFailure(RuntimeError):
+    """Fatal per-frame IK failure with the already completed sequence attached."""
+
+    def __init__(
+        self, message: str, *, result: IKSequenceResult,
+        output_index: int, source_frame: int,
+    ) -> None:
+        super().__init__(message)
+        self.result = result
+        self.output_index = int(output_index)
+        self.source_frame = int(source_frame)
+
+
 def build_solver_settings(
     *,
     model,
@@ -348,9 +361,14 @@ class FrameJointAccelerationSoftTask(mink.PostureTask):
 
 
 class SelfCollisionDampingTask(mink.Task):
-    """Soft distance task with cost ramping across the configured damping zone."""
+    """Non-negative collision violation with cost ramping in the damping zone.
 
-    def __init__(self, model, geom_pairs, zone_m, base_cost, max_cost):
+    MuJoCo's witness-point normal changes convention once signed distance becomes
+    negative.  Keep signed distance for measurement, but expose the optimizer to
+    ``max(zone - distance, 0)`` and correct the witness Jacobian on penetration.
+    """
+
+    def __init__(self, model, geom_pairs, zone_m, base_cost, max_cost, gain=1.0):
         self.model = model
         self.geom_pairs = list(geom_pairs)
         self.zone_m = float(zone_m)
@@ -358,7 +376,9 @@ class SelfCollisionDampingTask(mink.Task):
         self.max_cost = float(max_cost)
         self._distances = np.zeros(len(self.geom_pairs))
         self._fromto = np.zeros((len(self.geom_pairs), 6))
-        super().__init__(cost=np.full(len(self.geom_pairs), self.base_cost))
+        super().__init__(
+            cost=np.full(len(self.geom_pairs), self.base_cost), gain=float(gain)
+        )
 
     def compute_error(self, configuration):
         for index, (geom_a, geom_b) in enumerate(self.geom_pairs):
@@ -370,7 +390,7 @@ class SelfCollisionDampingTask(mink.Task):
             (self.zone_m - self._distances) / max(self.zone_m, 1e-9), 0.0, 1.0
         )
         self.cost = self.base_cost + (self.max_cost - self.base_cost) * penetration ** 2
-        return np.minimum(self._distances - self.zone_m, 0.0)
+        return np.maximum(self.zone_m - self._distances, 0.0)
 
     def compute_jacobian(self, configuration):
         jacobian = np.zeros((len(self.geom_pairs), self.model.nv))
@@ -393,8 +413,56 @@ class SelfCollisionDampingTask(mink.Task):
                 self.model, configuration.data, jac_b, None, point_b,
                 int(self.model.geom_bodyid[geom_b]),
             )
-            jacobian[index] = normal @ (jac_b - jac_a)
+            raw_distance_jacobian = normal @ (jac_b - jac_a)
+            # For separated geoms MuJoCo's from-to normal gives +d(distance)/dq.
+            # During penetration its witness normal reverses and gives the
+            # negative derivative.  The task residual is zone-distance, hence
+            # the two regions require opposite signs here.
+            jacobian[index] = (
+                -raw_distance_jacobian
+                if self._distances[index] >= 0.0
+                else raw_distance_jacobian
+            )
         return jacobian
+
+
+def _collision_step_worsens(current_distances, candidate_distances, tolerance=1e-9):
+    """Return whether a candidate creates or deepens selected-pair penetration."""
+    current = np.asarray(current_distances, dtype=float)
+    candidate = np.asarray(candidate_distances, dtype=float)
+    if current.shape != candidate.shape:
+        raise ValueError("collision distance shape mismatch")
+    creates_penetration = (current >= 0.0) & (candidate < -tolerance)
+    deepens_penetration = (current < 0.0) & (candidate < current - tolerance)
+    return bool(np.any(creates_penetration | deepens_penetration))
+
+
+def _integrate_with_collision_backtracking(
+    configuration,
+    velocity,
+    collision_task,
+    *,
+    dt_s,
+    factor,
+    minimum_step_scale,
+):
+    """Integrate the largest step that does not create/deepen penetration."""
+    q_before = configuration.q.copy()
+    collision_task.compute_error(configuration)
+    current_distances = collision_task._distances.copy()
+    step_scale = 1.0
+    while step_scale >= minimum_step_scale:
+        configuration.update(q=q_before)
+        configuration.integrate_inplace(velocity * step_scale, dt_s)
+        collision_task.compute_error(configuration)
+        if not _collision_step_worsens(
+            current_distances, collision_task._distances
+        ):
+            return step_scale
+        step_scale *= factor
+    configuration.update(q=q_before)
+    collision_task.compute_error(configuration)
+    return 0.0
 
 
 def resolve_joint_velocity_limit(model, velocity_cfg):
@@ -512,6 +580,10 @@ def solve_ik_sequence(
             solver_settings.acceleration_weight_at_2x_limit,
         )
     collision_damping_task = None
+    collision_initial_gain = 0.2
+    collision_minimum_gain = 0.05
+    collision_backtracking_factor = 0.8
+    collision_minimum_step_scale = 0.01
     collision_cfg = dict(solver_settings.self_collision_avoidance or {})
     selected_collision_pairs = list(collision_cfg.get("selected_pairs", []))
     if collision_cfg.get("enabled", False) and selected_collision_pairs:
@@ -527,13 +599,39 @@ def solve_ik_sequence(
         zone = float(collision_cfg.get("damping", {}).get("limit_zone_m", 0.005))
         base_cost = float(collision_cfg.get("damping", {}).get("base_cost", 0.01))
         max_cost = float(collision_cfg.get("damping", {}).get("max_cost", 0.2))
+        backtracking_cfg = dict(collision_cfg.get("backtracking", {}))
+        collision_backtracking_factor = float(
+            backtracking_cfg.get("factor", 0.8)
+        )
+        collision_initial_gain = float(backtracking_cfg.get("initial_gain", 0.2))
+        collision_minimum_gain = float(backtracking_cfg.get("minimum_gain", 0.05))
+        collision_minimum_step_scale = float(
+            backtracking_cfg.get("minimum_step_scale", 0.01)
+        )
         if not np.isfinite(zone) or zone < 0.0:
             raise ValueError("self_collision_avoidance.damping.limit_zone_m must be non-negative")
         if not np.isfinite(base_cost) or base_cost < 0.0 or not np.isfinite(max_cost) or max_cost < base_cost:
             raise ValueError("self-collision damping costs must satisfy 0 <= base_cost <= max_cost")
+        if (
+            not np.isfinite(collision_backtracking_factor)
+            or not 0.0 < collision_backtracking_factor < 1.0
+        ):
+            raise ValueError("self-collision backtracking factor must be between 0 and 1")
+        if not np.isfinite(collision_initial_gain) or not 0.0 < collision_initial_gain <= 1.0:
+            raise ValueError("self-collision initial gain must be in (0, 1]")
+        if (
+            not np.isfinite(collision_minimum_gain)
+            or not 0.0 < collision_minimum_gain <= collision_initial_gain
+        ):
+            raise ValueError("self-collision minimum gain must be in (0, initial_gain]")
+        if (
+            not np.isfinite(collision_minimum_step_scale)
+            or not 0.0 < collision_minimum_step_scale <= 1.0
+        ):
+            raise ValueError("self-collision minimum step scale must be in (0, 1]")
         collision_damping_task = SelfCollisionDampingTask(
             model, [(pair[0][0], pair[1][0]) for pair in geom_pairs],
-            zone, base_cost, max_cost,
+            zone, base_cost, max_cost, gain=collision_initial_gain,
         )
         limits.append(mink.CollisionAvoidanceLimit(
             model,
@@ -570,6 +668,20 @@ def solve_ik_sequence(
     print(f"[0/{len(frame_specs)}] frame {first_source}")
 
     q_history: list[np.ndarray] = []
+
+    def current_result() -> IKSequenceResult:
+        return IKSequenceResult(
+            qpos=np.asarray(qpos),
+            diagnostics=diag,
+            diagnostic_rows=diagnostic_rows,
+            diagnostic_values_by_key=diagnostic_values_by_key,
+            iteration_diagnostic_values=iteration_values,
+            iteration_joint_deltas=iteration_joint_deltas,
+            iteration_joint_delta_rows=iteration_joint_delta_rows,
+            acceleration_soft_limit_rows=acceleration_soft_limit_rows,
+            diagnostic_hinges=diagnostic_hinges,
+        )
+
     for output_index, frame_spec in enumerate(frame_specs):
         source_frame = int(frame_spec.source_frame)
         q_previous = conf.q.copy() if output_index > 0 else None
@@ -584,7 +696,15 @@ def solve_ik_sequence(
         if q_previous is not None and temporal_posture is not None:
             temporal_posture.set_target(q_previous)
 
-        prepared = frame_spec.prepare(conf)
+        try:
+            prepared = frame_spec.prepare(conf)
+        except Exception as exc:
+            raise IKSequenceFailure(
+                f"IK target preparation failed at output frame {output_index}, "
+                f"source frame {source_frame}: {type(exc).__name__}: {exc}",
+                result=current_result(), output_index=output_index,
+                source_frame=source_frame,
+            ) from exc
         solve_tasks_base = list(prepared.tasks)
         if collision_damping_task is not None:
             solve_tasks_base.append(collision_damping_task)
@@ -620,6 +740,7 @@ def solve_ik_sequence(
         final_max_joint_delta_deg = float("inf")
         iterations_used = 0
         max_joint_limit_cost_this_frame = 0.0
+        collision_adaptive_gain = collision_initial_gain
 
         for iteration_index in range(1, solver_settings.max_iterations + 1):
             q_before_iteration = conf.q.copy()
@@ -631,6 +752,8 @@ def solve_ik_sequence(
                 float(np.max(joint_limit_cost)) if len(joint_limit_cost) else 0.0,
             )
             solve_tasks = list(solve_tasks_base)
+            if collision_damping_task is not None:
+                collision_damping_task.gain = collision_adaptive_gain
             if np.any(joint_limit_cost > 0.0):
                 solve_tasks.append(mink.DampingTask(model, cost=joint_limit_cost))
             if (
@@ -666,12 +789,39 @@ def solve_ik_sequence(
                         variant_results[label] = "feasible"
                     except Exception as diagnostic_exc:  # diagnostic only
                         variant_results[label] = type(diagnostic_exc).__name__
-                raise RuntimeError(
+                message = (
                     "Main/Primary IK QP infeasible at "
                     f"output frame {output_index}, source frame {source_frame}, "
                     f"iteration {iteration_index}; variants={variant_results}"
+                )
+                raise IKSequenceFailure(
+                    message, result=current_result(), output_index=output_index,
+                    source_frame=source_frame,
                 ) from exc
-            conf.integrate_inplace(velocity, solver_settings.dt_s)
+            if collision_damping_task is not None:
+                collision_step_scale = _integrate_with_collision_backtracking(
+                    conf,
+                    velocity,
+                    collision_damping_task,
+                    dt_s=solver_settings.dt_s,
+                    factor=collision_backtracking_factor,
+                    minimum_step_scale=collision_minimum_step_scale,
+                )
+                if collision_step_scale < 1.0:
+                    collision_adaptive_gain = max(
+                        collision_minimum_gain,
+                        collision_adaptive_gain * collision_backtracking_factor,
+                    )
+            else:
+                conf.integrate_inplace(velocity, solver_settings.dt_s)
+            if not np.all(np.isfinite(conf.q)):
+                raise IKSequenceFailure(
+                    "IK produced NaN/Inf at "
+                    f"output frame {output_index}, source frame {source_frame}, "
+                    f"iteration {iteration_index}",
+                    result=current_result(), output_index=output_index,
+                    source_frame=source_frame,
+                )
             iterations_used = iteration_index
 
             per_joint_delta_deg = {}
@@ -733,14 +883,4 @@ def solve_ik_sequence(
         if completed % 50 == 0 or completed == len(frame_specs):
             print(f"[{completed}/{len(frame_specs)}] frame {source_frame}")
 
-    return IKSequenceResult(
-        qpos=np.asarray(qpos),
-        diagnostics=diag,
-        diagnostic_rows=diagnostic_rows,
-        diagnostic_values_by_key=diagnostic_values_by_key,
-        iteration_diagnostic_values=iteration_values,
-        iteration_joint_deltas=iteration_joint_deltas,
-        iteration_joint_delta_rows=iteration_joint_delta_rows,
-        acceleration_soft_limit_rows=acceleration_soft_limit_rows,
-        diagnostic_hinges=diagnostic_hinges,
-    )
+    return current_result()

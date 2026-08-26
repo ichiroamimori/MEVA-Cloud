@@ -33,6 +33,8 @@ class MainTargetTest(unittest.TestCase):
                 path,
                 schema_version=np.asarray("1.1"), target_fps=np.asarray(30.0),
                 frame=np.arange(n), time_s=np.arange(n) / 30.0,
+                source_frame_float=np.arange(n, dtype=np.float64),
+                source_frame_nearest=np.arange(n, dtype=np.int64),
                 pelvis_target_xyz=np.zeros((n, 3)),
                 pelvis_target_quat=np.tile([1.0, 0.0, 0.0, 0.0], (n, 1)),
                 quaternion_order=np.asarray("wxyz"),
@@ -54,6 +56,7 @@ class MainTargetTest(unittest.TestCase):
             loaded = load_main_target(path, expected_frames=n, expected_fps=30.0)
             self.assertEqual(set(loaded), {
                 "schema_version", "target_fps", "frame", "time_s",
+                "source_frame_float", "source_frame_nearest",
                 "pelvis_target_xyz", "pelvis_target_quat", "quaternion_order",
                 "link_names", "link_orientation_mode", "link_axis_local",
                 "link_target_quat", "left_pelvis_to_foot_direction",

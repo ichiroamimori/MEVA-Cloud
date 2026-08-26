@@ -5,16 +5,17 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import pickle
+import traceback
 from copy import deepcopy
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
 from main_calibration import CalibrationSettings
 from main_diagnostics import write_main_diagnostics_csv
-from ik_solver import hinge_info, solve_ik_sequence
+from ik_solver import IKSequenceFailure, hinge_info, solve_ik_sequence
 from main_prepare import (
     _support_state_and_used_gcp,
     apply_main_ik_result,
@@ -22,6 +23,8 @@ from main_prepare import (
     prepare_main_ik_from_target,
 )
 from main_target import build_main_target, load_main_target
+from main_viewer import write_main_viewer
+from motion_io import canonical_motion, save_gmr_pickle, save_motion_npz
 from main_postprocess import (
     GlobalContactAnchoringSettings,
     apply_global_contact_anchoring,
@@ -187,11 +190,6 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def save_pickle(path: Path, obj: dict) -> None:
-    with path.open("wb") as f:
-        pickle.dump(obj, f)
-
-
 def write_csv(path: Path, rows: list[dict]) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
@@ -223,7 +221,9 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     cfg = load_json(config_path)
     root = repo_root_from(config_path)
     output_dir = config_path.parent
-    main_id = output_dir.name
+    # Retry runs are generated in a job-specific staging directory. Artifact
+    # filenames continue to use the stable Retargeted Data ID from the config.
+    main_id = str(cfg.get("main_id") or output_dir.name)
     primary_run_id = str(cfg.get("primary_run_id") or main_id)
     is_legacy_nested_main = output_dir.parent.name.lower() == "main"
     if is_legacy_nested_main:
@@ -234,30 +234,25 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     else:
         primary_dir = output_dir.parent
 
-    primary_pkl = primary_dir / f"{primary_run_id}_primary.pkl"
+    primary_pkl = primary_dir / f"{primary_run_id}_primary.npz"
     if not primary_pkl.exists():
-        # Backward-compatible fallback if an older run used a generic name.
-        legacy = primary_dir / "primary.pkl"
-        if legacy.exists():
+        # Read-only fallback for Runs created before canonical Primary NPZ.
+        legacy = next((path for path in (
+            primary_dir / f"{primary_run_id}_primary.pkl",
+            primary_dir / "primary.pkl",
+        ) if path.exists()), None)
+        if legacy is not None:
             primary_pkl = legacy
         else:
-            raise FileNotFoundError(f"Primary PKL not found in {primary_dir}")
-
-    primary_post_csv = primary_dir / f"{primary_run_id}_primary_post.csv"
-    if not primary_post_csv.exists():
-        # Read-only compatibility for Primary runs created before the rename.
-        legacy_primary_post = primary_dir / f"{primary_run_id}_main_input.csv"
-        if legacy_primary_post.exists():
-            primary_post_csv = legacy_primary_post
-        else:
-            raise FileNotFoundError(f"Primary post CSV not found in {primary_dir}")
+            raise FileNotFoundError(
+                f"Primary motion NPZ/legacy PKL not found in {primary_dir}"
+            )
     primary_target_npz = primary_dir / f"{primary_run_id}_primary_target.npz"
     if not primary_target_npz.exists():
         raise FileNotFoundError(
             f"Primary target NPZ is required for Main: {primary_target_npz}"
         )
 
-    meva_csv = (root / cfg["source"]["file"]).resolve()
     robot_xml = (root / cfg["robot"]["mjcf"]).resolve()
 
     main_cfg = dict(cfg.get("main", {}))
@@ -293,9 +288,7 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     preparation = prepare_main(
         config_path=config_path,
         primary_pkl=primary_pkl,
-        primary_post_csv=primary_post_csv,
         primary_target_npz=primary_target_npz,
-        meva_csv=meva_csv,
         robot_xml=robot_xml,
         cfg=cfg,
         calibration_settings=CalibrationSettings(
@@ -390,13 +383,117 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     sole_targets = preparation.sole_targets_xyz
     print("Main target:", main_target_path, flush=True)
     print("Main IK: common Mink solver", flush=True)
-    ik_result = solve_ik_sequence(
-        model=preparation.model,
-        initial_configuration=preparation.initial_configuration,
-        frame_specs=preparation.solver_frame_specs,
-        solver_settings=preparation.solver_settings,
-        diagnostic_keys=preparation.diagnostic_keys,
-    )
+    try:
+        ik_result = solve_ik_sequence(
+            model=preparation.model,
+            initial_configuration=preparation.initial_configuration,
+            frame_specs=preparation.solver_frame_specs,
+            solver_settings=preparation.solver_settings,
+            diagnostic_keys=preparation.diagnostic_keys,
+        )
+    except IKSequenceFailure as failure:
+        # A failed Main does not publish a motion/result export, but a complete
+        # frame-shaped Viewer remains useful for inspecting the successful
+        # prefix and locating the fatal frame.  Failed/uncomputed poses use the
+        # same-frame Primary-derived initial pose and are explicitly masked.
+        total = len(preparation.solver_frame_specs)
+        completed = len(failure.result.qpos)
+        fallback_qpos = []
+        for index, frame_spec in enumerate(preparation.solver_frame_specs):
+            if index < completed:
+                fallback_qpos.append(failure.result.qpos[index])
+            elif frame_spec.initial_q is not None:
+                fallback_qpos.append(np.asarray(frame_spec.initial_q, dtype=float))
+            else:
+                fallback_qpos.append(preparation.initial_configuration.q.copy())
+        frame_status = np.full(total, 3, dtype=np.uint8)
+        frame_status[:completed] = np.asarray(
+            [0 if bool(row[4]) else 1 for row in failure.result.diagnostics],
+            dtype=np.uint8,
+        )
+        frame_status[failure.output_index] = 2
+        padded_diagnostics = list(failure.result.diagnostics)
+        for index in range(completed, total):
+            source_frame = int(preparation.solver_frame_specs[index].source_frame)
+            padded_diagnostics.append((source_frame, 0.0, 0.0, 0, False, 0.0))
+        padded_values = {
+            key: list(values) + [0.0] * (total - len(values))
+            for key, values in failure.result.diagnostic_values_by_key.items()
+        }
+        partial_result = replace(
+            failure.result,
+            qpos=np.asarray(fallback_qpos),
+            diagnostics=padded_diagnostics,
+            diagnostic_values_by_key=padded_values,
+        )
+        partial_motion = apply_main_ik_result(preparation, partial_result)
+        joint_names = [name for _, name, _, _, _, _, _ in hinge_info(preparation.model)]
+        root_rot_order = str(
+            partial_motion.get("metadata", {}).get("root_rot_order", "xyzw")
+        )
+        canonical_partial = canonical_motion(
+            partial_motion, joint_names=joint_names, root_rot_order=root_rot_order,
+        )
+        cfg["main_id"] = main_id
+        cfg["primary_run_id"] = primary_run_id
+        cfg["primary_motion_file"] = primary_pkl.name
+        cfg["primary_target_npz"] = primary_target_npz.name
+        cfg["main_target_npz"] = main_target_path.name
+        cfg["schema_version"] = str(cfg.get("schema_version") or "1.0")
+        cfg["name"] = str(cfg.get("name") or cfg.get("config_name") or "Main Standard")
+        cfg["run_status"] = "partial"
+        cfg["main_runtime_context"] = {
+            "capsule_id": cfg.get("capsule_id"),
+            "primary_run_id": primary_run_id,
+            "primary_motion_file": primary_pkl.name,
+            "primary_target_file": primary_target_npz.name,
+            "main_target_file": main_target_path.name,
+            "fps": float(preparation.primary_motion.get("fps", 30.0)),
+            "frame_count": total,
+            "completed_frame_count": completed,
+            "failed_output_frame": failure.output_index,
+            "failed_source_frame": failure.source_frame,
+            "frame_range": deepcopy(cfg.get("frame_range", {})),
+        }
+        frame_errors = [{
+            "frame_index": failure.output_index,
+            "source_frame": failure.source_frame,
+            "status": "solver error",
+            "error": str(failure),
+        }]
+        cfg["frame_errors"] = frame_errors
+        canonical_config_path = output_dir / f"{main_id}_main_config.json"
+        write_json(canonical_config_path, cfg)
+        viewer_path = write_main_viewer(
+            path=output_dir / f"{main_id}_main_viewer.bin",
+            repo_root=root,
+            config=cfg,
+            motion=canonical_partial,
+            target=main_target,
+            result=partial_result,
+            frame_status=frame_status,
+            frame_errors=frame_errors,
+        )
+        error_path = output_dir / f"{main_id}_error.log"
+        error_path.write_text(
+            "\n".join((
+                f"timestamp_utc: {datetime.now(timezone.utc).isoformat()}",
+                f"capsule_id: {cfg.get('capsule_id', '')}",
+                f"primary_id: {primary_run_id}",
+                f"main_id: {main_id}",
+                f"completed_frames: {completed} / {total}",
+                f"failed_output_frame: {failure.output_index}",
+                f"failed_source_frame: {failure.source_frame}",
+                f"error: {type(failure).__name__}: {failure}",
+                "",
+                "traceback:",
+                "".join(traceback.format_exception(failure)),
+            )) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Main partial viewer: {viewer_path}", flush=True)
+        print(f"Main error log: {error_path}", flush=True)
+        raise RuntimeError(str(failure)) from failure
     print("Main postprocess: Global Contact Anchoring (World X/Y only)", flush=True)
     postprocess_result = apply_global_contact_anchoring(
         model=preparation.model,
@@ -467,19 +564,31 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     }
     cfg["main_id"] = main_id
     cfg["primary_run_id"] = primary_run_id
-    cfg["primary_post_csv"] = primary_post_csv.name
+    cfg["primary_motion_file"] = primary_pkl.name
     cfg["primary_target_npz"] = primary_target_npz.name
     cfg.pop("main_input_csv", None)
     cfg["main_target_npz"] = main_target_path.name
     cfg["main_calibration"] = calibration_result
-    write_json(config_path, cfg)
+    cfg["schema_version"] = str(cfg.get("schema_version") or "1.0")
+    cfg["name"] = str(cfg.get("name") or cfg.get("config_name") or "Main Standard")
+    cfg["main_runtime_context"] = {
+        "capsule_id": cfg.get("capsule_id"),
+        "primary_run_id": primary_run_id,
+        "primary_motion_file": primary_pkl.name,
+        "primary_target_file": primary_target_npz.name,
+        "main_target_file": main_target_path.name,
+        "fps": float(preparation.primary_motion.get("fps", 30.0)),
+        "frame_count": int(len(preparation.rows)),
+        "frame_range": deepcopy(cfg.get("frame_range", {})),
+    }
+    canonical_config_path = output_dir / f"{main_id}_main_config.json"
+    write_json(canonical_config_path, cfg)
 
     metadata = dict(out.get("metadata", {}))
     metadata.update({
         "main_retarget": True,
         "main_stage_version": "main-target-npz-v1",
         "main_source_primary": primary_pkl.name,
-        "main_source_primary_post": primary_post_csv.name,
         "main_source_primary_target": primary_target_npz.name,
         "main_target_npz": main_target_path.name,
         "main_result_json": config_path.name,
@@ -551,7 +660,7 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         "max_iterations_per_frame": settings.max_iterations,
         "converged_frames": int(converged_count),
         "frame_count": int(len(ik_result.diagnostics)),
-        "initial_pose": "same-frame qpos assembled directly from Primary PKL",
+        "initial_pose": "same-frame qpos assembled directly from Primary motion NPZ",
         "pelvis_task": {
             "position": "main_target.npz pelvis_target_xyz",
             "orientation": "main_target.npz pelvis_target_quat",
@@ -619,41 +728,64 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         link: [float(x) for x in value]
         for link, value in preparation.mapping_offsets.items()
     }
+    debug_artifacts = bool(cfg.get("output", {}).get("save_debug_artifacts", False))
     diagnostics_path = output_dir / f"{main_id}_main_diagnostics.csv"
     source_frame_indices = np.asarray(out.get("source_frame_indices"), dtype=np.int64)
     fps = float(out.get("fps", out.get("metadata", {}).get("fps", 1.0 / settings.output_frame_dt_s)))
     joint_names = [name for _, name, _, _, _, _, _ in hinge_info(preparation.model)]
-    write_main_diagnostics_csv(
-        diagnostics_path,
-        diagnostics=ik_result.diagnostics,
-        dof_pos=np.asarray(out["dof_pos"], dtype=float),
-        source_frame_indices=source_frame_indices,
-        fps=fps,
-        joint_names=joint_names,
-        acceleration_limits=settings.acceleration_limit_by_joint,
-        weight_at_2x_limit=float(settings.acceleration_weight_at_2x_limit),
-    )
-    metadata["main_ik"]["diagnostics_csv"] = diagnostics_path.name
-    metadata["diagnostics_csv"] = diagnostics_path.name
+    if debug_artifacts:
+        write_main_diagnostics_csv(
+            diagnostics_path,
+            diagnostics=ik_result.diagnostics,
+            dof_pos=np.asarray(out["dof_pos"], dtype=float),
+            source_frame_indices=source_frame_indices,
+            fps=fps,
+            joint_names=joint_names,
+            acceleration_limits=settings.acceleration_limit_by_joint,
+            weight_at_2x_limit=float(settings.acceleration_weight_at_2x_limit),
+        )
+        metadata["main_ik"]["diagnostics_csv"] = diagnostics_path.name
+        metadata["diagnostics_csv"] = diagnostics_path.name
     out["metadata"] = metadata
 
-    validation_metadata_path = write_stage_validation_artifacts(
-        output_dir=output_dir,
-        file_id=main_id,
-        stage="main",
+    csv_path = output_dir / f"{main_id}_main_targets.csv"
+    npz_path = output_dir / f"{main_id}_main.npz"
+    pkl_path = output_dir / f"{main_id}_main.pkl"
+    if debug_artifacts:
+        write_csv(csv_path, rows)
+    joint_names = [name for _, name, _, _, _, _, _ in hinge_info(preparation.model)]
+    root_rot_order = str(out.get("metadata", {}).get("root_rot_order", "xyzw"))
+    canonical_main = save_motion_npz(
+        npz_path,
+        out,
+        joint_names=joint_names,
+        root_rot_order=root_rot_order,
+    )
+    viewer_path = write_main_viewer(
+        path=output_dir / f"{main_id}_main_viewer.bin",
         repo_root=root,
         config=cfg,
-        motion=out,
+        motion=canonical_main,
+        target=main_target,
+        result=final_ik_result,
     )
-    out["metadata"]["frame_validation"] = {
-        "metadata_file": validation_metadata_path.name,
-        "precomputed_after_stage": True,
-    }
-
-    csv_path = output_dir / f"{main_id}_main_targets.csv"
-    pkl_path = output_dir / f"{main_id}_main.pkl"
-    write_csv(csv_path, rows)
-    save_pickle(pkl_path, out)
+    save_gmr_pickle(pkl_path, {
+        "fps": float(canonical_main["fps"]),
+        "root_pos": canonical_main["root_pos"],
+        "root_rot": canonical_main["root_rot"],
+        "dof_pos": canonical_main["dof_pos"],
+        "metadata": {"root_rot_order": root_rot_order},
+    })
+    validation_metadata_path = None
+    if debug_artifacts:
+        validation_metadata_path = write_stage_validation_artifacts(
+            output_dir=output_dir,
+            file_id=main_id,
+            stage="main",
+            repo_root=root,
+            config=cfg,
+            motion=out,
+        )
 
     print(f"Scale common: {scale_common:.9f}")
     print(f"MEVA Foot Z @ ground: {meva_foot_z_at_ground:.9f} m")
@@ -665,13 +797,17 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         f"{postprocess_result.validation['max_abs_root_quaternion_diff']:.3e} / "
         f"{postprocess_result.validation['max_abs_hinge_qpos_diff']:.3e}"
     )
-    print(f"Main JSON: {config_path}")
-    print(f"Main CSV: {csv_path}")
-    print(f"Main diagnostics CSV: {diagnostics_path}")
+    print(f"Main config: {canonical_config_path}")
+    if debug_artifacts:
+        print(f"Main debug CSV: {csv_path}")
+        print(f"Main diagnostics debug CSV: {diagnostics_path}")
     print(f"Main target NPZ: {main_target_path}")
+    print(f"Main motion NPZ: {npz_path}")
+    print(f"Main viewer: {viewer_path}")
     print(f"Main PKL: {pkl_path}")
-    print(f"Main frame validation: {validation_metadata_path}")
-    return csv_path, pkl_path
+    if validation_metadata_path is not None:
+        print(f"Main frame validation debug data: {validation_metadata_path}")
+    return npz_path, pkl_path
 
 
 def main() -> None:

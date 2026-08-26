@@ -13,16 +13,27 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+from server.retarget_config_store import (
+    ConfigNameCollision,
+    ConfigStoreError,
+    list_configs as list_shared_configs,
+    load_config as load_shared_config,
+    runtime_config as merge_runtime_config,
+    save_user_config,
+    workspace_root,
+)
+
 
 router = APIRouter(prefix="/api/retarget", tags=["retarget"])
 
 RUN_RE = re.compile(r"^\d{10}$")
+CAPSULE_RE = re.compile(r"^\d{10}$")
 MAIN_ID_RE = re.compile(r"^(\d{10})-(\d{2})$")
 PROGRESS_RE = re.compile(r"^\[(\d+)/(\d+)\] frame (\d+)")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -40,8 +51,7 @@ def robot_dir(
     user_id: str = "local_user",
 ) -> Path:
     return (
-        repo_root()
-        / "workspace"
+        workspace_root()
         / "users"
         / user_id
         / "capsules"
@@ -215,7 +225,12 @@ def list_primary_run_ids(path: Path) -> list[str]:
     out: list[str] = []
     for run_id in list_run_ids(path):
         run = path / run_id
-        if (run / f"{run_id}_primary.pkl").exists() or (run / "primary.pkl").exists():
+        if (
+            (run / f"{run_id}_primary.npz").exists()
+            or (run / f"{run_id}_primary.pkl").exists()
+            or (run / "primary.pkl").exists()
+            or (run / f"{run_id}_primary_viewer.bin").exists()
+        ):
             out.append(run_id)
     return out
 
@@ -279,21 +294,61 @@ def metadata_frame_count(
     capsule_id: str,
     user_id: str = "local_user",
 ) -> int | None:
-    """Read the precomputed frame count without scanning the MEVA CSV."""
+    """Read the source frame count without scanning a large MEVA CSV."""
     path = (
-        repo_root() / "workspace" / "users" / user_id
+        workspace_root() / "users" / user_id
         / "capsules" / capsule_id / "metadata.json"
     )
     if not path.exists():
         return None
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))["meva_source"][
-            "frame_count"
-        ]
-        frame_count = int(value)
-        return frame_count if frame_count >= 0 else None
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
         return None
+    source = metadata.get("meva_source") or {}
+    try:
+        frame_count = int(source["frame_count"])
+        if frame_count >= 0:
+            return frame_count
+    except (KeyError, TypeError, ValueError):
+        pass
+
+    # Older Capsule metadata did not include frame_count. A same-stem BVH has
+    # the authoritative frame count in its small header and avoids rescanning a
+    # potentially hundreds-of-megabytes CSV whenever the page is opened.
+    source_file = str(source.get("file") or "").replace("\\", "/").strip("/")
+    relative = Path(source_file)
+    if not source_file or relative.is_absolute() or ".." in relative.parts:
+        return None
+    bvh_path = (path.parent / relative).with_suffix(".bvh")
+    try:
+        with bvh_path.open("r", encoding="utf-8-sig", errors="replace") as stream:
+            for _ in range(1000):
+                line = stream.readline()
+                if not line:
+                    break
+                match = re.fullmatch(r"\s*Frames:\s*(\d+)\s*", line)
+                if match:
+                    return int(match.group(1))
+    except OSError:
+        pass
+    return None
+
+
+def capsule_metadata(
+    capsule_id: str,
+    user_id: str = "local_user",
+) -> dict[str, Any]:
+    """Return Capsule metadata without trusting client-supplied display values."""
+    path = (
+        workspace_root() / "users" / user_id
+        / "capsules" / capsule_id / "metadata.json"
+    )
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
 
 
 
@@ -312,6 +367,217 @@ def selected_frame_count(cfg: dict[str, Any]) -> int | None:
         return max(0, int(math.ceil((stop - start) * target_fps / source_fps - 1e-12)))
     except Exception:
         return None
+
+
+def _main_artifact_names(main_id: str) -> tuple[str, ...]:
+    return (
+        f"{main_id}_main_target.npz",
+        f"{main_id}_main.npz",
+        f"{main_id}_main_config.json",
+        f"{main_id}_main.pkl",
+        f"{main_id}_main_viewer.bin",
+    )
+
+
+def _main_primary_frame_count(path: Path) -> int:
+    if path.suffix.lower() == ".pkl":
+        import pickle
+
+        with path.open("rb") as stream:
+            motion = pickle.load(stream)
+        return int(len(motion["root_pos"]))
+    import numpy as np
+
+    with np.load(path, allow_pickle=False) as archive:
+        return int(len(archive["frame"]))
+
+
+def _main_artifact_frame_counts(path: Path, main_id: str) -> dict[str, int]:
+    """Read the frame count of each self-contained Main artifact."""
+    import pickle
+    import struct
+
+    import numpy as np
+
+    target_path = path / f"{main_id}_main_target.npz"
+    motion_path = path / f"{main_id}_main.npz"
+    config_path = path / f"{main_id}_main_config.json"
+    viewer_path = path / f"{main_id}_main_viewer.bin"
+    pickle_path = path / f"{main_id}_main.pkl"
+    missing = [
+        name for name in _main_artifact_names(main_id)
+        if not (path / name).is_file()
+    ]
+    if missing:
+        raise RuntimeError(f"Incomplete Main artifact set: {', '.join(missing)}")
+    with np.load(target_path, allow_pickle=False) as archive:
+        target_frames = int(len(archive["frame"]))
+    with np.load(motion_path, allow_pickle=False) as archive:
+        motion_frames = int(len(archive["frame"]))
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    if str(cfg.get("main_id")) != main_id:
+        raise RuntimeError(
+            f"Main config ID mismatch: expected {main_id}, got {cfg.get('main_id')}"
+        )
+    config_frames = int(cfg.get("main_runtime_context", {}).get("frame_count", -1))
+    with viewer_path.open("rb") as stream:
+        raw_header = stream.read(16)
+    if len(raw_header) != 16 or raw_header[:8] != b"MEVAVW02":
+        raise RuntimeError("Invalid Main Viewer BIN header")
+    _, header_length = struct.unpack("<II", raw_header[8:16])
+    with viewer_path.open("rb") as stream:
+        stream.seek(16)
+        viewer_header = json.loads(stream.read(header_length).decode("utf-8"))
+    if str(viewer_header.get("stage")) != "main":
+        raise RuntimeError("Main Viewer BIN has a non-Main stage")
+    viewer_frames = int(viewer_header.get("frame_count", viewer_header.get("frames", -1)))
+    with pickle_path.open("rb") as stream:
+        gmr = pickle.load(stream)
+    pickle_frames = int(len(gmr["root_pos"]))
+    return {
+        "target": target_frames,
+        "motion": motion_frames,
+        "config": config_frames,
+        "viewer": viewer_frames,
+        "pkl": pickle_frames,
+    }
+
+
+def _validate_main_artifact_set(
+    path: Path, main_id: str, *, expected_frames: int | None = None,
+    generation_id: str | None = None,
+) -> int:
+    counts = _main_artifact_frame_counts(path, main_id)
+    unique = set(counts.values())
+    if len(unique) != 1 or next(iter(unique)) < 0:
+        raise RuntimeError(f"Main artifact frame-count mismatch: {counts}")
+    frame_count = next(iter(unique))
+    if expected_frames is not None and frame_count != expected_frames:
+        raise RuntimeError(
+            f"Main artifact frame count is {frame_count}; current Primary has "
+            f"{expected_frames} frames"
+        )
+    if generation_id is not None:
+        cfg = json.loads(
+            (path / f"{main_id}_main_config.json").read_text(encoding="utf-8")
+        )
+        if str(cfg.get("artifact_generation_id")) != generation_id:
+            raise RuntimeError("Main artifact generation ID mismatch")
+        import struct
+
+        with (path / f"{main_id}_main_viewer.bin").open("rb") as stream:
+            fixed = stream.read(16)
+            _, header_length = struct.unpack("<II", fixed[8:16])
+            viewer_header = json.loads(stream.read(header_length).decode("utf-8"))
+        if str(viewer_header.get("artifact_generation_id")) != generation_id:
+            raise RuntimeError("Main Viewer generation ID mismatch")
+    return frame_count
+
+
+def _cleanup_main_staging(path: Path, main_id: str) -> None:
+    for name in (
+        *_main_artifact_names(main_id),
+        f"{main_id}_error.log",
+        f"{main_id}_main_diagnostics.csv",
+        f"{main_id}_main_targets.csv",
+        f"{main_id}_main_validation.json",
+    ):
+        (path / name).unlink(missing_ok=True)
+    try:
+        path.rmdir()
+    except (FileNotFoundError, OSError):
+        pass
+
+
+def _publish_main_artifact_set(
+    staging: Path, destination: Path, main_id: str, *,
+    expected_frames: int, generation_id: str,
+) -> tuple[Path, list[str]]:
+    """Validate all five files, then publish Viewer last as the set marker."""
+    _validate_main_artifact_set(
+        staging, main_id, expected_frames=expected_frames,
+        generation_id=generation_id,
+    )
+    destination.mkdir(parents=True, exist_ok=True)
+    publish_order = (
+        f"{main_id}_main_target.npz",
+        f"{main_id}_main.npz",
+        f"{main_id}_main_config.json",
+        f"{main_id}_main.pkl",
+        f"{main_id}_main_viewer.bin",
+    )
+    for name in publish_order:
+        (staging / name).replace(destination / name)
+    _validate_main_artifact_set(
+        destination, main_id, expected_frames=expected_frames,
+        generation_id=generation_id,
+    )
+    return destination, list(publish_order)
+
+
+def _publish_main_failure_artifacts(
+    staging: Path, destination: Path, main_id: str, log_lines: list[str],
+) -> tuple[Path, list[str]]:
+    """Publish only the reproducibility snapshot, partial Viewer, and error log."""
+    config_name = f"{main_id}_main_config.json"
+    viewer_name = f"{main_id}_main_viewer.bin"
+    error_name = f"{main_id}_error.log"
+    if not (staging / config_name).exists():
+        raise RuntimeError("Failed Main did not leave its config snapshot")
+    if not (staging / error_name).exists():
+        (staging / error_name).write_text(
+            "Main retarget failed.\n\n" + "\n".join(log_lines[-120:]) + "\n",
+            encoding="utf-8",
+        )
+    destination.mkdir(parents=True, exist_ok=True)
+    # A retry of the same Main ID must never leave a previously successful
+    # NPZ/PKL set beside the new failed status.
+    for name in (*_main_artifact_names(main_id), error_name):
+        (destination / name).unlink(missing_ok=True)
+    publish_order = [config_name]
+    if (staging / viewer_name).exists():
+        publish_order.append(viewer_name)
+    publish_order.append(error_name)
+    for name in publish_order:
+        (staging / name).replace(destination / name)
+    return destination, publish_order
+
+
+def _publish_primary_failure_artifacts(
+    rdir: Path, run_id: str, request_path: Path, log_lines: list[str],
+) -> tuple[Path, list[str]]:
+    """Leave the same diagnostic-only contract used by a failed Main."""
+    run = rdir / run_id
+    run.mkdir(parents=True, exist_ok=True)
+    config_name = f"{run_id}_primary_config.json"
+    viewer_name = f"{run_id}_primary_viewer.bin"
+    error_name = f"{run_id}_error.log"
+    config_path = run / config_name
+    if not config_path.exists():
+        snapshot = load_json(request_path)
+        snapshot["schema_version"] = str(snapshot.get("schema_version") or "1.0")
+        snapshot["name"] = str(
+            snapshot.get("name") or snapshot.get("config_name") or "Primary Standard"
+        )
+        snapshot["run_status"] = "failed"
+        atomic_write_json(config_path, snapshot)
+    error_path = run / error_name
+    if not error_path.exists():
+        error_path.write_text(
+            "Primary retarget failed.\n\n" + "\n".join(log_lines[-120:]) + "\n",
+            encoding="utf-8",
+        )
+    for name in (
+        f"{run_id}_primary_target.npz", f"{run_id}_primary.npz",
+        f"{run_id}_primary.pkl",
+    ):
+        (run / name).unlink(missing_ok=True)
+    (rdir / f".{run_id}_primary_target.npz").unlink(missing_ok=True)
+    files = [config_name]
+    if (run / viewer_name).exists():
+        files.append(viewer_name)
+    files.append(error_name)
+    return run, files
 
 
 def update_job(job_id: str, **values: Any) -> None:
@@ -362,6 +628,21 @@ class DefaultConfigRequest(BaseModel):
     config: dict[str, Any]
 
 
+class SharedConfigSaveRequest(BaseModel):
+    capsule_id: str
+    name: str = Field(min_length=1, max_length=200)
+    source_type: str = "meva"
+    manufacturer: str = "unitree"
+    robot_variant: str = "g1_29dof"
+    user_id: str = "local_user"
+    stage: Literal["primary", "main"] = "primary"
+    run_id: str | None = None
+    selected_scope: Literal["xenoma", "user"] | None = None
+    selected_filename: str | None = None
+    overwrite: bool = False
+    config: dict[str, Any]
+
+
 class RunRequest(BaseModel):
     capsule_id: str
     robot_variant: str = "g1_29dof"
@@ -394,6 +675,248 @@ class DataManagementDeleteRequest(BaseModel):
     main_results: list[MainDeleteSelection] = Field(default_factory=list)
 
 
+def _capsule_runtime_context(
+    capsule_id: str,
+    robot_variant: str,
+    user_id: str = "local_user",
+) -> dict[str, Any]:
+    """Build only the Capsule-specific fields merged into a Shared Config."""
+    if not CAPSULE_RE.fullmatch(capsule_id) or user_id != "local_user":
+        raise HTTPException(status_code=404, detail="Capsule not found")
+    capsules = (workspace_root() / "users" / user_id / "capsules").resolve()
+    capsule = (capsules / capsule_id).resolve()
+    if capsule.parent != capsules or not capsule.is_dir():
+        raise HTTPException(status_code=404, detail="Capsule not found")
+
+    existing_path = default_config_path(capsule_id, robot_variant, user_id)
+    existing: dict[str, Any] = {}
+    if existing_path.exists():
+        existing = load_json(existing_path)
+    existing_source = deepcopy(existing.get("source") or {})
+
+    metadata_path = capsule / "metadata.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=409, detail="Capsule metadata is unavailable") from exc
+    source_metadata = metadata.get("meva_source") or {}
+    source_relative = str(source_metadata.get("file") or "").replace("\\", "/").strip("/")
+    logical_prefix = Path("workspace") / "users" / user_id / "capsules" / capsule_id
+    logical_prefix_text = logical_prefix.as_posix() + "/"
+    existing_file = str(existing_source.get("file") or "").replace("\\", "/")
+    if not source_relative and existing_file.startswith(logical_prefix_text):
+        source_relative = existing_file[len(logical_prefix_text):]
+    relative_path = Path(source_relative)
+    if not source_relative or relative_path.is_absolute() or ".." in relative_path.parts:
+        raise HTTPException(status_code=409, detail="Capsule MEVA source is unavailable")
+    source_file = capsule / relative_path
+    if not source_file.is_file():
+        raise HTTPException(status_code=409, detail="Capsule MEVA source is unavailable")
+
+    source: dict[str, Any] = {
+        "type": "meva_csv",
+        "file": (logical_prefix / relative_path).as_posix(),
+        "header_row_1based": int(
+            source_metadata.get("header_row_1based")
+            or source_metadata.get("header_row")
+            or existing_source.get("header_row_1based")
+            or 8
+        ),
+        "sampling_rate_hz": float(
+            source_metadata.get("sampling_rate_hz")
+            or existing_source.get("sampling_rate_hz")
+            or 100.0
+        ),
+        "quaternion_order": str(
+            source_metadata.get("quaternion_order")
+            or existing_source.get("quaternion_order")
+            or "wxyz"
+        ),
+        "quaternion_columns": str(
+            source_metadata.get("quaternion_columns")
+            or existing_source.get("quaternion_columns")
+            or "{segment}_q_gs_{component}"
+        ),
+    }
+    bvh_relative = source_metadata.get("bvh")
+    if not bvh_relative:
+        same_stem = relative_path.with_suffix(".bvh")
+        if (capsule / same_stem).is_file():
+            bvh_relative = same_stem.as_posix()
+        else:
+            bvh_file = next((path for path in (capsule / "meva").glob("*.bvh")), None)
+            if bvh_file:
+                bvh_relative = bvh_file.relative_to(capsule).as_posix()
+    if bvh_relative:
+        bvh_path = Path(str(bvh_relative).replace("\\", "/").strip("/"))
+        if not bvh_path.is_absolute() and ".." not in bvh_path.parts:
+            source["bvh"] = (logical_prefix / bvh_path).as_posix()
+    return {
+        "capsule_id": capsule_id,
+        "source": source,
+        "frame_range": deepcopy(
+            existing.get("frame_range")
+            or {"start": 0, "stop": None, "step": 1}
+        ),
+        "sampling": deepcopy(
+            existing.get("sampling")
+            or {"rate_fps": 30.0}
+        ),
+        "output": deepcopy(existing.get("output") or {}),
+    }
+
+
+def _shared_error(exc: ConfigStoreError, status_code: int = 400) -> HTTPException:
+    return HTTPException(status_code=status_code, detail=str(exc))
+
+
+@router.get("/configs")
+def get_shared_configs(
+    source_type: str = "meva",
+    manufacturer: str = "unitree",
+    robot_variant: str = "g1_29dof",
+    user_id: str = "local_user",
+    stage: Literal["primary", "main"] = "primary",
+):
+    try:
+        configs = list_shared_configs(
+            source_type=source_type,
+            manufacturer=manufacturer,
+            robot_variant=robot_variant,
+            user_id=user_id,
+            stage=stage,
+        )
+    except ConfigStoreError as exc:
+        raise _shared_error(exc) from exc
+    return {"configs": [record.as_dict() for record in configs]}
+
+
+@router.get("/configs/load")
+def get_shared_config(
+    capsule_id: str,
+    scope: Literal["xenoma", "user"],
+    filename: str,
+    source_type: str = "meva",
+    manufacturer: str = "unitree",
+    robot_variant: str = "g1_29dof",
+    user_id: str = "local_user",
+    stage: Literal["primary", "main"] = "primary",
+    run_id: str | None = None,
+):
+    if stage == "main":
+        if not CAPSULE_RE.fullmatch(capsule_id) or user_id != "local_user":
+            raise HTTPException(status_code=404, detail="Capsule not found")
+        if not run_id or not RUN_RE.fullmatch(run_id):
+            raise HTTPException(status_code=400, detail="A Primary run_id is required for Main config")
+    try:
+        record, shared = load_shared_config(
+            scope=scope,
+            filename=filename,
+            source_type=source_type,
+            manufacturer=manufacturer,
+            robot_variant=robot_variant,
+            user_id=user_id,
+            stage=stage,
+        )
+        if stage == "main":
+            assert run_id is not None
+            primary = load_json(run_config_path(capsule_id, robot_variant, run_id, user_id))
+            runtime = _overlay_main_defaults(primary, shared)
+            runtime["schema_version"] = str(shared.get("schema_version") or "1.0")
+            runtime["name"] = record.name
+            runtime["config_name"] = record.name
+            runtime["retarget_stage"] = "main"
+        else:
+            runtime = merge_runtime_config(
+                shared,
+                _capsule_runtime_context(capsule_id, robot_variant, user_id),
+            )
+    except ConfigStoreError as exc:
+        raise _shared_error(exc, 404) from exc
+    return {
+        "config": runtime,
+        "shared_config": shared,
+        "selection": record.as_dict(),
+    }
+
+
+@router.post("/configs")
+def save_shared_config(req: SharedConfigSaveRequest):
+    try:
+        primary: dict[str, Any] | None = None
+        if req.stage == "main":
+            if not CAPSULE_RE.fullmatch(req.capsule_id) or req.user_id != "local_user":
+                raise HTTPException(status_code=404, detail="Capsule not found")
+            if not req.run_id or not RUN_RE.fullmatch(req.run_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail="A Primary run_id is required for Main config",
+                )
+            # Validate the Config path components and the Primary snapshot before
+            # writing the User Config, so a failed Main save has no side effects.
+            list_shared_configs(
+                source_type=req.source_type,
+                manufacturer=req.manufacturer,
+                robot_variant=req.robot_variant,
+                user_id=req.user_id,
+                stage="main",
+            )
+            primary = load_json(run_config_path(
+                req.capsule_id, req.robot_variant, req.run_id, req.user_id
+            ))
+        record, shared = save_user_config(
+            req.config,
+            name=req.name,
+            source_type=req.source_type,
+            manufacturer=req.manufacturer,
+            robot_variant=req.robot_variant,
+            selected_scope=req.selected_scope,
+            selected_filename=req.selected_filename,
+            overwrite=req.overwrite,
+            user_id=req.user_id,
+            stage=req.stage,
+        )
+        if req.stage == "main":
+            assert primary is not None
+            runtime = _overlay_main_defaults(primary, shared)
+            runtime["schema_version"] = str(shared.get("schema_version") or "1.0")
+            runtime["name"] = record.name
+            runtime["config_name"] = record.name
+            runtime["retarget_stage"] = "main"
+            atomic_write_json(
+                main_default_config_path(req.capsule_id, req.robot_variant, req.user_id),
+                runtime,
+            )
+        else:
+            runtime = merge_runtime_config(
+                shared,
+                _capsule_runtime_context(req.capsule_id, req.robot_variant, req.user_id),
+            )
+            # Preserve the existing per-Capsule runtime default path for Primary and
+            # older clients. It is a composed runtime document, not a Shared Config.
+            atomic_write_json(
+                default_config_path(req.capsule_id, req.robot_variant, req.user_id),
+                runtime,
+            )
+    except ConfigNameCollision as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "CONFIG_NAME_COLLISION",
+                "message": str(exc),
+                "filename": exc.filename,
+            },
+        ) from exc
+    except ConfigStoreError as exc:
+        raise _shared_error(exc) from exc
+    return {
+        "ok": True,
+        "config": runtime,
+        "shared_config": shared,
+        "selection": record.as_dict(),
+    }
+
+
 @router.get("/context")
 def get_context(
     capsule_id: str,
@@ -407,7 +930,28 @@ def get_context(
     if cfg_path.exists():
         default_config = load_json(cfg_path)
         _normalize_ground_contact_estimation(default_config)
+    else:
+        # A newly uploaded Capsule has no per-Capsule config file. Compose the
+        # read-only Xenoma default in memory without creating one on upload/open.
+        try:
+            _, shared_default = load_shared_config(
+                scope="xenoma",
+                filename="primary_standard.json",
+                source_type="meva",
+                manufacturer="unitree",
+                robot_variant=robot_variant,
+                user_id=user_id,
+                stage="primary",
+            )
+            default_config = merge_runtime_config(
+                shared_default,
+                _capsule_runtime_context(capsule_id, robot_variant, user_id),
+            )
+            _normalize_ground_contact_estimation(default_config)
+        except ConfigStoreError:
+            default_config = None
 
+    metadata = capsule_metadata(capsule_id, user_id)
     total_frames = metadata_frame_count(capsule_id, user_id)
     if total_frames is None and default_config:
         # Backward compatibility for capsules created before metadata included
@@ -421,8 +965,26 @@ def get_context(
             model_metadata = robot_model_metadata(repo_root(), default_config)
         except Exception as exc:
             model_metadata["warning"] = f"{type(exc).__name__}: {exc}"
+    source_metadata = metadata.get("meva_source") or {}
+    config_source = (default_config or {}).get("source") or {}
+    source_fps = float(
+        source_metadata.get("sampling_rate_hz")
+        or config_source.get("sampling_rate_hz")
+        or 100.0
+    )
+    robot = deepcopy((default_config or {}).get("robot") or {})
     return {
         "capsule_id": capsule_id,
+        "capsule": {
+            "id": capsule_id,
+            "title": str(metadata.get("title") or capsule_id),
+        },
+        "source": {
+            "type": str(source_metadata.get("type") or "meva"),
+            "frame_count": total_frames,
+            "sampling_rate_hz": source_fps,
+        },
+        "robot": robot,
         "robot_variant": robot_variant,
         "default_config_exists": cfg_path.exists(),
         "default_config": default_config,
@@ -459,7 +1021,9 @@ def get_data_management(
         primaries.append({
             "run_id": run_id,
             "pkl_exists": (
-                (run / f"{run_id}_primary.pkl").exists() or (run / "primary.pkl").exists()
+                (run / f"{run_id}_primary.npz").exists()
+                or (run / f"{run_id}_primary.pkl").exists()
+                or (run / "primary.pkl").exists()
             ),
             "mains": mains,
         })
@@ -616,7 +1180,7 @@ def get_main_targets_file(
 
 def _overlay_main_defaults(primary_cfg: dict[str, Any], overlay: dict[str, Any] | None) -> dict[str, Any]:
     cfg = deepcopy(primary_cfg)
-    cfg["config_name"] = "Robot Standard Main"
+    cfg["config_name"] = "Main Standard"
     cfg["main"] = {
         "gcp_smoothing_ms": 150.0,
         "gcp_min_offset": 0.2,
@@ -691,9 +1255,13 @@ def get_main_config(
         raise HTTPException(status_code=400, detail="Invalid run_id")
 
     run = robot_dir(capsule_id, robot_variant, user_id) / run_id
-    primary_path = run / f"{run_id}_primary.pkl"
-    if not primary_path.exists() and not (run / "primary.pkl").exists():
-        raise HTTPException(status_code=409, detail=f"Primary PKL not found for run {run_id}")
+    primary_path = run / f"{run_id}_primary.npz"
+    if not primary_path.exists():
+        primary_path = next((path for path in (
+            run / f"{run_id}_primary.pkl", run / "primary.pkl"
+        ) if path.exists()), primary_path)
+    if not primary_path.exists():
+        raise HTTPException(status_code=409, detail=f"Primary motion not found for run {run_id}")
 
     primary_cfg = load_json(run_config_path(capsule_id, robot_variant, run_id, user_id))
     legacy_cfg_path = main_run_config_path(capsule_id, robot_variant, run_id, user_id)
@@ -725,6 +1293,18 @@ def get_main_config(
         result_dir = cfg_path.parent
         main_path = result_dir / f"{main_id}_main.pkl"
         main_csv_path = result_dir / f"{main_id}_main_targets.csv"
+    main_done = main_id != "new" and main_path.exists()
+    generation_id = cfg.get("artifact_generation_id") if isinstance(cfg, dict) else None
+    if main_done and generation_id and main_id != "legacy":
+        try:
+            _validate_main_artifact_set(
+                main_path.parent,
+                main_id,
+                expected_frames=_main_primary_frame_count(primary_path),
+                generation_id=str(generation_id),
+            )
+        except RuntimeError:
+            main_done = False
     return {
         "run_id": run_id,
         "main_id": main_id,
@@ -732,7 +1312,7 @@ def get_main_config(
         "legacy_main_exists": legacy_cfg_path.exists(),
         "config": cfg,
         "primary_done": True,
-        "main_done": main_id != "new" and main_path.exists(),
+        "main_done": main_done,
         "main_csv_exists": main_id != "new" and main_csv_path.exists(),
         "run_main_config_exists": main_id != "new",
         "main_default_config_exists": default_main_cfg_path.exists(),
@@ -743,7 +1323,7 @@ def get_main_config(
 @router.post("/main/default")
 def save_main_default(req: DefaultConfigRequest):
     cfg = deepcopy(req.config)
-    cfg["config_name"] = str(cfg.get("config_name") or "Robot Standard Main")
+    cfg["config_name"] = str(cfg.get("config_name") or "Main Standard")
     cfg.setdefault("main", {})
     cfg.pop("main_id", None)
     cfg.pop("primary_run_id", None)
@@ -774,7 +1354,7 @@ def get_run_config(
         user_id,
     )
     run = robot_dir(capsule_id, robot_variant, user_id) / run_id
-    primary_path = run / f"{run_id}_primary.pkl"
+    primary_path = run / f"{run_id}_primary.npz"
     main_path = run / f"{run_id}_main.pkl"
     main_csv_path = run / f"{run_id}_main_targets.csv"
     nested_ids = list_main_result_ids(run, run_id)
@@ -793,7 +1373,9 @@ def get_run_config(
     return {
         "run_id": run_id,
         "config": load_json(path),
-        "primary_done": primary_path.exists() or (run / "primary.pkl").exists(),
+        "primary_done": primary_path.exists() or any((run / name).exists() for name in (
+            f"{run_id}_primary.pkl", "primary.pkl"
+        )),
         "main_done": main_path.exists() or nested_main_done,
         "main_csv_exists": main_csv_path.exists() or nested_csv_done,
     }
@@ -807,10 +1389,6 @@ def save_default(req: DefaultConfigRequest):
     cfg.setdefault("output", {})
     cfg["output"]["run_id"] = "auto"
     cfg["output"].pop("overwrite_existing", None)
-
-    # Offset cache for this capsule + robot.
-    cfg.setdefault("offsets", {})
-    cfg["offsets"]["file"] = "offsets.json"
 
     path = default_config_path(
         req.capsule_id,
@@ -886,11 +1464,9 @@ def _prepare_run(req: RunRequest) -> tuple[str, Path, list[str], Path, bool]:
     cfg.setdefault("output", {})
     cfg["output"]["run_id"] = run_id
     cfg["output"]["overwrite_existing"] = overwrite
-    cfg["output"]["pkl_name"] = f"{run_id}_primary.pkl"
-    cfg["output"]["save_diagnostics_csv"] = True
-
-    cfg.setdefault("offsets", {})
-    cfg["offsets"]["file"] = "offsets.json"
+    cfg["output"].pop("pkl_name", None)
+    cfg["output"]["save_diagnostics_csv"] = bool(req.iteration_diagnostics)
+    cfg["output"]["save_debug_artifacts"] = bool(req.iteration_diagnostics)
 
     request_path = rdir / f".{run_id}_request_config.json"
     atomic_write_json(request_path, cfg)
@@ -910,6 +1486,9 @@ def _run_job(
     cmd: list[str],
     cleanup_path: Path | None,
     overwrite: bool,
+    finalize: Callable[[], tuple[Path, list[str]]] | None = None,
+    failure_finalize: Callable[[list[str]], tuple[Path, list[str]]] | None = None,
+    cleanup: Callable[[], None] | None = None,
 ) -> None:
     try:
         with JOBS_LOCK:
@@ -961,18 +1540,25 @@ def _run_job(
         returncode = proc.wait()
 
         if returncode != 0:
+            files: list[str] = []
+            if failure_finalize is not None:
+                _, files = failure_finalize(log_lines)
             update_job(
                 job_id,
                 status="failed",
                 message="Retarget failed",
                 error="\n".join(log_lines[-120:]),
+                files=files,
             )
             return
 
-        run_path = rdir / run_id
-        files = sorted(
-            p.name for p in run_path.iterdir() if p.is_file()
-        ) if run_path.exists() else []
+        if finalize is not None:
+            run_path, files = finalize()
+        else:
+            run_path = rdir / run_id
+            files = sorted(
+                p.name for p in run_path.iterdir() if p.is_file()
+            ) if run_path.exists() else []
 
         update_job(
             job_id,
@@ -992,6 +1578,11 @@ def _run_job(
     finally:
         if cleanup_path is not None:
             cleanup_path.unlink(missing_ok=True)
+        if cleanup is not None:
+            try:
+                cleanup()
+            except Exception:
+                pass
 
 
 @router.post("/run-start")
@@ -1020,6 +1611,11 @@ def run_retarget_start(req: RunRequest):
     thread = threading.Thread(
         target=_run_job,
         args=(job_id, run_id, rdir, cmd, request_path, overwrite),
+        kwargs={
+            "failure_finalize": lambda log_lines: _publish_primary_failure_artifacts(
+                rdir, run_id, request_path, log_lines,
+            ),
+        },
         daemon=True,
     )
     thread.start()
@@ -1037,18 +1633,32 @@ def run_main_start(req: MainRunRequest):
     if not run.is_dir():
         raise HTTPException(status_code=404, detail=f"Run not found: {req.run_id}")
 
-    primary_path = run / f"{req.run_id}_primary.pkl"
-    if not primary_path.exists() and not (run / "primary.pkl").exists():
+    primary_path = run / f"{req.run_id}_primary.npz"
+    if not primary_path.exists():
+        primary_path = next((path for path in (
+            run / f"{req.run_id}_primary.pkl", run / "primary.pkl"
+        ) if path.exists()), primary_path)
+    if not primary_path.exists():
         raise HTTPException(
             status_code=409,
-            detail=f"Primary PKL not found for run {req.run_id}",
+            detail=f"Primary motion not found for run {req.run_id}",
         )
 
-    # Main follows the same run-snapshot rule as Primary. Persistent defaults
-    # are only used while opening a new form, never after the Run request.
+    # Main follows the same run-snapshot rule as Primary. Capsule runtime
+    # fields always come from the current Primary snapshot, never from an old
+    # Main snapshot selected for Retry.
     cfg = deepcopy(req.config)
+    primary_cfg = load_json(
+        run_config_path(req.capsule_id, req.robot_variant, req.run_id, req.user_id)
+    )
+    for key in (
+        "capsule_id", "source", "frame_range", "sampling",
+        "foot_to_ground_offset",
+    ):
+        if key in primary_cfg:
+            cfg[key] = deepcopy(primary_cfg[key])
     _normalize_ground_contact_estimation(cfg)
-    cfg["config_name"] = str(cfg.get("config_name") or "Robot Standard Main")
+    cfg["config_name"] = str(cfg.get("config_name") or "Main Standard")
     main_cfg = cfg.setdefault("main", {})
     smoothing_ms = float(main_cfg.get("gcp_smoothing_ms", 150.0))
     gcp_min_offset = float(main_cfg.get("gcp_min_offset", 0.2))
@@ -1141,20 +1751,23 @@ def run_main_start(req: MainRunRequest):
 
     cfg["primary_run_id"] = req.run_id
     cfg["main_id"] = main_id
-    cfg.setdefault("offsets", {})
-    cfg["offsets"]["file"] = f"{main_id}_offsets.json"
-    cfg_path = main_result_json_path(
-        req.capsule_id, req.robot_variant, req.run_id, main_id, req.user_id
+    job_id = uuid.uuid4().hex
+    cfg["artifact_generation_id"] = job_id
+    expected_frames = _main_primary_frame_count(primary_path)
+    final_dir = resolve_main_result_dir(
+        req.capsule_id, req.robot_variant, req.run_id, main_id, req.user_id,
+        must_exist=False,
     )
+    staging_dir = run / f".{main_id}.{job_id}.staging"
+    staging_dir.mkdir(parents=False, exist_ok=False)
+    cfg_path = staging_dir / f"{main_id}_main_config.json"
     atomic_write_json(cfg_path, cfg)
 
     script = repo_root() / "server" / "retarget" / "main_retarget.py"
     cmd = [sys.executable, "-u", str(script), str(cfg_path)]
 
-    main_path = cfg_path.parent / f"{main_id}_main.pkl"
-    job_id = uuid.uuid4().hex
     with JOBS_LOCK:
-        initial_total = selected_frame_count(cfg)
+        initial_total = expected_frames
         JOBS[job_id] = {
             "job_id": job_id,
             "run_id": req.run_id,
@@ -1175,7 +1788,17 @@ def run_main_start(req: MainRunRequest):
 
     thread = threading.Thread(
         target=_run_job,
-        args=(job_id, main_id, cfg_path.parent.parent, cmd, None, overwrite),
+        args=(job_id, main_id, run, cmd, None, overwrite),
+        kwargs={
+            "finalize": lambda: _publish_main_artifact_set(
+                staging_dir, final_dir, main_id,
+                expected_frames=expected_frames, generation_id=job_id,
+            ),
+            "failure_finalize": lambda log_lines: _publish_main_failure_artifacts(
+                staging_dir, final_dir, main_id, log_lines,
+            ),
+            "cleanup": lambda: _cleanup_main_staging(staging_dir, main_id),
+        },
         daemon=True,
     )
     thread.start()
@@ -1187,7 +1810,7 @@ def get_main_file(
     capsule_id: str,
     run_id: str,
     main_id: str = "legacy",
-    kind: Literal["csv", "pkl"] = "csv",
+    kind: Literal["csv", "npz", "pkl"] = "csv",
     robot_variant: str = "g1_29dof",
     user_id: str = "local_user",
 ):
@@ -1205,6 +1828,9 @@ def get_main_file(
         file_id = main_id
     if kind == "pkl":
         path = result_dir / f"{file_id}_main.pkl"
+        media_type = "application/octet-stream"
+    elif kind == "npz":
+        path = result_dir / f"{file_id}_main.npz"
         media_type = "application/octet-stream"
     else:
         path = result_dir / f"{file_id}_main_targets.csv"
@@ -1244,9 +1870,22 @@ def prepare_viewer(
     rdir = robot_dir(capsule_id, robot_variant, user_id)
 
     if meva_only:
-        cfg = load_json(default_config_path(
-            capsule_id, robot_variant, user_id
-        ))
+        capsule_default = default_config_path(capsule_id, robot_variant, user_id)
+        if capsule_default.exists():
+            cfg = load_json(capsule_default)
+        else:
+            try:
+                _, shared_default = load_shared_config(
+                    scope="xenoma", filename="primary_standard.json",
+                    source_type="meva", manufacturer="unitree",
+                    robot_variant=robot_variant, user_id=user_id, stage="primary",
+                )
+                cfg = merge_runtime_config(
+                    shared_default,
+                    _capsule_runtime_context(capsule_id, robot_variant, user_id),
+                )
+            except ConfigStoreError as exc:
+                raise _shared_error(exc, 404) from exc
         run_dir = None
     else:
         run_dir = rdir / run_id
@@ -1276,8 +1915,8 @@ def prepare_viewer(
             "storage": "capsule_cache",
         }
 
-        # Primary/Main viewer data are generated directly from PKL on request.
-        # No per-stage *_viewer.bin file is created.
+        # New Primary and Main runs both have a persisted, self-contained
+        # Viewer BIN. Canonical NPZ / legacy PKL remain read-only fallbacks.
         if not meva_only:
             for stage, label in (("primary", "Primary"), ("main", "Main")):
                 stage_dir = run_dir
@@ -1289,12 +1928,17 @@ def prepare_viewer(
                         capsule_id, robot_variant, run_id, main_id, user_id
                     )
                     file_id = main_id
-                pkl_path = stage_dir / f"{file_id}_{stage}.pkl"
-                if stage == "primary" and not pkl_path.exists():
-                    legacy = run_dir / "primary.pkl"
-                    if legacy.exists():
-                        pkl_path = legacy
-                if not pkl_path.exists():
+                viewer_path = stage_dir / f"{file_id}_{stage}_viewer.bin"
+                motion_path = stage_dir / f"{file_id}_{stage}.npz"
+                if not motion_path.exists():
+                    legacy_candidates = [stage_dir / f"{file_id}_{stage}.pkl"]
+                    if stage == "primary":
+                        legacy_candidates.append(run_dir / "primary.pkl")
+                    legacy = next((path for path in legacy_candidates if path.exists()), None)
+                    if legacy is not None:
+                        motion_path = legacy
+                source_path = viewer_path if viewer_path.exists() else motion_path
+                if not source_path.exists():
                     continue
                 stage_cfg = cfg
                 if stage == "main":
@@ -1306,6 +1950,23 @@ def prepare_viewer(
                         if candidate.exists():
                             stage_cfg = load_json(candidate)
                             break
+                    generation_id = stage_cfg.get("artifact_generation_id")
+                    if (
+                        viewer_path.exists()
+                        and generation_id
+                        and str(stage_cfg.get("run_status", "complete")) != "partial"
+                    ):
+                        primary_motion = run_dir / f"{run_id}_primary.npz"
+                        if not primary_motion.exists():
+                            primary_motion = next((candidate for candidate in (
+                                run_dir / f"{run_id}_primary.pkl",
+                                run_dir / "primary.pkl",
+                            ) if candidate.exists()), primary_motion)
+                        _validate_main_artifact_set(
+                            stage_dir, file_id,
+                            expected_frames=_main_primary_frame_count(primary_motion),
+                            generation_id=str(generation_id),
+                        )
                 sources[stage] = {
                     "label": label,
                     "kind": "retarget",
@@ -1314,10 +1975,13 @@ def prepare_viewer(
                         f"?capsule_id={capsule_id}&robot_variant={robot_variant}"
                         f"&run_id={run_id}&stage={stage}&user_id={user_id}"
                         f"&main_id={main_id}"
-                        f"&rev={pkl_path.stat().st_mtime_ns}"
+                        f"&rev={source_path.stat().st_mtime_ns}"
                     ),
-                    "file": pkl_path.name,
-                    "storage": "pkl_on_demand",
+                    "file": source_path.name,
+                    "storage": (
+                        f"{stage}_viewer_bin" if viewer_path.exists()
+                        else "motion_on_demand"
+                    ),
                     # Display-only limits used for physical-value tooltips and
                     # ratio coloring. These are the exact run snapshot values;
                     # Viewer never writes them back or changes IK behavior.
@@ -1417,6 +2081,46 @@ def get_retarget_viewer_file(
 ):
     if not RUN_RE.fullmatch(run_id):
         raise HTTPException(status_code=400, detail="Invalid run_id")
+    run = robot_dir(capsule_id, robot_variant, user_id) / run_id
+    result_dir = run
+    file_id = run_id
+    if stage == "main" and main_id != "legacy":
+        if not MAIN_ID_RE.fullmatch(main_id) or not main_id.startswith(f"{run_id}-"):
+            raise HTTPException(status_code=400, detail="Invalid main_id")
+        result_dir = resolve_main_result_dir(
+            capsule_id, robot_variant, run_id, main_id, user_id
+        )
+        file_id = main_id
+    path = result_dir / f"{file_id}_{stage}_viewer.bin"
+    if path.exists():
+        if stage == "main" and main_id != "legacy":
+            config_path = result_dir / f"{main_id}_main_config.json"
+            if config_path.exists():
+                stage_cfg = load_json(config_path)
+                generation_id = stage_cfg.get("artifact_generation_id")
+                if (
+                    generation_id
+                    and str(stage_cfg.get("run_status", "complete")) != "partial"
+                ):
+                    primary_motion = run / f"{run_id}_primary.npz"
+                    if not primary_motion.exists():
+                        primary_motion = next((candidate for candidate in (
+                            run / f"{run_id}_primary.pkl", run / "primary.pkl"
+                        ) if candidate.exists()), primary_motion)
+                    try:
+                        _validate_main_artifact_set(
+                            result_dir, main_id,
+                            expected_frames=_main_primary_frame_count(primary_motion),
+                            generation_id=str(generation_id),
+                        )
+                    except RuntimeError as exc:
+                        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FileResponse(
+            path,
+            media_type="application/octet-stream",
+            filename=path.name,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
     try:
         from server.retarget.viewer_data import build_retarget_viewer_bytes
         payload = build_retarget_viewer_bytes(
@@ -1428,14 +2132,14 @@ def get_retarget_viewer_file(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"{stage} PKL viewer conversion failed: {type(exc).__name__}: {exc}",
+            detail=f"{stage} motion viewer conversion failed: {type(exc).__name__}: {exc}",
         ) from exc
     return Response(
         content=payload,
         media_type="application/octet-stream",
         headers={
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "X-MEVA-Viewer-Source": f"{stage}.pkl",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "X-MEVA-Viewer-Source": f"{stage}.npz-or-legacy-pkl",
         },
     )
 
@@ -1515,12 +2219,9 @@ def run_retarget(req: RunRequest):
     cfg.setdefault("output", {})
     cfg["output"]["run_id"] = run_id
     cfg["output"]["overwrite_existing"] = overwrite
-    cfg["output"]["pkl_name"] = f"{run_id}_primary.pkl"
-    cfg["output"]["save_diagnostics_csv"] = True
-
-    # Keep offset cache short and robot-level.
-    cfg.setdefault("offsets", {})
-    cfg["offsets"]["file"] = "offsets.json"
+    cfg["output"].pop("pkl_name", None)
+    cfg["output"]["save_diagnostics_csv"] = bool(req.iteration_diagnostics)
+    cfg["output"]["save_debug_artifacts"] = bool(req.iteration_diagnostics)
 
     # Temporary request config stays beside the robot default so that
     # primary_retarget.py creates the run directory beneath the same folder.

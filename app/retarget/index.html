@@ -172,6 +172,16 @@ select{min-width:215px}
   width:275px;height:36px;border:1px solid #b9cdcf;border-radius:8px;
   background:#fff;padding:0 10px;font-size:13px;font-weight:750;color:var(--ink)
 }
+.config-label-row{display:flex;align-items:center;gap:4px}
+.config-label-row label{margin:0}
+.config-dirty-indicator{color:#d92d20;font-size:16px;font-weight:900;line-height:1}
+.config-dirty-indicator[hidden]{display:none}
+.save-config-modal{width:min(460px,92vw);background:#fff;border-radius:16px;box-shadow:0 18px 55px rgba(13,38,49,.28);overflow:hidden}
+.save-config-body{padding:18px 20px}
+.save-config-body label{display:block;margin-bottom:7px}
+.save-config-body input{width:100%;height:40px;border:1px solid #b9cdcf;border-radius:8px;padding:0 11px;font:inherit;color:var(--ink)}
+.save-config-error{min-height:18px;margin-top:7px;color:#b42318;font-size:11px;font-weight:750}
+.save-config-footer{display:flex;justify-content:flex-end;gap:9px;padding:13px 20px;border-top:1px solid var(--line)}
 
 .section-title{font-size:14px;font-weight:900;color:var(--ink);margin:16px 0 8px}
 .ik-condition-wrap{
@@ -805,12 +815,18 @@ select{min-width:215px}
 .rv-viewer{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden}
 .rv-viewer-head{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
 .rv-name{font-size:13px;font-weight:900}.rv-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.rv-run-warning{display:none;margin-left:5px;color:#c2413b;font-weight:900;cursor:help}
+.rv-run-warning.active{display:inline}
 .rv-scene{height:245px;background:linear-gradient(#fbfdfd,#f4f8f9)}
 .rv-scene canvas{width:100%;height:100%;display:block}
 .rv-timeline{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;padding:9px 11px}
 .rv-time-row{display:grid;grid-template-columns:38px 1fr 135px;gap:9px;align-items:center}
 .rv-play{height:33px;border:1px solid #bfd0d3;border-radius:8px;background:#fff;cursor:pointer}
 .rv-time-row input{width:100%;accent-color:var(--brand)}
+.rv-slider-wrap{position:relative;min-width:0}
+.rv-slider-wrap input{display:block}
+.rv-failure-markers{position:absolute;left:8px;right:8px;top:50%;height:14px;transform:translateY(-50%);pointer-events:none}
+.rv-failure-marker{position:absolute;top:0;width:3px;height:14px;border-radius:2px;background:#c2413b;box-shadow:0 0 0 1px #fff;pointer-events:auto;cursor:help}
 .rv-frame{font-size:11px;color:var(--muted);text-align:right}.rv-frame b{font-size:13px;color:var(--ink)}
 .rv-plot-panel{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px}
 .rv-plot-title{padding:10px 12px 0;font-size:13px;font-weight:900}
@@ -1305,6 +1321,18 @@ input[type="checkbox"]{
 .collision-pair input{flex:0 0 auto}
 .self-collision-card .inline-enabled input:indeterminate{accent-color:#8998a7 !important}
 .self-collision-card .inline-enabled input[data-partial="true"]{outline:2px solid #8998a7;outline-offset:1px}
+.self-collision-card .self-collision-algorithm-row{
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+  justify-content:flex-end;
+}
+.self-collision-card .self-collision-algorithm-row .setting-control{min-width:0}
+@media(max-width:1100px){
+  .self-collision-card .ik-one-line{flex-wrap:wrap}
+  .self-collision-card .ik-flex-spacer{display:none}
+  .self-collision-card .self-collision-algorithm-row{justify-content:flex-start}
+}
 .rv-validation-status{padding:4px 8px;color:var(--muted);font-size:10px}
 .frame-status-matrix{height:100%;min-height:150px;overflow:auto;position:relative;background:#fff}
 .fsm-grid{display:grid;position:relative;min-width:max-content}
@@ -1341,7 +1369,7 @@ input[type="checkbox"]{
 
 <main class="shell">
   <div class="page-context">
-    <div class="crumb"><a href="../" style="color:inherit">My Capsules</a> / <a id="capsuleBack" href="../capsule/" style="color:inherit">ハンヤ節</a></div>
+    <div class="crumb"><a href="../" style="color:inherit">My Capsules</a> / <a id="capsuleBack" href="../capsule/" style="color:inherit">—</a></div>
   </div>
 
 
@@ -1357,9 +1385,9 @@ input[type="checkbox"]{
 
   <div class="tab-page active" id="tab-mapping">
   <div class="summary">
-    <div class="card"><div class="k">Capsule</div><div class="v">2606050001 / ハンヤ節</div><div class="frame-count" id="frameCount">— frames</div></div>
+    <div class="card"><div class="k">Capsule</div><div class="v" id="capsuleSummary">—</div><div class="frame-count" id="frameCount">—</div></div>
     <div class="card"><div class="k">Source</div><div class="v">MEVA / 18 segments</div></div>
-    <div class="card"><div class="k">Target Robot</div><div class="v">Unitree G1 / 29DoF</div></div>
+    <div class="card"><div class="k">Target Robot</div><div class="v" id="targetRobotSummary">—</div></div>
     <div class="card">
       <div class="k">Retargeted Data ID</div>
       <div class="v">
@@ -1376,11 +1404,14 @@ input[type="checkbox"]{
       <div class="operation-panel">
         <div class="operation-left">
           <div>
-            <label for="configName">Config name</label>
-            <input class="config-name" id="configName" type="text" value="Robot Standard Mapping">
+            <div class="config-label-row">
+              <label for="configName">Config name</label>
+              <span class="config-dirty-indicator" id="configDirtyIndicator" title="Unsaved config changes" aria-label="Unsaved config changes" hidden>*</span>
+            </div>
+            <select class="config-name" id="configName" aria-label="Config name"></select>
           </div>
           <button class="btn" type="button" id="resetBtn">Reset</button>
-          <button class="btn primary" type="button" id="changeDefaultBtn">Change Default</button>
+          <button class="btn primary" type="button" id="changeDefaultBtn">SAVE CONFIG</button>
         </div>
         <div class="retarget-actions">
           <div class="frame-range-control">
@@ -1442,6 +1473,13 @@ input[type="checkbox"]{
               <div class="setting-control"><label for="selfCollisionZone">Limit zone (m)</label><input id="selfCollisionZone" type="number" min="0" step="0.001" value="0.005"></div>
               <div class="setting-control"><label for="selfCollisionBaseCost">Base cost</label><input id="selfCollisionBaseCost" type="number" min="0" step="0.01" value="0.01"></div>
               <div class="setting-control"><label for="selfCollisionMaxCost">Max cost</label><input id="selfCollisionMaxCost" type="number" min="0" step="0.01" value="0.2"></div>
+            </div>
+            <div class="ik-one-line self-collision-algorithm-row">
+              <div class="ik-flex-spacer"></div>
+              <div class="setting-control"><label for="selfCollisionInitialGain">Initial gain</label><input id="selfCollisionInitialGain" type="number" min="0.01" max="1" step="0.05" value="0.2"></div>
+              <div class="setting-control"><label for="selfCollisionBacktrackingFactor">Backtrack factor</label><input id="selfCollisionBacktrackingFactor" type="number" min="0.01" max="0.99" step="0.05" value="0.8"></div>
+              <div class="setting-control"><label for="selfCollisionMinimumGain">Min gain</label><input id="selfCollisionMinimumGain" type="number" min="0.01" max="1" step="0.05" value="0.05"></div>
+              <div class="setting-control"><label for="selfCollisionMinimumStepScale">Min step ratio</label><input id="selfCollisionMinimumStepScale" type="number" min="0.001" max="1" step="0.01" value="0.01" title="Smallest multiplier allowed for a backtracked IK step."></div>
             </div>
             <details class="collision-pair-details"><summary>Collision GEOM pairs <span id="selfCollisionPairCount">0 selected</span></summary><div id="selfCollisionPairs" class="collision-pair-list"></div></details>
           </div>
@@ -1731,11 +1769,14 @@ input[type="checkbox"]{
         <div class="bottom-operation-panel">
           <div class="operation-left">
             <div>
-              <label for="configNameBottom">Config name</label>
-              <input class="config-name" id="configNameBottom" type="text" value="Robot Standard Mapping">
+              <div class="config-label-row">
+                <label for="configNameBottom">Config name</label>
+                <span class="config-dirty-indicator" id="configDirtyIndicatorBottom" title="Unsaved config changes" aria-label="Unsaved config changes" hidden>*</span>
+              </div>
+              <select class="config-name" id="configNameBottom" aria-label="Config name"></select>
             </div>
             <button class="btn" type="button" id="resetBottomBtn">Reset</button>
-            <button class="btn primary" type="button" id="changeDefaultBottomBtn">Change Default</button>
+            <button class="btn primary" type="button" id="changeDefaultBottomBtn">SAVE CONFIG</button>
           </div>
           <div class="retarget-actions">
             <div class="frame-range-control">
@@ -1764,9 +1805,9 @@ input[type="checkbox"]{
 
   <div class="tab-page" id="tab-primary">
     <div class="summary">
-      <div class="card"><div class="k">Capsule</div><div class="v">2606050001 / ハンヤ節</div><div class="frame-count" id="mainFrameCount">— frames</div></div>
+      <div class="card"><div class="k">Capsule</div><div class="v" id="mainCapsuleSummary">—</div><div class="frame-count" id="mainFrameCount">—</div></div>
       <div class="card"><div class="k">Source</div><div class="v">MEVA / 18 segments</div></div>
-      <div class="card"><div class="k">Target Robot</div><div class="v">Unitree G1 / 29DoF</div></div>
+      <div class="card"><div class="k">Target Robot</div><div class="v" id="mainTargetRobotSummary">—</div></div>
       <div class="card">
         <div class="k">Primary Data ID</div>
         <div class="v">
@@ -1786,11 +1827,14 @@ input[type="checkbox"]{
         <div class="operation-panel">
           <div class="operation-left">
             <div>
-              <label for="mainConfigName">Config name</label>
-              <input class="config-name" id="mainConfigName" type="text" value="Robot Standard Main">
+              <div class="config-label-row">
+                <label for="mainConfigName">Config name</label>
+                <span class="config-dirty-indicator" id="mainConfigDirtyIndicator" title="Unsaved config changes" aria-label="Unsaved config changes" hidden>*</span>
+              </div>
+              <select class="config-name" id="mainConfigName" aria-label="Main config name"></select>
             </div>
             <button class="btn" type="button" id="mainResetBtn">Reset</button>
-            <button class="btn primary" type="button" id="mainChangeDefaultBtn">Change Default</button>
+            <button class="btn primary" type="button" id="mainChangeDefaultBtn">SAVE CONFIG</button>
           </div>
           <div class="retarget-actions">
             <div class="frame-range-control">
@@ -1897,11 +1941,14 @@ input[type="checkbox"]{
           <div class="bottom-operation-panel">
             <div class="operation-left">
               <div>
-                <label for="mainConfigNameBottom">Config name</label>
-                <input class="config-name" id="mainConfigNameBottom" type="text" value="Robot Standard Main">
+                <div class="config-label-row">
+                  <label for="mainConfigNameBottom">Config name</label>
+                  <span class="config-dirty-indicator" id="mainConfigDirtyIndicatorBottom" title="Unsaved config changes" aria-label="Unsaved config changes" hidden>*</span>
+                </div>
+                <select class="config-name" id="mainConfigNameBottom" aria-label="Main config name"></select>
               </div>
               <button class="btn" type="button" id="mainResetBottomBtn">Reset</button>
-              <button class="btn primary" type="button" id="mainChangeDefaultBottomBtn">Change Default</button>
+              <button class="btn primary" type="button" id="mainChangeDefaultBottomBtn">SAVE CONFIG</button>
             </div>
             <div class="retarget-actions">
               <div class="frame-range-control">
@@ -2000,7 +2047,7 @@ input[type="checkbox"]{
         <div class="rv-viewer" id="rvRobotPanel">
           <div class="rv-viewer-head">
             <div>
-              <div class="rv-name rv-slot-a" id="rvAName">A</div>
+              <div class="rv-name rv-slot-a"><span id="rvAName">A</span><span class="rv-run-warning" id="rvAWarning" aria-label="Run warning">⚠</span></div>
               <div class="rv-meta" id="rvRobotMeta">—</div>
             </div>
             <span class="pill pill-pkl" id="rvAPill">—</span>
@@ -2011,7 +2058,7 @@ input[type="checkbox"]{
         <div class="rv-viewer" id="rvMevaPanel">
           <div class="rv-viewer-head">
             <div>
-              <div class="rv-name rv-slot-b" id="rvBName">B</div>
+              <div class="rv-name rv-slot-b"><span id="rvBName">B</span><span class="rv-run-warning" id="rvBWarning" aria-label="Run warning">⚠</span></div>
               <div class="rv-meta" id="rvMevaMeta">—</div>
             </div>
             <span class="pill pill-meva" id="rvBPill">—</span>
@@ -2101,7 +2148,10 @@ input[type="checkbox"]{
       <div class="rv-timeline">
         <div class="rv-time-row">
           <button class="rv-play" id="rvPlayBtn" type="button">▶</button>
-          <input id="rvFrameSlider" type="range" min="0" max="0" value="0" step="1">
+          <div class="rv-slider-wrap">
+            <input id="rvFrameSlider" type="range" min="0" max="0" value="0" step="1">
+            <div class="rv-failure-markers" id="rvFailureMarkers"></div>
+          </div>
           <div class="rv-frame">Primary frame <b id="rvFrameLabel">—</b> · <b id="rvTimeLabel">—</b> s · MEVA <b id="rvMevaFrameLabel">—</b></div>
         </div>
       </div>
@@ -2122,6 +2172,24 @@ input[type="checkbox"]{
     <div class="data-management-footer">
       <span class="result-modal-meta" id="dataManagementSelection">0 selected</span>
       <button class="btn danger" id="dataManagementDeleteBtn" type="button" disabled>Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="result-modal-backdrop" id="saveConfigModal" aria-hidden="true">
+  <div class="save-config-modal" role="dialog" aria-modal="true" aria-labelledby="saveConfigTitle">
+    <div class="result-modal-head">
+      <div class="result-modal-title" id="saveConfigTitle">Save Config</div>
+      <button class="result-modal-close" id="saveConfigCloseBtn" type="button">×</button>
+    </div>
+    <div class="save-config-body">
+      <label for="saveConfigName">Config name</label>
+      <input id="saveConfigName" type="text" maxlength="200" autocomplete="off">
+      <div class="save-config-error" id="saveConfigError" role="alert"></div>
+    </div>
+    <div class="save-config-footer">
+      <button class="btn" id="saveConfigCancelBtn" type="button">CANCEL</button>
+      <button class="btn primary" id="saveConfigSubmitBtn" type="button">SAVE</button>
     </div>
   </div>
 </div>
@@ -2150,6 +2218,8 @@ input[type="checkbox"]{
   const retargetNowBottomBtn = document.getElementById("retargetNowBottomBtn");
   const runStatus = document.getElementById("runStatus");
   const configNameBottom = document.getElementById("configNameBottom");
+  const configDirtyIndicator = document.getElementById("configDirtyIndicator");
+  const configDirtyIndicatorBottom = document.getElementById("configDirtyIndicatorBottom");
   const resetBottomBtn = document.getElementById("resetBottomBtn");
   const changeDefaultBottomBtn = document.getElementById("changeDefaultBottomBtn");
   const startFrameBottom = document.getElementById("startFrameBottom");
@@ -2157,13 +2227,28 @@ input[type="checkbox"]{
   const samplingRateBottom = document.getElementById("samplingRateBottom");
   const runStatusBottom = document.getElementById("runStatusBottom");
   const frameCount = document.getElementById("frameCount");
+  const capsuleSummary = document.getElementById("capsuleSummary");
+  const mainCapsuleSummary = document.getElementById("mainCapsuleSummary");
+  const targetRobotSummary = document.getElementById("targetRobotSummary");
+  const mainTargetRobotSummary = document.getElementById("mainTargetRobotSummary");
   const startFrame = document.getElementById("startFrame");
   const endFrame = document.getElementById("endFrame");
   const samplingRate = document.getElementById("samplingRate");
   const progressTrack = document.getElementById("progressTrack");
   const progressFill = document.getElementById("progressFill");
+  const saveConfigModal = document.getElementById("saveConfigModal");
+  const saveConfigName = document.getElementById("saveConfigName");
+  const saveConfigError = document.getElementById("saveConfigError");
+  const saveConfigSubmitBtn = document.getElementById("saveConfigSubmitBtn");
+  const saveConfigCancelBtn = document.getElementById("saveConfigCancelBtn");
+  const saveConfigCloseBtn = document.getElementById("saveConfigCloseBtn");
+  let configCatalog = [];
+  let selectedSharedConfig = null;
+  let baselineConfigSignature = "";
+  let saveConfigStage = "primary";
   let sourceTotalFrames = null;
   let sourceMaxFrame = null;
+  let sourceSamplingRateHz = null;
   const temporalEnabled = document.getElementById("temporalEnabled");
   const temporalCost = document.getElementById("temporalCost");
   const jointLimitEnabled = document.getElementById("jointLimitEnabled");
@@ -2183,6 +2268,10 @@ input[type="checkbox"]{
   const selfCollisionZone = document.getElementById("selfCollisionZone");
   const selfCollisionBaseCost = document.getElementById("selfCollisionBaseCost");
   const selfCollisionMaxCost = document.getElementById("selfCollisionMaxCost");
+  const selfCollisionInitialGain = document.getElementById("selfCollisionInitialGain");
+  const selfCollisionBacktrackingFactor = document.getElementById("selfCollisionBacktrackingFactor");
+  const selfCollisionMinimumGain = document.getElementById("selfCollisionMinimumGain");
+  const selfCollisionMinimumStepScale = document.getElementById("selfCollisionMinimumStepScale");
   const selfCollisionPairs = document.getElementById("selfCollisionPairs");
   const selfCollisionPairCount = document.getElementById("selfCollisionPairCount");
   const primaryMevaFootGroundOffset = document.getElementById("primaryMevaFootGroundOffset");
@@ -2203,6 +2292,8 @@ input[type="checkbox"]{
   const mainInheritedSnapshot = document.getElementById("mainInheritedSnapshot");
   const mainConfigName = document.getElementById("mainConfigName");
   const mainConfigNameBottom = document.getElementById("mainConfigNameBottom");
+  const mainConfigDirtyIndicator = document.getElementById("mainConfigDirtyIndicator");
+  const mainConfigDirtyIndicatorBottom = document.getElementById("mainConfigDirtyIndicatorBottom");
   const mainResetBtn = document.getElementById("mainResetBtn");
   const mainResetBottomBtn = document.getElementById("mainResetBottomBtn");
   const mainChangeDefaultBtn = document.getElementById("mainChangeDefaultBtn");
@@ -2222,11 +2313,201 @@ input[type="checkbox"]{
   let selectedMainRunStage = {primaryDone:false, mainDone:false, mainCsvExists:false};
   let mainLoadedConfig = null;
   let mainWorkingConfig = null;
+  let mainConfigCatalog = [];
+  let selectedMainSharedConfig = null;
+  let mainBaselineConfigSignature = "";
   let loadedMainRunId = null;
   let loadedMainResultId = "new";
   let mainSoleGeoms = {left:[], right:[]};
 
   function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
+
+  function configSignature(cfg){
+    const shared = deepClone(cfg || {});
+    for(const key of [
+      "capsule_id", "source", "frame_range", "sampling", "offsets",
+      "config_name", "name", "primary_run_id", "main_id",
+      "artifact_generation_id", "main_runtime_context",
+      "primary_motion_file", "primary_target_npz", "main_target_npz",
+      "primary_post_csv", "main_input_csv", "main_calibration", "main_target_analysis"
+    ]){
+      delete shared[key];
+    }
+    if(shared.output){
+      for(const key of ["run_id", "pkl_name", "overwrite_existing", "config_snapshot_name"]){
+        delete shared.output[key];
+      }
+      if(Object.keys(shared.output).length === 0) delete shared.output;
+    }
+    const stable = value => {
+      if(Array.isArray(value)) return value.map(stable);
+      if(value && typeof value === "object"){
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
+      }
+      return value;
+    };
+    return JSON.stringify(stable(shared));
+  }
+
+  function showConfigDirtyIndicator(dirty){
+    for(const indicator of [configDirtyIndicator, configDirtyIndicatorBottom]){
+      if(indicator) indicator.hidden = !dirty;
+    }
+  }
+
+  function selectionValue(record){
+    return record ? `${record.scope}|${record.filename}` : "";
+  }
+
+  function selectedConfigDisplayName(){
+    return selectedSharedConfig?.name || workingConfig?.name || workingConfig?.config_name || "Primary Standard";
+  }
+
+  function selectSharedRecord(record){
+    selectedSharedConfig = record || null;
+    const value = selectionValue(record);
+    if(configName) configName.value = value;
+    if(configNameBottom) configNameBottom.value = value;
+  }
+
+  function renderConfigCatalog(preferredName=""){
+    for(const select of [configName, configNameBottom]){
+      if(!select) continue;
+      select.innerHTML = "";
+      for(const scope of ["xenoma", "user"]){
+        const records = configCatalog.filter(item => item.scope === scope);
+        if(!records.length) continue;
+        const group = document.createElement("optgroup");
+        group.label = scope === "xenoma" ? "Xenoma" : "User";
+        for(const record of records){
+          const option = document.createElement("option");
+          option.value = selectionValue(record);
+          option.textContent = record.name;
+          group.appendChild(option);
+        }
+        select.appendChild(group);
+      }
+    }
+    const preferred = configCatalog.find(item => item.name === preferredName)
+      || configCatalog.find(item => item.scope === "xenoma" && item.name === "Primary Standard")
+      || configCatalog[0]
+      || null;
+    selectSharedRecord(preferred);
+    return preferred;
+  }
+
+  async function loadConfigCatalog(preferredName=""){
+    const robot = workingConfig?.robot || {};
+    const query = new URLSearchParams({
+      source_type: "meva",
+      manufacturer: robot.manufacturer || "unitree",
+      robot_variant: robot.variant || "g1_29dof",
+      stage: "primary",
+    });
+    const response = await fetch(`/api/retarget/configs?${query}`);
+    const data = await response.json();
+    if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    configCatalog = data.configs || [];
+    return renderConfigCatalog(preferredName);
+  }
+
+  async function loadSelectedSharedConfig(){
+    if(!selectedSharedConfig) return;
+    const query = new URLSearchParams({
+      capsule_id: capsuleId,
+      scope: selectedSharedConfig.scope,
+      filename: selectedSharedConfig.filename,
+      source_type: "meva",
+      manufacturer: workingConfig?.robot?.manufacturer || "unitree",
+      robot_variant: workingConfig?.robot?.variant || "g1_29dof",
+      stage: "primary",
+    });
+    const response = await fetch(`/api/retarget/configs/load?${query}`);
+    const data = await response.json();
+    if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    loadedConfig = deepClone(data.config);
+    workingConfig = deepClone(data.config);
+    selectSharedRecord(data.selection);
+    applyConfig(data.config, {updateBaseline:true});
+    if(startFrame) startFrame.value = 0;
+    if(endFrame) endFrame.value = sourceMaxFrame ?? "";
+    syncTopToBottom();
+    refreshSourceSummary();
+  }
+
+  function selectedMainConfigDisplayName(){
+    return selectedMainSharedConfig?.name || mainWorkingConfig?.name || mainWorkingConfig?.config_name || "Main Standard";
+  }
+
+  function selectMainSharedRecord(record){
+    selectedMainSharedConfig = record || null;
+    const value = selectionValue(record);
+    if(mainConfigName) mainConfigName.value = value;
+    if(mainConfigNameBottom) mainConfigNameBottom.value = value;
+  }
+
+  function renderMainConfigCatalog(preferredName=""){
+    for(const select of [mainConfigName, mainConfigNameBottom]){
+      if(!select) continue;
+      select.innerHTML = "";
+      for(const scope of ["xenoma", "user"]){
+        const records = mainConfigCatalog.filter(item => item.scope === scope);
+        if(!records.length) continue;
+        const group = document.createElement("optgroup");
+        group.label = scope === "xenoma" ? "Xenoma" : "User";
+        for(const record of records){
+          const option = document.createElement("option");
+          option.value = selectionValue(record);
+          option.textContent = record.name;
+          group.appendChild(option);
+        }
+        select.appendChild(group);
+      }
+    }
+    const preferred = mainConfigCatalog.find(item => item.name === preferredName)
+      || mainConfigCatalog.find(item => item.scope === "xenoma" && item.name === "Main Standard")
+      || mainConfigCatalog[0]
+      || null;
+    selectMainSharedRecord(preferred);
+    return preferred;
+  }
+
+  async function loadMainConfigCatalog(preferredName=""){
+    const robot = mainWorkingConfig?.robot || workingConfig?.robot || {};
+    const query = new URLSearchParams({
+      source_type: "meva",
+      manufacturer: robot.manufacturer || "unitree",
+      robot_variant: robot.variant || "g1_29dof",
+      stage: "main",
+    });
+    const response = await fetch(`/api/retarget/configs?${query}`);
+    const data = await response.json();
+    if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    mainConfigCatalog = data.configs || [];
+    return renderMainConfigCatalog(preferredName);
+  }
+
+  async function loadSelectedMainSharedConfig(runId){
+    if(!selectedMainSharedConfig || !runId) return;
+    const robot = mainWorkingConfig?.robot || workingConfig?.robot || {};
+    const query = new URLSearchParams({
+      capsule_id: capsuleId,
+      scope: selectedMainSharedConfig.scope,
+      filename: selectedMainSharedConfig.filename,
+      source_type: "meva",
+      manufacturer: robot.manufacturer || "unitree",
+      robot_variant: robot.variant || "g1_29dof",
+      stage: "main",
+      run_id: runId,
+    });
+    const response = await fetch(`/api/retarget/configs/load?${query}`);
+    const data = await response.json();
+    if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    mainLoadedConfig = deepClone(data.config);
+    mainWorkingConfig = deepClone(data.config);
+    selectMainSharedRecord(data.selection);
+    applyMainConfig(data.config, {updateBaseline:true});
+  }
 
   function mapByLink(cfg){
     const out = new Map();
@@ -2354,7 +2635,13 @@ input[type="checkbox"]{
     if(source&&target){const counterpart=robotModelMetadata.body_symmetry?.[source.value] || source.value.replace(/^Left/,"Right");if([...target.options].some(x=>x.value===counterpart))target.value=counterpart}
     const ori=row.children[2]?.querySelector("input"),otherOri=other.children[2]?.querySelector("input");if(ori&&otherOri)otherOri.value=ori.value;
     const axis=row.querySelector(".axis-mode-check"),otherAxis=other.querySelector(".axis-mode-check");if(axis&&otherAxis)otherAxis.checked=axis.checked;
-    if(row.closest("#mainInheritedSnapshot"))syncMainDuplicateOptions();else syncDuplicateOptions();refreshChangedState();
+    if(row.closest("#mainInheritedSnapshot")){
+      syncMainDuplicateOptions();
+      refreshMainChangedState();
+    }else{
+      syncDuplicateOptions();
+      refreshChangedState();
+    }
   }
   function syncSymmetricJointInput(input){
     const region=input.closest(".region");if(region?.dataset.symmetric!=="on")return;
@@ -2447,10 +2734,9 @@ input[type="checkbox"]{
     }
   }
 
-  function applyConfig(cfg){
+  function applyConfig(cfg, {updateBaseline=false}={}){
     workingConfig = deepClone(cfg);
     baselineByLink = mapByLink(cfg);
-    if(configName) configName.value = (cfg.config_name || "Robot Standard Mapping").replace(/^G1 Standard/,"Robot Standard");
     const byLink = mapByLink(cfg);
 
     const temporal = cfg.temporal_regularization || {};
@@ -2494,6 +2780,10 @@ input[type="checkbox"]{
     if(selfCollisionZone) selfCollisionZone.value = Number(selfCollision.damping?.limit_zone_m ?? 0.005);
     if(selfCollisionBaseCost) selfCollisionBaseCost.value = Number(selfCollision.damping?.base_cost ?? 0.01);
     if(selfCollisionMaxCost) selfCollisionMaxCost.value = Number(selfCollision.damping?.max_cost ?? 0.2);
+    if(selfCollisionInitialGain) selfCollisionInitialGain.value = Number(selfCollision.backtracking?.initial_gain ?? 0.2);
+    if(selfCollisionBacktrackingFactor) selfCollisionBacktrackingFactor.value = Number(selfCollision.backtracking?.factor ?? 0.8);
+    if(selfCollisionMinimumGain) selfCollisionMinimumGain.value = Number(selfCollision.backtracking?.minimum_gain ?? 0.05);
+    if(selfCollisionMinimumStepScale) selfCollisionMinimumStepScale.value = Number(selfCollision.backtracking?.minimum_step_scale ?? 0.01);
     const selectedPairs = new Set(selfCollision.selected_pairs || []);
     selfCollisionPairs?.querySelectorAll(".collision-pair-check").forEach(input => {
       input.checked = selectedPairs.has(input.value);
@@ -2546,6 +2836,9 @@ input[type="checkbox"]{
       input.disabled=!active || Boolean(enabled?.disabled);
     }
     syncDuplicateOptions();
+    if(updateBaseline){
+      baselineConfigSignature = configSignature(collectConfig());
+    }
     refreshChangedState();
     refreshPalette();
   }
@@ -2641,15 +2934,32 @@ input[type="checkbox"]{
     const collisionZone = Number(selfCollisionZone?.value ?? 0.005);
     const collisionBase = Number(selfCollisionBaseCost?.value ?? 0.01);
     const collisionMax = Number(selfCollisionMaxCost?.value ?? 0.2);
+    const collisionInitialGain = Number(selfCollisionInitialGain?.value ?? 0.2);
+    const collisionBacktrackingFactor = Number(selfCollisionBacktrackingFactor?.value ?? 0.8);
+    const collisionMinimumGain = Number(selfCollisionMinimumGain?.value ?? 0.05);
+    const collisionMinimumStepScale = Number(selfCollisionMinimumStepScale?.value ?? 0.01);
     if(!Number.isFinite(collisionZone) || collisionZone < 0) throw new Error("Self-collision Limit zone must be non-negative.");
     if(!Number.isFinite(collisionBase) || collisionBase < 0 || !Number.isFinite(collisionMax) || collisionMax < collisionBase){
       throw new Error("Self-collision costs must be non-negative and Max cost must be >= Base cost.");
+    }
+    if(!Number.isFinite(collisionBacktrackingFactor) || collisionBacktrackingFactor <= 0 || collisionBacktrackingFactor >= 1){
+      throw new Error("Self-collision Backtrack factor must be between 0 and 1.");
+    }
+    if(!Number.isFinite(collisionInitialGain) || collisionInitialGain <= 0 || collisionInitialGain > 1){
+      throw new Error("Self-collision Initial gain must be in (0, 1].");
+    }
+    if(!Number.isFinite(collisionMinimumGain) || collisionMinimumGain <= 0 || collisionMinimumGain > collisionInitialGain){
+      throw new Error("Self-collision Min gain must be in (0, Initial gain].");
+    }
+    if(!Number.isFinite(collisionMinimumStepScale) || collisionMinimumStepScale <= 0 || collisionMinimumStepScale > 1){
+      throw new Error("Self-collision Min step scale must be in (0, 1].");
     }
     const selectedSelfCollisionPairs = [...(selfCollisionPairs?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length > 0,
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
+      backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
     };
     const accelerationOverrides = {};
     for(const input of document.querySelectorAll("#tab-mapping .joint-acceleration-input")){
@@ -2685,7 +2995,8 @@ input[type="checkbox"]{
     delete cfg.main;
     delete cfg.main_target_analysis;
 
-    cfg.config_name = (configName?.value || "Robot Standard Mapping").trim();
+    cfg.name = selectedConfigDisplayName();
+    cfg.config_name = cfg.name;
 
     const maxIterationsValue = Number(maxIterations?.value ?? 20);
     if(!Number.isInteger(maxIterationsValue) || maxIterationsValue < 1){
@@ -2729,6 +3040,10 @@ input[type="checkbox"]{
       if(pairChanged) changed++;
     }
     const cfg = collectConfig();
+    showConfigDirtyIndicator(
+      Boolean(baselineConfigSignature)
+      && configSignature(cfg) !== baselineConfigSignature
+    );
     if(statusLine){
       statusLine.innerHTML =
         `<strong>${cfg.mappings.length}</strong> mappings` +
@@ -2747,36 +3062,123 @@ input[type="checkbox"]{
 
 
   resetBtn?.addEventListener("click", () => applyConfig(loadedConfig));
-  configName?.addEventListener("input", refreshChangedState);
-  async function saveDefaultConfig(){
+  function closeSaveConfigModal(){
+    saveConfigModal?.classList.remove("open");
+    saveConfigModal?.setAttribute("aria-hidden", "true");
+  }
+
+  function openSaveConfigModal(stage="primary"){
+    saveConfigStage = stage;
+    if(saveConfigName){
+      saveConfigName.value = stage === "main"
+        ? selectedMainConfigDisplayName()
+        : selectedConfigDisplayName();
+    }
+    if(saveConfigError) saveConfigError.textContent = "";
+    saveConfigModal?.classList.add("open");
+    saveConfigModal?.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => saveConfigName?.focus());
+  }
+
+  async function saveDefaultConfig(overwrite=false){
     try{
       const cfg = collectConfig();
-      delete cfg.frame_range;
-      changeDefaultBtn.disabled = true;
-      const res = await fetch("/api/retarget/default", {
+      const name = (saveConfigName?.value || "").trim();
+      if(!name) throw new Error("Config name is required.");
+      for(const button of [changeDefaultBtn, changeDefaultBottomBtn, saveConfigSubmitBtn]){
+        if(button) button.disabled = true;
+      }
+      const res = await fetch("/api/retarget/configs", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           capsule_id: capsuleId,
+          name,
+          source_type: "meva",
+          manufacturer: cfg.robot?.manufacturer || "unitree",
           robot_variant: cfg.robot?.variant || "g1_29dof",
+          selected_scope: selectedSharedConfig?.scope || null,
+          selected_filename: selectedSharedConfig?.filename || null,
+          overwrite,
           config: cfg
         })
       });
       const data = await res.json();
-      if(!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-      loadedConfig = deepClone(cfg);
-      workingConfig = deepClone(cfg);
-      applyConfig(cfg);
-      if(statusLine) statusLine.innerHTML = `<strong>${cfg.mappings.length}</strong> mappings / default updated`;
-      alert("Default config.jsonを更新しました。");
+      if(!res.ok){
+        const detail = data.detail;
+        const message = typeof detail === "string" ? detail : (detail?.message || JSON.stringify(detail));
+        if(
+          res.status === 409
+          && detail?.code === "CONFIG_NAME_COLLISION"
+          && !message.startsWith("Xenoma-provided")
+          && !overwrite
+          && confirm(`${message}\nOverwrite the existing User config?`)
+        ){
+          return await saveDefaultConfig(true);
+        }
+        throw new Error(message);
+      }
+      loadedConfig = deepClone(data.config);
+      workingConfig = deepClone(data.config);
+      applyConfig(data.config, {updateBaseline:true});
+      await loadConfigCatalog(data.selection?.name || name);
+      const savedRecord = configCatalog.find(item =>
+        item.scope === data.selection?.scope && item.filename === data.selection?.filename
+      );
+      selectSharedRecord(savedRecord || data.selection);
+      if(statusLine) statusLine.innerHTML = `<strong>${data.config.mappings?.length || 0}</strong> mappings / config saved`;
+      closeSaveConfigModal();
     }catch(err){
-      alert("Defaultを更新できませんでした: " + err.message);
+      if(saveConfigError) saveConfigError.textContent = err.message;
     }finally{
-      changeDefaultBtn.disabled = false;
+      for(const button of [changeDefaultBtn, changeDefaultBottomBtn, saveConfigSubmitBtn]){
+        if(button) button.disabled = false;
+      }
     }
   }
 
-  changeDefaultBtn?.addEventListener("click", saveDefaultConfig);
+  changeDefaultBtn?.addEventListener("click", openSaveConfigModal);
+  function saveActiveConfig(overwrite=false){
+    return saveConfigStage === "main"
+      ? saveMainConfig(overwrite)
+      : saveDefaultConfig(overwrite);
+  }
+
+  saveConfigSubmitBtn?.addEventListener("click", () => saveActiveConfig(false));
+  saveConfigCancelBtn?.addEventListener("click", closeSaveConfigModal);
+  saveConfigCloseBtn?.addEventListener("click", closeSaveConfigModal);
+  saveConfigModal?.addEventListener("click", event => {
+    if(event.target === saveConfigModal) closeSaveConfigModal();
+  });
+  saveConfigName?.addEventListener("keydown", event => {
+    if(event.key === "Enter") saveActiveConfig(false);
+    if(event.key === "Escape") closeSaveConfigModal();
+  });
+
+  async function handleConfigSelection(select){
+    const record = configCatalog.find(item => selectionValue(item) === select?.value);
+    if(!record) return;
+    selectSharedRecord(record);
+    try{
+      await loadSelectedSharedConfig();
+    }catch(err){
+      alert("Configを読み込めませんでした: " + err.message);
+    }
+  }
+
+  configName?.addEventListener("change", () => handleConfigSelection(configName));
+
+  async function handleMainConfigSelection(select){
+    const record = mainConfigCatalog.find(item => selectionValue(item) === select?.value);
+    const runId = mainRetargetedDataSelect?.value || "";
+    if(!record || !runId) return;
+    selectMainSharedRecord(record);
+    try{
+      await loadSelectedMainSharedConfig(runId);
+    }catch(err){
+      alert("Main Configを読み込めませんでした: " + err.message);
+    }
+  }
 
   function syncTopToBottom(){
     if(configNameBottom && configName) configNameBottom.value = configName.value;
@@ -2792,15 +3194,17 @@ input[type="checkbox"]{
     if(samplingRate && samplingRateBottom) samplingRate.value = samplingRateBottom.value;
   }
 
-  function samplingFrameCount(startValue,endValue,rateValue,sourceRate=100){
-    const start=Number(startValue),end=Number(endValue),rate=Number(rateValue),source=Number(sourceRate);
-    if(!Number.isFinite(start)||!Number.isFinite(end)||end<start||!Number.isFinite(rate)||rate<=0||!Number.isFinite(source)||source<=0)return null;
-    return Math.max(0,Math.ceil((end+1-start)*rate/source-1e-12));
-  }
-
-  function refreshSamplingFrameCount(){
-    const count=samplingFrameCount(startFrame?.value,endFrame?.value,samplingRate?.value,workingConfig?.source?.sampling_rate_hz??100);
-    if(frameCount)frameCount.textContent=count==null?"— frames":`${count.toLocaleString()} frames`;
+  function refreshSourceSummary(){
+    const fps = Number(sourceSamplingRateHz);
+    const fpsText = Number.isFinite(fps)
+      ? (Number.isInteger(fps) ? fps.toLocaleString() : fps.toLocaleString(undefined, {maximumFractionDigits:3}))
+      : "—";
+    const totalText = sourceTotalFrames == null
+      ? "TOTAL — frames"
+      : `TOTAL ${Number(sourceTotalFrames).toLocaleString()} frames`;
+    const text = `${totalText} / ${fpsText} FPS`;
+    if(frameCount) frameCount.textContent = text;
+    if(mainFrameCount) mainFrameCount.textContent = text;
   }
 
   function settingRunLabel(){
@@ -2835,6 +3239,8 @@ input[type="checkbox"]{
       "convergenceConsecutiveIterations",
       "pelvisFootDirectionEnabled", "pelvisLeftFootDirectionCost", "pelvisRightFootDirectionCost",
       "selfCollisionEnabled", "selfCollisionZone", "selfCollisionBaseCost", "selfCollisionMaxCost",
+      "selfCollisionBacktrackingFactor", "selfCollisionMinimumStepScale",
+      "selfCollisionInitialGain", "selfCollisionMinimumGain",
       "accelerationWeightAt2x",
     ]);
     root.querySelectorAll("[id]").forEach(el => {
@@ -2914,6 +3320,10 @@ input[type="checkbox"]{
     setValue("selfCollisionZone", Number(collision.damping?.limit_zone_m ?? 0.005));
     setValue("selfCollisionBaseCost", Number(collision.damping?.base_cost ?? 0.01));
     setValue("selfCollisionMaxCost", Number(collision.damping?.max_cost ?? 0.2));
+    setValue("selfCollisionInitialGain", Number(collision.backtracking?.initial_gain ?? 0.2));
+    setValue("selfCollisionBacktrackingFactor", Number(collision.backtracking?.factor ?? 0.8));
+    setValue("selfCollisionMinimumGain", Number(collision.backtracking?.minimum_gain ?? 0.05));
+    setValue("selfCollisionMinimumStepScale", Number(collision.backtracking?.minimum_step_scale ?? 0.01));
     const selectedCollisionPairs = new Set(collision.selected_pairs || []);
     root.querySelectorAll(".collision-pair-check").forEach(input=>input.checked=selectedCollisionPairs.has(input.value));
     updateSelfCollisionParent(root);
@@ -3008,6 +3418,12 @@ input[type="checkbox"]{
       updateSelfCollisionParent(mainInheritedSnapshot);
     });
     mainInheritedSnapshot.querySelectorAll(".collision-pair-check").forEach(input=>input.addEventListener("change",()=>updateSelfCollisionParent(mainInheritedSnapshot)));
+    mainInheritedSnapshot.querySelectorAll("input,select").forEach(control => {
+      if(control.dataset.mainDirtyBound) return;
+      control.dataset.mainDirtyBound = "1";
+      control.addEventListener("input", refreshMainChangedState);
+      control.addEventListener("change", refreshMainChangedState);
+    });
   }
 
   function defaultSoleWeight(){ return {x:0, y:0, z:1}; }
@@ -3086,7 +3502,9 @@ input[type="checkbox"]{
 
   function collectMainConfig(){
     const cfg = deepClone(mainWorkingConfig || {});
-    cfg.config_name = (mainConfigName?.value || "Robot Standard Main").trim() || "Robot Standard Main";
+    cfg.name = selectedMainConfigDisplayName();
+    cfg.config_name = cfg.name;
+    cfg.retarget_stage = "main";
     const control = sourceId => mainInheritedSnapshot?.querySelector(
       `[data-source-id="${sourceId}"]`
     );
@@ -3173,12 +3591,21 @@ input[type="checkbox"]{
     const collisionZone = Number(control("selfCollisionZone")?.value ?? 0.005);
     const collisionBase = Number(control("selfCollisionBaseCost")?.value ?? 0.01);
     const collisionMax = Number(control("selfCollisionMaxCost")?.value ?? 0.2);
+    const collisionInitialGain = Number(control("selfCollisionInitialGain")?.value ?? 0.2);
+    const collisionBacktrackingFactor = Number(control("selfCollisionBacktrackingFactor")?.value ?? 0.8);
+    const collisionMinimumGain = Number(control("selfCollisionMinimumGain")?.value ?? 0.05);
+    const collisionMinimumStepScale = Number(control("selfCollisionMinimumStepScale")?.value ?? 0.01);
     if(collisionZone < 0 || collisionBase < 0 || collisionMax < collisionBase) throw new Error("Invalid Self-collision damping values.");
+    if(!Number.isFinite(collisionBacktrackingFactor) || collisionBacktrackingFactor <= 0 || collisionBacktrackingFactor >= 1) throw new Error("Invalid Self-collision Backtrack factor.");
+    if(!Number.isFinite(collisionInitialGain) || collisionInitialGain <= 0 || collisionInitialGain > 1) throw new Error("Invalid Self-collision Initial gain.");
+    if(!Number.isFinite(collisionMinimumGain) || collisionMinimumGain <= 0 || collisionMinimumGain > collisionInitialGain) throw new Error("Invalid Self-collision Min gain.");
+    if(!Number.isFinite(collisionMinimumStepScale) || collisionMinimumStepScale <= 0 || collisionMinimumStepScale > 1) throw new Error("Invalid Self-collision Min step scale.");
     const selectedSelfCollisionPairs=[...(mainInheritedSnapshot?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length>0,
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
+      backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
     };
     const accelerationOverrides={};
     for(const input of (mainInheritedSnapshot?.querySelectorAll(".joint-acceleration-input") || [])){
@@ -3240,12 +3667,9 @@ input[type="checkbox"]{
     return cfg;
   }
 
-  function applyMainConfig(cfg){
+  function applyMainConfig(cfg, {updateBaseline=false}={}){
     mainWorkingConfig = deepClone(cfg || {});
     const mainCfg = mainWorkingConfig.main || {};
-    const configLabel = (mainWorkingConfig.config_name || "Robot Standard Main").replace(/^G1 Standard/,"Robot Standard");
-    if(mainConfigName) mainConfigName.value = configLabel;
-    if(mainConfigNameBottom) mainConfigNameBottom.value = configLabel;
     if(mainGcpSmoothingMs) mainGcpSmoothingMs.value = Number(mainCfg.gcp_smoothing_ms ?? 150);
     if(mainGcpMinOffset) mainGcpMinOffset.value = Number(mainCfg.gcp_min_offset ?? 0.2);
     if(mainGcpMaxOffset) mainGcpMaxOffset.value = Number(mainCfg.gcp_max_offset ?? 0.99);
@@ -3283,17 +3707,26 @@ input[type="checkbox"]{
     const endValue = stop == null ? (sourceMaxFrame ?? "") : Math.max(0, Number(stop) - 1);
     for(const el of [mainStartFrame, mainStartFrameBottom]) if(el) el.value = startValue;
     for(const el of [mainEndFrame, mainEndFrameBottom]) if(el) el.value = endValue;
-    const targetCount=samplingFrameCount(startValue,endValue,mainWorkingConfig.sampling?.rate_fps??30,mainWorkingConfig.source?.sampling_rate_hz??100);
-    if(mainFrameCount) mainFrameCount.textContent = targetCount==null?"— frames":`${targetCount.toLocaleString()} frames`;
+    refreshSourceSummary();
     renderMainInheritedSnapshot(mainWorkingConfig);
+    if(updateBaseline){
+      mainBaselineConfigSignature = configSignature(collectMainConfig());
+    }
+    refreshMainChangedState();
   }
 
-  function syncMainConfigNameTopToBottom(){
-    if(mainConfigName && mainConfigNameBottom) mainConfigNameBottom.value = mainConfigName.value;
-  }
-
-  function syncMainConfigNameBottomToTop(){
-    if(mainConfigName && mainConfigNameBottom) mainConfigName.value = mainConfigNameBottom.value;
+  function refreshMainChangedState(){
+    if(!mainWorkingConfig) return;
+    let dirty = false;
+    try{
+      dirty = Boolean(mainBaselineConfigSignature)
+        && configSignature(collectMainConfig()) !== mainBaselineConfigSignature;
+    }catch(_error){
+      dirty = true;
+    }
+    for(const indicator of [mainConfigDirtyIndicator, mainConfigDirtyIndicatorBottom]){
+      if(indicator) indicator.hidden = !dirty;
+    }
   }
 
   function updateMainStageUi(){
@@ -3333,24 +3766,64 @@ input[type="checkbox"]{
     }
   }
 
-  async function saveMainDefault(){
+  async function saveMainConfig(overwrite=false){
     if(!mainWorkingConfig) return;
     try{
       const cfg = collectMainConfig();
-      const res = await fetch("/api/retarget/main/default", {
+      const name = (saveConfigName?.value || "").trim();
+      const runId = mainRetargetedDataSelect?.value || "";
+      if(!name) throw new Error("Config name is required.");
+      if(!runId) throw new Error("A Primary Data ID is required.");
+      for(const button of [mainChangeDefaultBtn, mainChangeDefaultBottomBtn, saveConfigSubmitBtn]){
+        if(button) button.disabled = true;
+      }
+      const res = await fetch("/api/retarget/configs", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
           capsule_id: capsuleId,
+          name,
+          source_type: "meva",
+          manufacturer: cfg.robot?.manufacturer || "unitree",
           robot_variant: cfg.robot?.variant || "g1_29dof",
+          stage: "main",
+          run_id: runId,
+          selected_scope: selectedMainSharedConfig?.scope || null,
+          selected_filename: selectedMainSharedConfig?.filename || null,
+          overwrite,
           config: cfg,
         }),
       });
       const data = await res.json();
-      if(!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-      alert("Main default configを保存しました。");
+      if(!res.ok){
+        const detail = data.detail;
+        const message = typeof detail === "string" ? detail : (detail?.message || JSON.stringify(detail));
+        if(
+          res.status === 409
+          && detail?.code === "CONFIG_NAME_COLLISION"
+          && !message.startsWith("Xenoma-provided")
+          && !overwrite
+          && confirm(`${message}\nOverwrite the existing User config?`)
+        ){
+          return await saveMainConfig(true);
+        }
+        throw new Error(message);
+      }
+      mainLoadedConfig = deepClone(data.config);
+      mainWorkingConfig = deepClone(data.config);
+      applyMainConfig(data.config, {updateBaseline:true});
+      await loadMainConfigCatalog(data.selection?.name || name);
+      const savedRecord = mainConfigCatalog.find(item =>
+        item.scope === data.selection?.scope && item.filename === data.selection?.filename
+      );
+      selectMainSharedRecord(savedRecord || data.selection);
+      closeSaveConfigModal();
     }catch(err){
-      alert("Main default configを保存できませんでした: " + err.message);
+      if(saveConfigError) saveConfigError.textContent = err.message;
+    }finally{
+      for(const button of [mainChangeDefaultBtn, mainChangeDefaultBottomBtn, saveConfigSubmitBtn]){
+        if(button) button.disabled = false;
+      }
     }
   }
 
@@ -3365,16 +3838,32 @@ input[type="checkbox"]{
       return false;
     }
     try{
-      const requestedMainId = (loadedMainRunId && loadedMainRunId !== runId)
+      let requestedMainId = (loadedMainRunId && loadedMainRunId !== runId)
         ? "new" : (mainResultSelect?.value || "new");
       const robotVariant = workingConfig.robot?.variant || "g1_29dof";
-      const res = await fetch(
-        `/api/retarget/main-config?capsule_id=${encodeURIComponent(capsuleId)}&robot_variant=${encodeURIComponent(robotVariant)}&run_id=${encodeURIComponent(runId)}&main_id=${encodeURIComponent(requestedMainId)}`
+      let res = await fetch(
+        `/api/retarget/main-config?capsule_id=${encodeURIComponent(capsuleId)}&robot_variant=${encodeURIComponent(robotVariant)}&run_id=${encodeURIComponent(runId)}&main_id=${encodeURIComponent(requestedMainId)}`,
+        {cache:"no-store"}
       );
-      const data = await res.json();
+      let data = await res.json();
+      // Overwriting a Primary invalidates its nested Main results. A browser can
+      // still have the old Main ID selected while refreshing the run context;
+      // rediscover the current list from New instead of surfacing a stale-file
+      // error or keeping an old Viewer BIN alive.
+      if(res.status === 404 && requestedMainId !== "new"){
+        requestedMainId = "new";
+        if(mainResultSelect) mainResultSelect.value = "new";
+        loadedMainResultId = "new";
+        rvData = null;
+        rvValidationData = null;
+        rvValidationCache.clear();
+        res = await fetch(
+          `/api/retarget/main-config?capsule_id=${encodeURIComponent(capsuleId)}&robot_variant=${encodeURIComponent(robotVariant)}&run_id=${encodeURIComponent(runId)}&main_id=new`,
+          {cache:"no-store"}
+        );
+        data = await res.json();
+      }
       if(!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-      mainLoadedConfig = deepClone(data.config);
-      mainWorkingConfig = deepClone(data.config);
       mainSoleGeoms = deepClone(data.sole_geoms || {left:[], right:[]});
       loadedMainRunId = runId;
       loadedMainResultId = data.main_id || requestedMainId;
@@ -3399,7 +3888,22 @@ input[type="checkbox"]{
         mainDone: Boolean(data.main_done),
         mainCsvExists: Boolean(data.main_csv_exists),
       };
-      applyMainConfig(data.config);
+      const snapshotIsNew = (data.main_id || requestedMainId) === "new";
+      if(!mainConfigCatalog.length){
+        await loadMainConfigCatalog(data.config?.name || data.config?.config_name || "");
+      }
+      if(snapshotIsNew){
+        await loadSelectedMainSharedConfig(runId);
+      }else{
+        if(!mainBaselineConfigSignature && selectedMainSharedConfig){
+          await loadSelectedMainSharedConfig(runId);
+        }
+        mainLoadedConfig = deepClone(data.config);
+        mainWorkingConfig = deepClone(data.config);
+        // Main Result Config is a Run snapshot; keep the selected Shared Main
+        // Config as the dirty comparison baseline.
+        applyMainConfig(data.config);
+      }
       updateMainStageUi();
       return selectedMainRunStage.primaryDone;
     }catch(err){
@@ -3411,7 +3915,7 @@ input[type="checkbox"]{
     }
   }
 
-  async function loadRetargetContext(){
+  async function loadRetargetContext({preserveWorkingConfig=false}={}){
     try{
       const previousSettingRun = retargetedDataSelect?.value || "new";
       const previousMainRun = mainRetargetedDataSelect?.value || "";
@@ -3426,16 +3930,13 @@ input[type="checkbox"]{
 
       sourceTotalFrames = data.total_frames ?? null;
       sourceMaxFrame = data.max_frame ?? null;
-      if(frameCount){
-        frameCount.textContent = sourceTotalFrames == null
-          ? "— frames"
-          : `${sourceTotalFrames.toLocaleString()} frames`;
-      }
-      if(mainFrameCount){
-        mainFrameCount.textContent = sourceTotalFrames == null
-          ? "— frames"
-          : `${sourceTotalFrames.toLocaleString()} frames`;
-      }
+      sourceSamplingRateHz = Number(
+        data.source?.sampling_rate_hz
+        ?? data.default_config?.source?.sampling_rate_hz
+        ?? 100
+      );
+      applyContextSummary(data);
+      refreshSourceSummary();
 
       retargetedDataSelect.innerHTML = '<option value="new">New</option>';
       for(const runId of (data.runs || [])){
@@ -3479,20 +3980,25 @@ input[type="checkbox"]{
         }
       }
 
-      if(data.default_config){
+      if(!preserveWorkingConfig && data.default_config){
         loadedConfig = deepClone(data.default_config);
         workingConfig = deepClone(data.default_config);
         applyConfig(data.default_config);
         if(startFrame) startFrame.value = 0;
         if(endFrame) endFrame.value = sourceMaxFrame ?? "";
         syncTopToBottom();
-        refreshSamplingFrameCount();
-      }else{
+        refreshSourceSummary();
+      }else if(!preserveWorkingConfig){
         if(startFrame) startFrame.value = 0;
         if(endFrame) endFrame.value = sourceMaxFrame ?? "";
         if(samplingRate) samplingRate.value = 30;
         syncTopToBottom();
-        refreshSamplingFrameCount();
+        refreshSourceSummary();
+      }
+      if(!preserveWorkingConfig){
+        const preferredConfigName = data.default_config?.name || data.default_config?.config_name || "";
+        const preferredConfig = await loadConfigCatalog(preferredConfigName);
+        if(preferredConfig) await loadSelectedSharedConfig();
       }
       updateStageUi();
       if(mainRetargetedDataSelect?.value){
@@ -3507,7 +4013,7 @@ input[type="checkbox"]{
     }
   }
 
-  async function loadRetargetedData(){
+  async function loadRetargetedData({preserveWorkingConfig=false}={}){
     const value = retargetedDataSelect?.value || "new";
     try{
       if(value === "new"){
@@ -3517,21 +4023,22 @@ input[type="checkbox"]{
         );
         const data = await res.json();
         if(!res.ok) throw new Error(JSON.stringify(data.detail));
-        if(data.default_config){
+        if(!preserveWorkingConfig && data.default_config){
           loadedConfig = deepClone(data.default_config);
           workingConfig = deepClone(data.default_config);
           applyConfig(data.default_config);
           if(startFrame) startFrame.value = 0;
           if(endFrame) endFrame.value = sourceMaxFrame ?? "";
           syncTopToBottom();
-          refreshSamplingFrameCount();
-        }else{
+        refreshSourceSummary();
+        }else if(!preserveWorkingConfig){
           if(startFrame) startFrame.value = 0;
           if(endFrame) endFrame.value = sourceMaxFrame ?? "";
           if(samplingRate) samplingRate.value = 30;
           syncTopToBottom();
-          refreshSamplingFrameCount();
+          refreshSourceSummary();
         }
+        if(!preserveWorkingConfig && selectedSharedConfig) await loadSelectedSharedConfig();
         selectedSettingRunStage = {primaryDone:false, mainDone:false, mainCsvExists:false};
         updateStageUi();
         return;
@@ -3543,9 +4050,13 @@ input[type="checkbox"]{
       );
       const data = await res.json();
       if(!res.ok) throw new Error(JSON.stringify(data.detail));
-      loadedConfig = deepClone(data.config);
-      workingConfig = deepClone(data.config);
-      applyConfig(data.config);
+      if(!preserveWorkingConfig){
+        loadedConfig = deepClone(data.config);
+        workingConfig = deepClone(data.config);
+        // A Run Config is a reproducibility snapshot, not a saved Shared
+        // Config. Reflect it in the UI without changing the dirty baseline.
+        applyConfig(data.config);
+      }
       selectedSettingRunStage = {
         primaryDone: Boolean(data.primary_done),
         mainDone: Boolean(data.main_done),
@@ -3560,7 +4071,7 @@ input[type="checkbox"]{
           : Math.max(0, Number(stop) - 1);
       }
       syncTopToBottom();
-      refreshSamplingFrameCount();
+          refreshSourceSummary();
       updateStageUi();
     }catch(err){
       alert("Retargeted Data IDを読み込めませんでした: " + err.message);
@@ -3621,6 +4132,7 @@ input[type="checkbox"]{
     }
 
     try{
+      if(viewResultBtn) viewResultBtn.disabled = true;
       // Build this run's snapshot directly from visible controls. Persistent
       // defaults are intentionally not saved or reloaded here.
       const cfg = collectConfig();
@@ -3673,6 +4185,20 @@ input[type="checkbox"]{
 
       const job = await waitForRetargetJob(data.job_id, data);
 
+      // The collision-pair list is rebuilt while refreshing context. Keep the
+      // just-submitted visible settings as the current model until the saved
+      // Run Config is loaded, otherwise selected pairs are redrawn from the
+      // pre-run workingConfig and appear unchecked.
+      workingConfig = deepClone(cfg);
+
+      // Overwriting Primary replaces its run directory and invalidates every
+      // dependent Main artifact. Do not retain a previously loaded Main BIN.
+      rvData = null;
+      rvValidationData = null;
+      rvValidationCache.clear();
+      loadedMainRunId = null;
+      loadedMainResultId = "new";
+
       setRunBusy(false, `Done: ${job.run_id}`);
       alert(
         job.overwritten
@@ -3680,9 +4206,11 @@ input[type="checkbox"]{
           : `${job.run_id} を新規作成してRetargetingしました。`
       );
 
-      await loadRetargetContext();
+      await loadRetargetContext({preserveWorkingConfig:true});
       retargetedDataSelect.value = job.run_id;
-      await loadRetargetedData();
+      // Reapply the authoritative Run Config snapshot, including selected
+      // collision pairs, after the model-driven controls have been rebuilt.
+      await loadRetargetedData({preserveWorkingConfig:false});
       if(mainRetargetedDataSelect && [...mainRetargetedDataSelect.options].some(o => o.value === job.run_id)){
         mainRetargetedDataSelect.value = job.run_id;
         await loadMainRetargetedData();
@@ -3691,6 +4219,8 @@ input[type="checkbox"]{
     }catch(err){
       setRunBusy(false, "Failed");
       alert("Retargetingに失敗しました: " + err.message);
+    }finally{
+      if(viewResultBtn) viewResultBtn.disabled = false;
     }
   }
 
@@ -3749,8 +4279,9 @@ input[type="checkbox"]{
     }
 
     try{
+      if(viewResultBtn) viewResultBtn.disabled = true;
       // Main uses the current cloned Main controls plus current Ground fields;
-      // Change Default is a separate persistence action.
+      // Saving a Shared Main Config is a separate persistence action.
       const cfg = collectMainConfig();
       const smoothingMs = Number(cfg.main?.gcp_smoothing_ms ?? 150);
       const minOffset = Number(cfg.main?.gcp_min_offset ?? 0.2);
@@ -3802,6 +4333,11 @@ input[type="checkbox"]{
         throw new Error(typeof detail === "string" ? detail : (detail?.message || JSON.stringify(detail)));
       }
       const job = await waitForMainJob(data.job_id, data);
+      // A retry keeps the same Main ID but publishes a new five-file set.
+      // Discard every in-memory Viewer/validation reference to the old set.
+      rvData = null;
+      rvValidationData = null;
+      rvValidationCache.clear();
       if(mainResultSelect && job.main_id){
         if(![...mainResultSelect.options].some(o=>o.value===job.main_id)){
           const opt=document.createElement("option");opt.value=job.main_id;opt.textContent=job.main_id;
@@ -3816,6 +4352,7 @@ input[type="checkbox"]{
         if(status) status.textContent = `Failed: ${runId}`;
       }
     }finally{
+      if(viewResultBtn) viewResultBtn.disabled = false;
       for(const btn of [mainRetargetBtn, mainRetargetBottomBtn]){
         if(!btn) continue;
         btn.classList.remove("running");
@@ -3827,7 +4364,6 @@ input[type="checkbox"]{
 
   mainRetargetBtn?.addEventListener("click", runMainRetarget);
   mainRetargetBottomBtn?.addEventListener("click", () => {
-    syncMainConfigNameBottomToTop();
     runMainRetarget();
   });
 
@@ -3837,40 +4373,41 @@ input[type="checkbox"]{
     loadMainRetargetedData();
   });
   mainResultSelect?.addEventListener("change", loadMainRetargetedData);
-  mainConfigName?.addEventListener("input", syncMainConfigNameTopToBottom);
-  mainConfigNameBottom?.addEventListener("input", syncMainConfigNameBottomToTop);
+  mainConfigName?.addEventListener("change", () => handleMainConfigSelection(mainConfigName));
+  mainConfigNameBottom?.addEventListener("change", () => handleMainConfigSelection(mainConfigNameBottom));
   mainResetBtn?.addEventListener("click", () => {
     if(mainLoadedConfig) applyMainConfig(mainLoadedConfig);
   });
   mainResetBottomBtn?.addEventListener("click", () => {
     if(mainLoadedConfig) applyMainConfig(mainLoadedConfig);
   });
-  mainChangeDefaultBtn?.addEventListener("click", saveMainDefault);
+  mainChangeDefaultBtn?.addEventListener("click", () => openSaveConfigModal("main"));
   mainChangeDefaultBottomBtn?.addEventListener("click", () => {
-    syncMainConfigNameBottomToTop();
-    saveMainDefault();
+    openSaveConfigModal("main");
   });
 
-  configNameBottom?.addEventListener("input", () => {
-    syncBottomToTop();
-    refreshChangedState();
-  });
+  for(const control of [
+    mainGcpSmoothingMs, mainGcpMinOffset, mainGcpMaxOffset, mainGcpPowerNumber,
+    mainFlyingMinPercent, mainFlyingMaxPercent, mainFullCorrectionHeight,
+    mainNoCorrectionHeight, mainGlobalContactAnchoringEnabled,
+  ]){
+    control?.addEventListener("input", refreshMainChangedState);
+    control?.addEventListener("change", refreshMainChangedState);
+  }
+
+  configNameBottom?.addEventListener("change", () => handleConfigSelection(configNameBottom));
   startFrameBottom?.addEventListener("input", () => {
     syncBottomToTop();
     refreshChangedState();
-    refreshSamplingFrameCount();
   });
   endFrameBottom?.addEventListener("input", () => {
     syncBottomToTop();
     refreshChangedState();
-    refreshSamplingFrameCount();
   });
   samplingRateBottom?.addEventListener("input", () => {
     syncBottomToTop();
     refreshChangedState();
-    refreshSamplingFrameCount();
   });
-  configName?.addEventListener("input", syncTopToBottom);
   startFrame?.addEventListener("input", syncTopToBottom);
   endFrame?.addEventListener("input", syncTopToBottom);
   samplingRate?.addEventListener("input", syncTopToBottom);
@@ -3881,7 +4418,7 @@ input[type="checkbox"]{
   });
   changeDefaultBottomBtn?.addEventListener("click", () => {
     syncBottomToTop();
-    changeDefaultBtn?.click();
+    openSaveConfigModal();
   });
 
   retargetNowBtn?.addEventListener("click", retargetNow);
@@ -3893,9 +4430,6 @@ input[type="checkbox"]{
   startFrame?.addEventListener("input", refreshChangedState);
   endFrame?.addEventListener("input", refreshChangedState);
   samplingRate?.addEventListener("input", refreshChangedState);
-  startFrame?.addEventListener("input", refreshSamplingFrameCount);
-  endFrame?.addEventListener("input", refreshSamplingFrameCount);
-  samplingRate?.addEventListener("input", refreshSamplingFrameCount);
   temporalEnabled?.addEventListener("change", refreshChangedState);
   temporalCost?.addEventListener("input", refreshChangedState);
   jointLimitEnabled?.addEventListener("change", refreshChangedState);
@@ -3916,7 +4450,7 @@ input[type="checkbox"]{
     selfCollisionPairs?.querySelectorAll(".collision-pair-check").forEach(input=>input.checked=checked);
     updateSelfCollisionParent();refreshChangedState();
   });
-  for(const input of [selfCollisionZone,selfCollisionBaseCost,selfCollisionMaxCost]) input?.addEventListener("input",refreshChangedState);
+  for(const input of [selfCollisionZone,selfCollisionBaseCost,selfCollisionMaxCost,selfCollisionInitialGain,selfCollisionBacktrackingFactor,selfCollisionMinimumGain,selfCollisionMinimumStepScale]) input?.addEventListener("input",refreshChangedState);
   async function activateStageTab(name){
     const btn = document.querySelector(`.stage-tab[data-tab="${name}"]`);
     if(!btn) return false;
@@ -3942,7 +4476,7 @@ input[type="checkbox"]{
 
   const params = new URLSearchParams(location.search);
   const capsuleId = params.get("capsule") || EMBEDDED_CONFIG.capsule_id || "2606050001";
-  const capsuleTitle = params.get("title") || "ハンヤ節";
+  let capsuleTitle = params.get("title") || capsuleId;
   const dataListBtn = document.getElementById("dataListBtn");
   const dataManagementModal = document.getElementById("dataManagementModal");
   const dataManagementCloseBtn = document.getElementById("dataManagementCloseBtn");
@@ -4015,14 +4549,40 @@ input[type="checkbox"]{
     const response=await fetch("/api/retarget/data-management/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({capsule_id:capsuleId,robot_variant:robotVariant,...selected})});
     const data=await response.json();
     if(!response.ok){alert(`Delete failed: ${data.detail||"unknown error"}`);return;}
-    await loadRetargetContext();
+    await loadRetargetContext({preserveWorkingConfig:true});
     await loadDataManagement();
   });
   const capsuleBack = document.getElementById("capsuleBack");
-  if(capsuleBack){
-    capsuleBack.textContent = capsuleTitle;
-    capsuleBack.href = `../capsule/?capsule=${encodeURIComponent(capsuleId)}&title=${encodeURIComponent(capsuleTitle)}`;
+  function titleCaseIdentifier(value){
+    return String(value || "")
+      .split(/[_\s-]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
   }
+  function robotDisplayName(robot){
+    const manufacturer = titleCaseIdentifier(robot?.manufacturer);
+    const model = String(robot?.model || "").toUpperCase();
+    const variant = String(robot?.variant || "");
+    const dof = variant.match(/(?:^|_)(\d+)dof(?:$|_)/i)?.[1];
+    const identity = [manufacturer, model].filter(Boolean).join(" ");
+    const detail = dof ? `${dof}DoF` : variant;
+    return [identity, detail].filter(Boolean).join(" / ") || "—";
+  }
+  function applyContextSummary(data){
+    capsuleTitle = String(data.capsule?.title || capsuleTitle || capsuleId);
+    const capsuleText = `${data.capsule?.id || capsuleId} / ${capsuleTitle}`;
+    if(capsuleSummary) capsuleSummary.textContent = capsuleText;
+    if(mainCapsuleSummary) mainCapsuleSummary.textContent = capsuleText;
+    if(capsuleBack){
+      capsuleBack.textContent = capsuleTitle;
+      capsuleBack.href = `../capsule/?capsule=${encodeURIComponent(capsuleId)}&title=${encodeURIComponent(capsuleTitle)}`;
+    }
+    const robotText = robotDisplayName(data.robot || data.default_config?.robot || workingConfig?.robot);
+    if(targetRobotSummary) targetRobotSummary.textContent = robotText;
+    if(mainTargetRobotSummary) mainTargetRobotSummary.textContent = robotText;
+  }
+  applyContextSummary({capsule:{id:capsuleId,title:capsuleTitle},robot:workingConfig?.robot});
 
   prepareMappingColumns();
   installSelectors();
@@ -4049,6 +4609,8 @@ input[type="checkbox"]{
   const rvMevaMeta = document.getElementById("rvMevaMeta");
   const rvAName = document.getElementById("rvAName");
   const rvBName = document.getElementById("rvBName");
+  const rvAWarning = document.getElementById("rvAWarning");
+  const rvBWarning = document.getElementById("rvBWarning");
   const rvAPill = document.getElementById("rvAPill");
   const rvBPill = document.getElementById("rvBPill");
   const rvStageA = document.getElementById("rvStageA");
@@ -4058,6 +4620,7 @@ input[type="checkbox"]{
   const rvGraphAPairLabel = document.getElementById("rvGraphAPairLabel");
   const rvGraphBPairLabel = document.getElementById("rvGraphBPairLabel");
   const rvSlider = document.getElementById("rvFrameSlider");
+  const rvFailureMarkers = document.getElementById("rvFailureMarkers");
   const rvFrameLabel = document.getElementById("rvFrameLabel");
   const rvTimeLabel = document.getElementById("rvTimeLabel");
   const rvMevaFrameLabel = document.getElementById("rvMevaFrameLabel");
@@ -4216,6 +4779,16 @@ input[type="checkbox"]{
     if(!stage||stage==="meva")return null;
     const cacheKey=validationCacheKey(stage);
     if(rvValidationCache.has(cacheKey)){rvValidationData=rvValidationCache.get(cacheKey);return rvValidationData}
+    const viewerBin=[rvData?.a,rvData?.b].find(bin=>bin?.header?.stage===stage);
+    if(viewerBin?.arrays?.self_collision_signed_distance_m&&viewerBin?.arrays?.self_collision_severity){
+      const frameCount=Number(viewerBin.header.frame_count)||0,pairNames=viewerBin.header.collision_pair_names||[],pairCount=pairNames.length;
+      const distance=viewerBin.arrays.self_collision_signed_distance_m,severity=viewerBin.arrays.self_collision_severity;
+      rvValidationData={stage,frames:Array.from({length:frameCount},(_,index)=>Number(viewerBin.arrays.frame?.[index]??index)),
+        self_collision:{unit:"m",rows:pairNames.map((label,pairIndex)=>({key:String(pairIndex),label,
+          values:Array.from({length:frameCount},(_,frameIndex)=>Number(distance[frameIndex*pairCount+pairIndex])),
+          severities:Array.from({length:frameCount},(_,frameIndex)=>Number(severity[frameIndex*pairCount+pairIndex]))}))}};
+      rvValidationCache.set(cacheKey,rvValidationData);drawPlot();return rvValidationData;
+    }
     const runId=rvData?.runId||"";if(!runId||runId==="new")return null;
     const query=new URLSearchParams({capsule_id:capsuleId,run_id:runId,stage,main_id:rvData?.mainId||"legacy",robot_variant:rvData?.robotVariant||workingConfig?.robot?.variant||"g1_29dof"});
     try{
@@ -4232,31 +4805,35 @@ input[type="checkbox"]{
   function parseViewerBin(buffer){
     const dv = new DataView(buffer);
     const magic = new TextDecoder().decode(new Uint8Array(buffer, 0, 8));
-    if(magic !== "MEVAVW01") throw new Error("Unsupported viewer binary");
-    const headerLen = dv.getUint32(8, true);
+    if(magic !== "MEVAVW01"&&magic !== "MEVAVW02") throw new Error("Unsupported viewer binary");
+    const fixedHeaderBytes=magic==="MEVAVW02"?16:12;
+    const binaryFormatVersion=magic==="MEVAVW02"?dv.getUint32(8,true):null;
+    const headerLen = dv.getUint32(magic==="MEVAVW02"?12:8, true);
     const header = JSON.parse(
-      new TextDecoder().decode(new Uint8Array(buffer, 12, headerLen))
+      new TextDecoder().decode(new Uint8Array(buffer, fixedHeaderBytes, headerLen))
     );
-    const payloadStart = 12 + headerLen;
+    if(binaryFormatVersion!==null&&Number(header.format_version)!==binaryFormatVersion)throw new Error("Viewer binary format version mismatch");
+    const payloadStart = fixedHeaderBytes + headerLen;
     const arrays = {};
     for(const b of header.blocks){
       const byteOffset = payloadStart + b.offset;
-      const length = b.nbytes / 4;
+      const length = b.dtype === "uint8" ? b.nbytes : b.nbytes / 4;
       // TypedArray byteOffset must be aligned to 4 bytes. viewer.bin has a
       // variable-length JSON header, so copy each block into its own aligned
       // ArrayBuffer before constructing the typed view.
       const blockBuffer = buffer.slice(byteOffset, byteOffset + b.nbytes);
-      arrays[b.name] = b.dtype === "int32"
-        ? new Int32Array(blockBuffer, 0, length)
-        : new Float32Array(blockBuffer, 0, length);
+      arrays[b.name] = b.dtype === "uint8"
+        ? new Uint8Array(blockBuffer, 0, length)
+        : (b.dtype === "int32"
+          ? new Int32Array(blockBuffer, 0, length)
+          : new Float32Array(blockBuffer, 0, length));
     }
     return {header, arrays};
   }
 
-  async function fetchViewerBin(url){
-    // The API adds a source-mtime revision to the URL, so unchanged viewer
-    // data can safely be reused after a browser reload.
-    const r = await fetch(url);
+  async function loadViewerBin(url){
+    // Retry keeps the same artifact URL/ID, so always revalidate the BIN.
+    const r = await fetch(url,{cache:"no-store"});
     if(!r.ok) throw new Error(`Viewer data fetch failed (${r.status})`);
     return parseViewerBin(await r.arrayBuffer());
   }
@@ -4892,6 +5469,15 @@ input[type="checkbox"]{
     const names=bin.header.joint_names||[],jointIndex=names.indexOf(jointName);
     if(jointIndex<0)return [];
     const jointCount=names.length,frameCount=Number(bin.header.frame_count)||0;
+    const stored=bin.arrays[order===1?"joint_velocity_rad_s":"joint_acceleration_rad_s2"];
+    if(stored){
+      const frames=sourceFrames(bin),out=[];
+      for(let frameIndex=0;frameIndex<frameCount;frameIndex++){
+        const frame=frames[frameIndex];if(frame<startFrame||frame>endFrame)continue;
+        out.push([frame,Number(stored[frameIndex*jointCount+jointIndex])]);
+      }
+      return out;
+    }
     const dt=1/Math.max(1,Number(bin.header.fps)||50),q=frameIndex=>bin.arrays.dof_pos[frameIndex*jointCount+jointIndex];
     const out=[];
     for(let frameIndex=0;frameIndex<frameCount;frameIndex++){
@@ -4949,37 +5535,65 @@ input[type="checkbox"]{
     const dash=document.createElement("option");dash.value="";dash.textContent="---";select.appendChild(dash);
     if(!bin)return;
     if(bin.header.kind==="retarget"){
-      if(rvData?.diagnostics){
-        const dg=document.createElement("optgroup");dg.label="Robot Primary · Main input diagnostics";
-        for(const [value,label] of [
-          ["robot_main_base_geom","MIN GEOM Z (Main base, pre-contact correction)"],
-        ]){
-          const o=document.createElement("option");o.value="diag:"+value;o.textContent=label;dg.appendChild(o);
+      if(bin.arrays.ik_iterations){
+        const ik=document.createElement("optgroup");ik.label="IK Diagnostics";
+        for(const [value,label] of [["iterations","Iterations"],["converged","Convergence"],["final_delta","Final joint delta"]]){
+          const o=document.createElement("option");o.value=`ik:${value}`;o.textContent=label;ik.appendChild(o);
         }
-        select.appendChild(dg);
+        select.appendChild(ik);
+      }
+      if(includeJoints){
+        const hg=document.createElement("optgroup");hg.label="Heatmap";
+        for(const [value,label] of [["joint_limit","Joint limit"],["joint_velocity","Joint velocity"],["joint_acceleration","Joint acceleration"],["orientation_residual","Orientation residual"],["position_residual","Position residual"],["self_collision","Self-collision"]]){
+          const o=document.createElement("option");o.value=`heatmap:${value}`;o.textContent=label;hg.appendChild(o);
+        }
+        select.appendChild(hg);
       }
       const lg=document.createElement("optgroup");lg.label="Links";
       for(const n of (bin.header.link_names||[])){
         const o=document.createElement("option");o.value="link:"+n;o.textContent=n;lg.appendChild(o);
       }
       select.appendChild(lg);
-      const geomNames=bin.header.geom_names||[];
-      if(geomNames.length){
-        const gg=document.createElement("optgroup");gg.label="Foot GEOM";
-        for(const n of geomNames){const o=document.createElement("option");o.value="geom:"+n;o.textContent=n;gg.appendChild(o)}
-        select.appendChild(gg);
-      }
       if(includeJoints){
         const jg=document.createElement("optgroup");jg.label="Joints";
         for(const n of (bin.header.joint_names||[])){
           const o=document.createElement("option");o.value="joint:"+n;o.textContent=n;jg.appendChild(o);
         }
         select.appendChild(jg);
-        const hg=document.createElement("optgroup");hg.label="Heat maps";
-        for(const [value,label] of [["joint_velocity","Joint velocity"],["joint_acceleration","Joint acceleration"],["self_collision","Self-collision"]]){
-          const o=document.createElement("option");o.value=`heatmap:${value}`;o.textContent=label;hg.appendChild(o);
+      }
+      const geomNames=bin.header.geom_names||[];
+      if(geomNames.length){
+        const gg=document.createElement("optgroup");gg.label="GEOM";
+        for(const n of geomNames){const o=document.createElement("option");o.value="geom:"+n;o.textContent=n;gg.appendChild(o)}
+        select.appendChild(gg);
+      }
+      if(includeJoints){
+        const orientationMappings=bin.header.orientation_mappings||[];
+        const positionMappings=bin.header.position_mappings||[];
+        if(orientationMappings.length||positionMappings.length){
+          const rg=document.createElement("optgroup");rg.label="Primary Residuals";
+          orientationMappings.forEach((mapping,index)=>{const o=document.createElement("option");o.value=`ores:${index}`;o.textContent=`Orientation · ${mapping.source_segment} → ${mapping.target_link}`;rg.appendChild(o)});
+          positionMappings.forEach((mapping,index)=>{const o=document.createElement("option");o.value=`pres:${index}`;o.textContent=`Position · ${mapping.source_segment} → ${mapping.target_link}`;rg.appendChild(o)});
+          select.appendChild(rg);
         }
-        select.appendChild(hg);
+        if(rvData?.diagnostics){
+          const dg=document.createElement("optgroup");dg.label="Robot Primary · Main input diagnostics";
+          for(const [value,label] of [["robot_main_base_geom","MIN GEOM Z (Main base, pre-contact correction)"]]){
+            const o=document.createElement("option");o.value="diag:"+value;o.textContent=label;dg.appendChild(o);
+          }
+          select.appendChild(dg);
+        }
+        const footTasks=bin.header.foot_geom_task_names||[];
+        if(footTasks.length){
+          const fg=document.createElement("optgroup");fg.label="Main Foot GEOM Z tasks";
+          footTasks.forEach((name,index)=>{const o=document.createElement("option");o.value=`footz:${index}`;o.textContent=name;fg.appendChild(o)});
+          select.appendChild(fg);
+        }
+        if(bin.arrays.gcp_left_corrected||bin.arrays.gcp_right_corrected){
+          const gg=document.createElement("optgroup");gg.label="Main corrected GCP";
+          for(const [side,label] of [["left","Left corrected GCP"],["right","Right corrected GCP"]]){const o=document.createElement("option");o.value=`gcp:${side}`;o.textContent=label;gg.appendChild(o)}
+          select.appendChild(gg);
+        }
       }
     }else{
       if(rvData?.diagnostics){
@@ -5012,6 +5626,11 @@ input[type="checkbox"]{
     if(v.startsWith("link:")) return {kind:"link",name:v.slice(5)};
     if(v.startsWith("geom:")) return {kind:"geom",name:v.slice(5)};
     if(v.startsWith("heatmap:")) return {kind:"heatmap",name:v.slice(8)};
+    if(v.startsWith("ores:")) return {kind:"ores",name:v.slice(5)};
+    if(v.startsWith("pres:")) return {kind:"pres",name:v.slice(5)};
+    if(v.startsWith("ik:")) return {kind:"ik",name:v.slice(3)};
+    if(v.startsWith("footz:")) return {kind:"footz",name:v.slice(6)};
+    if(v.startsWith("gcp:")) return {kind:"gcp",name:v.slice(4)};
     if(v.startsWith("segment:")) return {kind:"segment",name:v.slice(8)};
     return {kind:"none",name:""};
   }
@@ -5073,7 +5692,12 @@ input[type="checkbox"]{
     const previous=metricSelect.value,a=stageNodeValue(aSelect),b=stageNodeValue(bSelect);
     const node=a.kind!=="none"?a:b;
     let options=[];
-    if(node.kind==="heatmap")options=[[`heatmap_${node.name}`,({joint_velocity:"Joint velocity",joint_acceleration:"Joint acceleration",self_collision:"Self-collision"})[node.name]||"Heat map"]];
+    if(node.kind==="heatmap")options=[[`heatmap_${node.name}`,({joint_limit:"Joint limit",joint_velocity:"Joint velocity",joint_acceleration:"Joint acceleration",orientation_residual:"Orientation residual",position_residual:"Position residual",self_collision:"Self-collision"})[node.name]||"Heat map"]];
+    else if(node.kind==="ores")options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_angle","Residual magnitude"]];
+    else if(node.kind==="pres")options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_norm","Residual magnitude"],["target_x","Target X"],["target_y","Target Y"],["target_z","Target Z"],["result_x","Result X"],["result_y","Result Y"],["result_z","Result Z"]];
+    else if(node.kind==="ik")options=[["value",({iterations:"Iterations",converged:"Convergence",final_delta:"Final joint delta"})[node.name]||"Value"]];
+    else if(node.kind==="footz")options=[["target","Target Z"],["result","Result Z"],["residual","Residual Z"]];
+    else if(node.kind==="gcp")options=[["value","Corrected GCP"]];
     else if(node.kind==="joint")options=[["joint_angle","Joint Angle"],["joint_velocity","Joint Velocity"],["joint_acceleration","Joint Acceleration"]];
     else if(node.kind==="geom")options=[["x","X"],["y","Y"],["z","Z"]];
     else if(node.kind==="link"||node.kind==="segment")options=[["x","X"],["y","Y"],["z","Z"],["pitch","Pitch"],["yaw","Yaw"],["roll","Roll"]];
@@ -5267,8 +5891,71 @@ input[type="checkbox"]{
     return traces.filter(trace=>trace.series.length);
   }
 
+  function primaryResidualTraces(bin,node,metric,start,end,labelPrefix){
+    if(!bin||!["ores","pres"].includes(node.kind))return [];
+    const mappingIndex=Number(node.name),frames=sourceFrames(bin),frameCount=frames.length;
+    if(!Number.isInteger(mappingIndex)||mappingIndex<0)return [];
+    let array=null,componentCount=1,component=0,unit="rad",label=metric;
+    if(node.kind==="ores"){
+      if(metric==="residual_angle")array=bin.arrays.orientation_residual_angle_rad;
+      else{array=bin.arrays.orientation_residual_rotvec_rad;componentCount=3;component={residual_x:0,residual_y:1,residual_z:2}[metric]??0}
+      const mapping=bin.header.orientation_mappings?.[mappingIndex]||{};
+      label=`Orientation ${mapping.source_segment||mappingIndex} → ${mapping.target_link||""} · ${metric.replace("residual_","").toUpperCase()}`;
+    }else{
+      unit="m";
+      const [quantity,axis]=metric.split("_");
+      const fields={target:"position_target_xyz_m",result:"position_result_xyz_m",residual:"position_residual_xyz_m"};
+      if(metric==="residual_norm")array=bin.arrays.position_residual_norm_m;
+      else{array=bin.arrays[fields[quantity]];componentCount=3;component={x:0,y:1,z:2}[axis]??0}
+      const mapping=bin.header.position_mappings?.[mappingIndex]||{};
+      label=`Position ${mapping.source_segment||mappingIndex} → ${mapping.target_link||""} · ${metric.replace("_"," ").toUpperCase()}`;
+    }
+    if(!array)return [];
+    const mappingCount=node.kind==="ores"?(bin.header.orientation_mappings||[]).length:(bin.header.position_mappings||[]).length;
+    const series=[];
+    for(let frameIndex=0;frameIndex<frameCount;frameIndex++){
+      const frame=frames[frameIndex];if(frame<start||frame>end)continue;
+      const offset=(frameIndex*mappingCount+mappingIndex)*componentCount+component;
+      series.push([frame,Number(array[offset])]);
+    }
+    return [{series,label:`${labelPrefix} · ${label}`,color:"#c2413b",dash:[],unit}];
+  }
+
+  function embeddedViewerDiagnosticTraces(bin,node,metric,start,end,labelPrefix){
+    if(!bin||!["ik","footz","gcp"].includes(node.kind))return [];
+    const frames=sourceFrames(bin),frameCount=frames.length,traces=[];
+    const seriesFrom=(array,getValue)=>frames.map((frame,index)=>[
+      frame,getValue(array,index)
+    ]).filter(point=>point[0]>=start&&point[0]<=end&&Number.isFinite(point[1]));
+    if(node.kind==="ik"){
+      const field={iterations:"ik_iterations",converged:"ik_converged",final_delta:"ik_final_joint_delta_rad"}[node.name];
+      const array=bin.arrays[field];if(!array)return [];
+      const unit=node.name==="final_delta"?"rad":node.name==="iterations"?"iterations":"1";
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · IK ${node.name.replace("_"," ")}`,color:"#7c3aed",dash:[],unit});
+    }else if(node.kind==="footz"){
+      const taskIndex=Number(node.name),taskCount=(bin.header.foot_geom_task_names||[]).length;
+      const field={target:"foot_geom_target_z_m",result:"foot_geom_result_z_m",residual:"foot_geom_residual_z_m"}[metric];
+      const array=bin.arrays[field];if(!array||!Number.isInteger(taskIndex)||taskIndex<0||taskIndex>=taskCount)return [];
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i*taskCount+taskIndex])),label:`${labelPrefix} · ${bin.header.foot_geom_task_names[taskIndex]} · ${metric}`,color:"#c2413b",dash:[],unit:"m"});
+    }else{
+      const array=bin.arrays[`gcp_${node.name}_corrected`];if(!array)return [];
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · ${node.name} corrected GCP`,color:node.name==="left"?"#2f5f8f":"#91abc5",dash:[],unit:"probability"});
+    }
+    return traces.filter(trace=>trace.series.length);
+  }
+
   function buildPlotTraces(aBin,bBin,aSelect,bSelect,metric,aSecond,bSecond,start,end){
     const aNode=stageNodeValue(aSelect),bNode=stageNodeValue(bSelect);
+    const embedded=[
+      ...embeddedViewerDiagnosticTraces(aBin,aNode,metric,start,end,"A"),
+      ...embeddedViewerDiagnosticTraces(bBin,bNode,metric,start,end,"B"),
+    ];
+    if(embedded.length)return maskInvalidViewerFrames(embedded,aBin,bBin);
+    const residual=[
+      ...primaryResidualTraces(aBin,aNode,metric,start,end,"A"),
+      ...primaryResidualTraces(bBin,bNode,metric,start,end,"B"),
+    ];
+    if(residual.length)return maskInvalidViewerFrames(residual,aBin,bBin);
     const diagnostic=[
       ...diagnosticTraces(aNode,metric,start,end),
       ...diagnosticTraces(bNode,metric,start,end),
@@ -5278,7 +5965,25 @@ input[type="checkbox"]{
     if(generic.rs.length)traces.push({series:generic.rs,label:`A · ${stageLabel(rvData?.aStage)}`,color:"#d97706",dash:[],unit:generic.unit});
     if(generic.ms.length)traces.push({series:generic.ms,label:`B · ${stageLabel(rvData?.bStage)}`,color:"#76a982",dash:[],unit:generic.unit});
     if(generic.diff.length)traces.push({series:generic.diff,label:"Difference",color:"#9a5b12",dash:[],unit:generic.unit});
-    return [...traces,...diagnostic];
+    return maskInvalidViewerFrames([...traces,...diagnostic],aBin,bBin);
+  }
+
+  function frameStatusMap(bin){
+    const status=bin?.arrays?.frame_status;if(!status)return null;
+    return new Map(sourceFrames(bin).map((frame,index)=>[frame,Number(status[index]??0)]));
+  }
+
+  function maskInvalidViewerFrames(traces,aBin,bBin){
+    const aStatus=frameStatusMap(aBin),bStatus=frameStatusMap(bBin);
+    if(!aStatus&&!bStatus)return traces;
+    return traces.map(trace=>{
+      const label=String(trace.label||"");
+      const maps=label.startsWith("A ·")?[aStatus]:label.startsWith("B ·")?[bStatus]:[aStatus,bStatus];
+      return {...trace,series:trace.series.map(point=>{
+        const invalid=maps.some(map=>map&&Number(map.get(point[0])??0)>=2);
+        return invalid?[point[0],NaN]:point;
+      })};
+    });
   }
 
   function selectedHeatmap(aSelect,bSelect){
@@ -5300,51 +6005,95 @@ input[type="checkbox"]{
   }
 
   function sourceFrames(bin){
-    const count=Number(bin?.header?.frame_count)||0,stored=bin?.arrays?.source_frame;
-    return Array.from({length:count},(_,index)=>Number(stored?.[index]??(bin.header.source_frame_start+index*(Number(bin.header.source_frame_step)||1))));
+    const count=Number(bin?.header?.frame_count)||0,stored=bin?.arrays?.frame||bin?.arrays?.source_frame;
+    return Array.from({length:count},(_,index)=>Number(stored?.[index]??index));
   }
 
   function buildJointHeatmap(selection,start,end){
     const bin=selection.bin,names=bin?.header?.joint_names||[],framesAll=sourceFrames(bin);
     const frameIndexes=[];framesAll.forEach((frame,index)=>{if(frame>=start&&frame<=end)frameIndexes.push(index)});
     const frames=frameIndexes.map(index=>framesAll[index]),frameCountAll=Number(bin.header.frame_count)||0,jointCount=names.length;
-    const dt=1/Math.max(1,Number(bin.header.fps)||50),order=selection.kind==="joint_velocity"?1:2;
-    const values=names.map((_,jointIndex)=>frameIndexes.map(frameIndex=>{
-      const q=index=>bin.arrays.dof_pos[index*jointCount+jointIndex];
-      if(order===1){
-        return frameIndex>0?(q(frameIndex)-q(frameIndex-1))/dt:NaN;
-      }
-      if(frameIndex===0||frameIndex===frameCountAll-1)return NaN;
-      return (q(frameIndex+1)-2*q(frameIndex)+q(frameIndex-1))/(dt*dt);
-    }));
+    const order=selection.kind==="joint_velocity"?1:2;
+    const storedValues=bin.arrays[order===1?"joint_velocity_rad_s":"joint_acceleration_rad_s2"];
+    const storedSeverity=bin.arrays[order===1?"joint_velocity_severity":"joint_acceleration_severity"];
+    const values=names.map((_,jointIndex)=>frameIndexes.map(frameIndex=>Number(storedValues?.[frameIndex*jointCount+jointIndex]??0)));
     const limitKind=order===1?"velocity":"acceleration",limits=names.map(name=>configuredJointLimit(selection.stage,limitKind,name));
-    const severities=values.map((row,rowIndex)=>row.map(value=>{
+    const severities=values.map((row,rowIndex)=>row.map((value,columnIndex)=>{
+      const frameIndex=frameIndexes[columnIndex];
+      if(storedSeverity)return Number(storedSeverity[frameIndex*jointCount+rowIndex]);
       const limit=limits[rowIndex];
       return Number.isFinite(value)&&Number.isFinite(limit)&&limit>0?Math.round(Math.min(1,Math.abs(value)/limit)*255):0;
     }));
-    return {kind:selection.kind,frames,rows:names,values,severities,limits,unit:order===1?"rad/s":"rad/s²"};
+    return {kind:selection.kind,stage:selection.stage,frames,rows:names,values,severities,limits,unit:order===1?"rad/s":"rad/s²",frameStatus:frameIndexes.map(index=>Number(bin.arrays.frame_status?.[index]??0))};
   }
 
   function buildSelfCollisionHeatmap(selection,start,end){
+    const bin=selection.bin,raw=bin?.arrays?.self_collision_signed_distance_m,severity=bin?.arrays?.self_collision_severity;
+    const pairNames=bin?.header?.collision_pair_names||[];
+    if(raw&&severity&&pairNames.length){
+      const framesAll=sourceFrames(bin),indexes=[];
+      framesAll.forEach((frame,index)=>{if(frame>=start&&frame<=end)indexes.push(index)});
+      const pairCount=pairNames.length;
+      return {
+        kind:"self_collision",stage:selection.stage,frames:indexes.map(index=>framesAll[index]),rows:pairNames,
+        values:pairNames.map((_,pairIndex)=>indexes.map(index=>Number(raw[index*pairCount+pairIndex]))),
+        severities:pairNames.map((_,pairIndex)=>indexes.map(index=>Number(severity[index*pairCount+pairIndex]))),
+        frameStatus:indexes.map(index=>Number(bin.arrays.frame_status?.[index]??0)),unit:"m",
+      };
+    }
     const data=rvValidationCache.get(validationCacheKey(selection.stage))||(rvValidationData?.stage===selection.stage?rvValidationData:null);
     if(!data?.self_collision){loadValidation(selection.stage);return null}
     const indexes=[];data.frames.forEach((frame,index)=>{if(frame>=start&&frame<=end)indexes.push(index)});
     return {
-      kind:"self_collision",frames:indexes.map(index=>data.frames[index]),
+      kind:"self_collision",stage:selection.stage,frames:indexes.map(index=>data.frames[index]),
       rows:data.self_collision.rows.map(row=>row.label),
       values:data.self_collision.rows.map(row=>indexes.map(index=>row.values[index])),
       severities:data.self_collision.rows.map(row=>indexes.map(index=>row.severities[index])),
+      frameStatus:indexes.map(index=>Number(selection.bin.arrays.frame_status?.[index]??0)),
       unit:"m",
     };
+  }
+
+  function buildMotionDiagnosticHeatmap(selection,start,end){
+    const bin=selection.bin,framesAll=sourceFrames(bin),frameIndexes=[];
+    framesAll.forEach((frame,index)=>{if(frame>=start&&frame<=end)frameIndexes.push(index)});
+    const frames=frameIndexes.map(index=>framesAll[index]);
+    let rows=[],raw=null,severity=null,unit="1",kind=selection.kind;
+    if(kind==="joint_limit"){
+      rows=bin.header.joint_names||[];raw=bin.arrays.joint_limit_margin_rad;
+      severity=bin.arrays.joint_limit_severity;unit="rad";
+    }else if(kind==="orientation_residual"){
+      rows=(bin.header.orientation_mappings||[]).map(m=>`${m.source_segment} → ${m.target_link}`);
+      raw=bin.arrays.orientation_residual_angle_rad;unit="rad";
+    }else if(kind==="position_residual"){
+      rows=(bin.header.position_mappings||[]).map(m=>`${m.source_segment} → ${m.target_link}`);
+      raw=bin.arrays.position_residual_norm_m;unit="m";
+    }
+    if(!raw||!rows.length)return null;
+    const rowCount=rows.length;
+    const values=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(raw[frameIndex*rowCount+rowIndex])));
+    let displayRange=NaN;
+    if(!severity){
+      displayRange=Math.max(0,...values.flat().filter(Number.isFinite));
+      severity=new Uint8Array(framesAll.length*rowCount);
+      if(displayRange>0)for(let frameIndex=0;frameIndex<framesAll.length;frameIndex++)for(let rowIndex=0;rowIndex<rowCount;rowIndex++)severity[frameIndex*rowCount+rowIndex]=Math.round(Math.min(1,Math.abs(Number(raw[frameIndex*rowCount+rowIndex]))/displayRange)*255);
+    }
+    const severities=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(severity[frameIndex*rowCount+rowIndex])));
+    return {kind,stage:selection.stage,frames,rows,values,severities,unit,displayRange,frameStatus:frameIndexes.map(index=>Number(bin.arrays.frame_status?.[index]??0))};
   }
 
   function heatmapTooltipText(state,rowIndex,frameIndex){
     const frame=state.frames[frameIndex],label=state.rows[rowIndex],value=Number(state.values[rowIndex]?.[frameIndex]);
     const time=localFrameTime(frame);
-    if(state.kind==="self_collision")return `Primary Frame: ${frame}\nTime: ${time.toFixed(6)} s\nPair: ${label}\nDistance: ${Number.isFinite(value)?(value*1000).toFixed(3):"—"} mm`;
+    const frameLabel=`${stageLabel(state.stage||"primary")} Frame`;
+    const status=Number(state.frameStatus?.[frameIndex]??0);
+    if(status>=2)return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\n${status===2?"Solver error":"Not computed"}\nFallback pose is hidden from graph values.`;
+    if(state.kind==="self_collision")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nPair: ${label}\nDistance: ${Number.isFinite(value)?(value*1000).toFixed(3):"—"} mm`;
+    if(state.kind==="joint_limit")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nJoint: ${label}\nSigned limit margin: ${Number.isFinite(value)?value.toFixed(5):"—"} rad`;
+    if(state.kind==="orientation_residual"||state.kind==="position_residual")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nMapping: ${label}\nResidual magnitude: ${Number.isFinite(value)?value.toFixed(6):"—"} ${state.unit}\nDisplay range max: ${Number.isFinite(state.displayRange)?state.displayRange.toFixed(6):"—"} ${state.unit}`;
     const limit=Number(state.limits?.[rowIndex]),ratio=Number.isFinite(value)&&Number.isFinite(limit)&&limit>0?Math.abs(value)/limit:NaN;
     const quantity=state.kind==="joint_velocity"?"Velocity":"Acceleration";
-    return `Primary Frame: ${frame}\nTime: ${time.toFixed(6)} s\nJoint: ${label}\n${quantity}: ${Number.isFinite(value)?value.toFixed(3):"—"} ${state.unit}\nLimit: ${Number.isFinite(limit)?limit.toFixed(3):"—"} ${state.unit}\nRatio: ${Number.isFinite(ratio)?ratio.toFixed(2)+"×":"—"}`;
+    return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nJoint: ${label}\n${quantity}: ${Number.isFinite(value)?value.toFixed(3):"—"} ${state.unit}\nLimit: ${Number.isFinite(limit)?limit.toFixed(3):"—"} ${state.unit}\nRatio: ${Number.isFinite(ratio)?ratio.toFixed(2)+"×":"—"}`;
   }
 
   function bindHeatmapPointer(canvas){
@@ -5364,7 +6113,12 @@ input[type="checkbox"]{
   function drawHeatmap(canvas,selection,start,end){
     const cacheKey=`${selection.stage}:${selection.kind}:${start}:${end}`;
     let state=rvHeatmapState.get(canvas);
-    if(state?.cacheKey!==cacheKey){state=selection.kind==="self_collision"?buildSelfCollisionHeatmap(selection,start,end):buildJointHeatmap(selection,start,end);if(state)state.cacheKey=cacheKey}
+    if(state?.cacheKey!==cacheKey){
+      if(selection.kind==="self_collision")state=buildSelfCollisionHeatmap(selection,start,end);
+      else if(["joint_limit","orientation_residual","position_residual"].includes(selection.kind))state=buildMotionDiagnosticHeatmap(selection,start,end);
+      else state=buildJointHeatmap(selection,start,end);
+      if(state)state.cacheKey=cacheKey;
+    }
     const rect=canvas.getBoundingClientRect(),cssWidth=Math.max(240,rect.width||600),cssHeight=Math.max(120,rect.height||220),dpr=devicePixelRatio||1;
     if(!state||!state.frames.length||!state.rows.length){
       const {ctx,w,h}=resizeCanvas(canvas);ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.fillStyle="#566b7f";ctx.font="12px Segoe UI";ctx.fillText("Heat map data is not available. Rerun this result if needed.",20,30);rvHeatmapState.delete(canvas);return;
@@ -5383,6 +6137,7 @@ input[type="checkbox"]{
       sourceCtx.putImageData(image,0,0);state.sourceCanvas=source;
     }
     ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(source,0,0,columns,rows,0,0,canvas.width,dataHeight);
+    (state.frameStatus||[]).forEach((status,column)=>{if(Number(status)<2)return;ctx.fillStyle=Number(status)===2?"rgba(194,65,59,.88)":"rgba(86,107,127,.55)";ctx.fillRect(column/columns*canvas.width,0,Math.max(2,canvas.width/columns),dataHeight)});
     ctx.fillStyle="#fff";ctx.fillRect(0,dataHeight,canvas.width,axisHeight);ctx.fillStyle="#566b7f";ctx.font=`${Math.max(9,Math.round(10*dpr))}px Segoe UI`;ctx.fillText(`${localFrameTime(state.frames[0]).toFixed(3)} s`,3,canvas.height-4);const endText=`${localFrameTime(state.frames.at(-1)).toFixed(3)} s`,endWidth=ctx.measureText(endText).width;ctx.fillText(endText,canvas.width-endWidth-3,canvas.height-4);
     const current=currentSourceFrame();if(current>=state.frames[0]&&current<=state.frames.at(-1)){const index=state.frames.findIndex(frame=>frame>=current),x=(index+.5)/columns*canvas.width;ctx.fillStyle="rgba(23,50,77,.75)";ctx.fillRect(Math.max(0,x-1),0,Math.max(1,dpr),dataHeight)}
     state.axisHeightCss=axisHeightCss;rvHeatmapState.set(canvas,state);bindHeatmapPointer(canvas);
@@ -5430,9 +6185,12 @@ input[type="checkbox"]{
       ctx.beginPath();ctx.moveTo(axisX,yy);ctx.lineTo(w-plotRight,yy);ctx.stroke();ctx.fillStyle="#566b7f";
       ctx.fillText(yv.toFixed(allDegrees?1:3),8,yy+3);
     }
+    if(yAxisSelect?.value==="auto"&&ymin<=0&&ymax>=0){
+      const zeroY=Y(0);ctx.strokeStyle="#91a4b7";ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(axisX,zeroY);ctx.lineTo(w-plotRight,zeroY);ctx.stroke();
+    }
     function line(series,color,dash=[]){
-      if(!series.length)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash(dash);ctx.beginPath();
-      series.forEach((p,i)=>{const x=X(p[0]),y=Y(p[1]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.setLineDash([]);
+      if(!series.length)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash(dash);ctx.beginPath();let drawing=false;
+      series.forEach(p=>{if(!Number.isFinite(p[1])){drawing=false;return}const x=X(p[0]),y=Y(p[1]);drawing?ctx.lineTo(x,y):ctx.moveTo(x,y);drawing=true});ctx.stroke();ctx.setLineDash([]);
     }
     for(const trace of traces)line(trace.series,trace.color,trace.dash);
     let legendX=axisX+6;
@@ -5495,11 +6253,38 @@ input[type="checkbox"]{
     const nameEl=which==="a"?rvAName:rvBName;
     const metaEl=which==="a"?rvRobotMeta:rvMevaMeta;
     const pillEl=which==="a"?rvAPill:rvBPill;
+    const warningEl=which==="a"?rvAWarning:rvBWarning;
     if(nameEl)nameEl.textContent=label;
     if(metaEl)metaEl.textContent=`${info?.file||"viewer.bin"} · ${bin?.header?.frame_count||0} frames`;
     if(pillEl){
-      pillEl.textContent=isRet?"Robot / PKL":"MEVA";
+      pillEl.textContent=isRet?"Robot":"MEVA";
       pillEl.className=`pill ${isRet?"pill-pkl":"pill-meva"}`;
+    }
+    if(warningEl){
+      const partial=String(bin?.header?.run_status||"")==="partial";
+      const failed=Number(bin?.header?.failed_frame_count||0);
+      warningEl.classList.toggle("active",partial);
+      warningEl.title=partial?`${failed} failed or unavailable frame${failed===1?"":"s"}. Hover timeline markers for details.`:"";
+    }
+  }
+
+  function renderFailureMarkers(){
+    if(!rvFailureMarkers)return;
+    rvFailureMarkers.replaceChildren();
+    const min=Number(rvSlider.min),max=Number(rvSlider.max),span=Math.max(1,max-min);
+    for(const [stage,entry] of Object.entries(rvData?.sources||{})){
+      const bin=entry?.bin,status=bin?.arrays?.frame_status;if(!status)continue;
+      const frames=sourceFrames(bin),errors=new Map((bin.header.frame_errors||[]).map(item=>[Number(item.frame_index),item]));
+      status.forEach((value,index)=>{
+        if(Number(value)!==2)return;
+        const frame=Number(frames[index]);if(frame<min||frame>max)return;
+        const detail=errors.get(index)||{};
+        const marker=document.createElement("span");marker.className="rv-failure-marker";
+        marker.style.left=`${Math.max(0,Math.min(100,(frame-min)/span*100))}%`;
+        marker.title=`${stageLabel(stage)} frame ${frame}: ${detail.error||"Solver error"}`;
+        marker.addEventListener("click",()=>{rvSlider.value=frame;drawViewer()});
+        rvFailureMarkers.appendChild(marker);
+      });
     }
   }
 
@@ -5512,9 +6297,15 @@ input[type="checkbox"]{
       [rvMevaNodeB,b,false],[rvMevaNodeB2,b,false],[rvMevaNodeB3,b,false],[rvMevaNodeB4,b,false]
     ]) fillStageSelector(sel,bin,joints);
 
-    setPreferredNode(rvRobotNode,a,["torso_link","Thoracic2","pelvis","Pelvis"]);
-    syncStageSelections(rvRobotNode,a,rvMevaNode,b);
-    if(!rvMevaNode.value)setPreferredNode(rvMevaNode,b,["torso_link","Thoracic2","pelvis","Pelvis"]);
+    if(a?.header?.kind==="retarget"&&[...rvRobotNode.options].some(option=>option.value==="heatmap:self_collision")){
+      rvRobotNode.value="heatmap:self_collision";rvMevaNode.value="";
+    }else if(b?.header?.kind==="retarget"&&[...rvMevaNode.options].some(option=>option.value==="heatmap:self_collision")){
+      rvRobotNode.value="";rvMevaNode.value="heatmap:self_collision";
+    }else{
+      setPreferredNode(rvRobotNode,a,["torso_link","Thoracic2","pelvis","Pelvis"]);
+      syncStageSelections(rvRobotNode,a,rvMevaNode,b);
+      if(!rvMevaNode.value)setPreferredNode(rvMevaNode,b,["torso_link","Thoracic2","pelvis","Pelvis"]);
+    }
 
     setPreferredNode(rvRobotNodeB,a,["pelvis","Pelvis"]);
     syncStageSelections(rvRobotNodeB,a,rvMevaNodeB,b);
@@ -5567,6 +6358,7 @@ input[type="checkbox"]{
     rvSlider.min=start;rvSlider.max=end;
     rvSlider.step=Math.max(1,Number(aEntry.bin.header.source_frame_step)||1,Number(bEntry.bin.header.source_frame_step)||1);
     if(Number(rvSlider.value)<start||Number(rvSlider.value)>end)rvSlider.value=start;
+    renderFailureMarkers();
     rvG1Visual.disabled=!(aEntry.bin.header.kind==="retarget"||bEntry.bin.header.kind==="retarget");
     applyCompareLayout();
     drawViewer();
@@ -5593,7 +6385,7 @@ input[type="checkbox"]{
         .map(stage=>[stage,info.sources?.[stage]])
         .filter(([,si])=>si?.url);
       const loadedSources=await Promise.all(sourceEntries.map(async([stage,si])=>[
-        stage,{info:si,bin:await fetchViewerBin(si.url)}
+        stage,{info:si,bin:await loadViewerBin(si.url)}
       ]));
       const sources=Object.fromEntries(loadedSources);
       if(!Object.keys(sources).length)throw new Error("No viewer data sources available");

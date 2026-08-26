@@ -74,10 +74,10 @@ def build_main_target(
     n = len(np.asarray(primary["root_pos"]))
     target_fps = float(np.asarray(source["target_fps"]).item())
     if len(source["frame"]) != n:
-        raise ValueError("Primary PKL and primary_target.npz frame counts differ")
+        raise ValueError("Primary motion and primary_target.npz frame counts differ")
     primary_fps = float(primary.get("fps", target_fps))
     if not np.isclose(primary_fps, target_fps):
-        raise ValueError("Primary PKL and primary_target.npz sampling rates differ")
+        raise ValueError("Primary motion and primary_target.npz sampling rates differ")
 
     scale = _saved_common_scale(primary, fallback_common_scale)
     free_qadr = _free_joint_qpos_addr(model)
@@ -207,6 +207,12 @@ def build_main_target(
         target_fps=np.asarray(target_fps, dtype=np.float64),
         frame=np.arange(n, dtype=np.int64),
         time_s=np.arange(n, dtype=np.float64) / target_fps,
+        source_frame_float=np.asarray(
+            primary.get("source_frame_float", np.arange(n)), dtype=np.float64
+        ),
+        source_frame_nearest=np.asarray(
+            primary.get("source_frame_indices", np.arange(n)), dtype=np.int64
+        ),
         pelvis_target_xyz=pelvis_xyz,
         pelvis_target_quat=pelvis_quat,
         quaternion_order=np.asarray("wxyz"),
@@ -236,7 +242,8 @@ def load_main_target(
         target = {key: archive[key].copy() for key in archive.files}
     n = len(target["frame"])
     expected_shapes = {
-        "time_s": (n,), "pelvis_target_xyz": (n, 3),
+        "time_s": (n,), "source_frame_float": (n,),
+        "source_frame_nearest": (n,), "pelvis_target_xyz": (n, 3),
         "pelvis_target_quat": (n, 4), "left_gcp_corrected": (n,),
         "right_gcp_corrected": (n,), "left_min_geom_index": (n,),
         "right_min_geom_index": (n,), "left_geom_target_z": (n, 4),

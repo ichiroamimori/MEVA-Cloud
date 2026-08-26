@@ -10,6 +10,19 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+try:
+    from .meva_canonical_geometry import (
+        CANONICAL_GEOMETRY_VERSION,
+        canonical_direction,
+        canonical_geometry_hash,
+    )
+except ImportError:
+    from meva_canonical_geometry import (
+        CANONICAL_GEOMETRY_VERSION,
+        canonical_direction,
+        canonical_geometry_hash,
+    )
+
 
 # ============================================================
 # Coordinate convention
@@ -25,21 +38,21 @@ import numpy as np
 # Therefore the BVH zero-rotation frame -> MEVA world is Rx(+90 deg).
 #
 # Non-terminal segments:
-#   Source geometry comes from real inter-joint BVH OFFSET.
+#   Source geometry comes from versioned MEVA canonical directions.
 #
 # Terminal segments (Hand / Foot):
 #   BVH End Site is NOT used to define orientation.
 #   Instead, explicit semantic local frames are used.
 #
-# A mapping offset is cached beside config.json and regenerated when
-# BVH, MJCF, mappings, or algorithm version changes.
+# A mapping offset is cached as a derived User asset and regenerated when
+# canonical geometry, MJCF, mappings, or algorithm version changes.
 #
 # Runtime-only IK settings such as temporal_regularization are deliberately
 # excluded from the offset fingerprint. Changing temporal_regularization.cost
 # must therefore NOT trigger geometric offset recalibration.
 # ============================================================
 
-ALGORITHM_VERSION = "geometry-v2.2-terminal-semantics-virtual-torso"
+ALGORITHM_VERSION = "geometry-v3.0-meva-canonical"
 
 SQRT_HALF = float(np.sqrt(0.5))
 
@@ -736,36 +749,9 @@ def parse_bvh_offsets(
     )
 
 
-def source_long_axis_bvh(
-    segment: str,
-    offsets,
-):
-    """
-    Return a real inter-joint BVH axis.
-
-    Terminal End Sites are intentionally NOT used.
-    """
-
-    if segment not in BVH_DISTAL_JOINT:
-
-        raise KeyError(
-            f"No inter-joint BVH geometry rule for MEVA segment: {segment}"
-        )
-
-    joint = (
-        BVH_DISTAL_JOINT[
-            segment
-        ]
-    )
-
-    if joint not in offsets:
-        raise KeyError(
-            f"BVH joint OFFSET not found: {joint}"
-        )
-
-    return normalize(
-        offsets[joint]
-    )
+def source_long_axis_canonical(segment: str):
+    """Return the Capsule-independent canonical MEVA segment direction."""
+    return canonical_direction(segment)
 
 
 # ============================================================
@@ -1036,8 +1022,8 @@ def build_mapping_offset(
     model,
     source_segment,
     target_link,
-    bvh_offsets,
-    bvh_endsites,
+    bvh_offsets=None,
+    bvh_endsites=None,
 ):
     """
     Build:
@@ -1052,7 +1038,7 @@ def build_mapping_offset(
         semantic-frame method
 
     Other segments:
-        inter-joint BVH geometry method
+        MEVA canonical geometry method
     """
 
     # --------------------------------------------------------
@@ -1077,10 +1063,7 @@ def build_mapping_offset(
     # --------------------------------------------------------
 
     src_axis_local = (
-        source_long_axis_bvh(
-            source_segment,
-            bvh_offsets,
-        )
+        source_long_axis_canonical(source_segment)
     )
 
     # Source long axis in MEVA world
@@ -1155,9 +1138,9 @@ def build_mapping_offset(
 
     detail = {
         "source_geometry_mode":
-            "bvh_inter_joint",
+            "meva_canonical_direction",
 
-        "source_long_axis_bvh_local":
+        "source_long_axis_canonical_local":
             [
                 float(x)
                 for x
@@ -1201,6 +1184,28 @@ def _mapping_signature(
         for m
         in mappings
     ]
+
+
+def offset_fingerprint(
+    cfg: dict,
+    mjcf_path: Path,
+    *,
+    algorithm_version: str = ALGORITHM_VERSION,
+    geometry_version: str = CANONICAL_GEOMETRY_VERSION,
+    geometry_hash: str | None = None,
+) -> dict:
+    """Return the complete Capsule-independent offset cache identity."""
+    return {
+        "algorithm_version": algorithm_version,
+        "meva_canonical_geometry_version": geometry_version,
+        "meva_canonical_geometry_sha256": (
+            geometry_hash
+            if geometry_hash is not None
+            else canonical_geometry_hash(terminal_semantics=MEVA_TERMINAL_SEMANTICS)
+        ),
+        "mjcf_sha256": sha256(mjcf_path),
+        "mappings": _mapping_signature(cfg["mappings"]),
+    }
 
 
 def resolve_bvh_path(
@@ -1249,29 +1254,18 @@ def resolve_bvh_path(
 def offsets_path_for_config(
     config_path: Path,
     cfg: dict,
+    fingerprint_hash: str,
 ) -> Path:
-
-    rel = (
-        cfg.get(
-            "offsets",
-            {},
-        ).get(
-            "file",
-            "retarget_offsets.json",
-        )
-    )
-
-    p = Path(
-        rel
-    )
-
-    if p.is_absolute():
-        return p
-
+    repo = find_repo_root(config_path)
+    manufacturer = str(cfg.get("robot", {}).get("manufacturer", "unitree"))
+    variant = str(cfg.get("robot", {}).get("variant", "g1_29dof"))
+    safe = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+    if not safe.fullmatch(manufacturer) or not safe.fullmatch(variant):
+        raise ValueError("Unsafe Robot identity for offset cache")
     return (
-        config_path.parent
-        /
-        p
+        repo / "workspace" / "users" / "local_user" / "retarget_assets"
+        / "offsets" / "meva" / manufacturer / variant
+        / f"{fingerprint_hash}.json"
     )
 
 
@@ -1302,28 +1296,11 @@ def compute_offsets(
         config_path
     )
 
-    bvh_path = resolve_bvh_path(
-        repo,
-        cfg,
-    )
-
     mjcf_path = (
         repo
         /
         cfg["robot"]["mjcf"]
     ).resolve()
-
-    out_path = (
-        offsets_path_for_config(
-            config_path,
-            cfg,
-        ).resolve()
-    )
-
-    if not bvh_path.exists():
-        raise FileNotFoundError(
-            bvh_path
-        )
 
     if not mjcf_path.exists():
         raise FileNotFoundError(
@@ -1333,25 +1310,16 @@ def compute_offsets(
     # Keep this fingerprint strictly geometric. In particular,
     # temporal_regularization is a runtime IK objective and is intentionally
     # NOT included here.
-    fingerprint = {
-        "algorithm_version":
-            ALGORITHM_VERSION,
-
-        "bvh_sha256":
-            sha256(
-                bvh_path
-            ),
-
-        "mjcf_sha256":
-            sha256(
-                mjcf_path
-            ),
-
-        "mappings":
-            _mapping_signature(
-                cfg["mappings"]
-            ),
-    }
+    canonical_hash = canonical_geometry_hash(terminal_semantics=MEVA_TERMINAL_SEMANTICS)
+    fingerprint = offset_fingerprint(
+        cfg, mjcf_path, geometry_hash=canonical_hash
+    )
+    fingerprint_hash = hashlib.sha256(
+        json.dumps(fingerprint, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    out_path = offsets_path_for_config(
+        config_path, cfg, fingerprint_hash
+    ).resolve()
 
     # --------------------------------------------------------
     # Cache reuse
@@ -1403,13 +1371,6 @@ def compute_offsets(
     # Generate
     # --------------------------------------------------------
 
-    (
-        bvh_offsets,
-        bvh_endsites,
-    ) = parse_bvh_offsets(
-        bvh_path
-    )
-
     model = (
         mujoco.MjModel.from_xml_path(
             str(
@@ -1440,8 +1401,6 @@ def compute_offsets(
             model,
             src,
             dst,
-            bvh_offsets,
-            bvh_endsites,
         )
 
         offsets[
@@ -1483,25 +1442,15 @@ def compute_offsets(
         "algorithm":
             ALGORITHM_VERSION,
 
-        "source_bvh":
-            str(
-                bvh_path.relative_to(
-                    repo
-                )
-            ).replace(
-                "\\",
-                "/",
-            ),
+        "meva_canonical_geometry_version": CANONICAL_GEOMETRY_VERSION,
 
-        "robot_mjcf":
-            str(
-                mjcf_path.relative_to(
-                    repo
-                )
-            ).replace(
-                "\\",
-                "/",
-            ),
+        "meva_canonical_geometry_sha256": canonical_hash,
+
+        "robot_mjcf": (
+            str(mjcf_path.relative_to(repo)).replace("\\", "/")
+            if mjcf_path.is_relative_to(repo)
+            else str(mjcf_path).replace("\\", "/")
+        ),
 
         "fingerprint":
             fingerprint,
@@ -1560,7 +1509,7 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Compute/cache "
-            "MEVA(BVH)->robot(MJCF) "
+            "MEVA canonical geometry -> robot(MJCF) "
             "mapping offsets."
         )
     )

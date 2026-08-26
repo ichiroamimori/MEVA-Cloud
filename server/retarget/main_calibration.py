@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -31,6 +30,7 @@ try:
         MEVA_POSITION_COLUMN_INDICES,
     )
     from .primary_target import load_primary_target
+    from .motion_io import load_motion
 except ImportError:
     from mapping_tasks import required_quaternion_columns
     from meva_schema import (
@@ -39,6 +39,7 @@ except ImportError:
         MEVA_POSITION_COLUMN_INDICES,
     )
     from primary_target import load_primary_target
+    from motion_io import load_motion
 
 
 @dataclass(frozen=True)
@@ -122,13 +123,12 @@ def preprocess_gcp(
 
 
 def _load_pickle(path: Path) -> dict:
-    with path.open("rb") as f:
-        obj = pickle.load(f)
+    obj = load_motion(path)
     if not isinstance(obj, dict):
-        raise TypeError(f"Primary PKL must contain dict, got {type(obj).__name__}")
+        raise TypeError(f"Primary motion must contain dict, got {type(obj).__name__}")
     for key in ("root_pos", "root_rot", "dof_pos"):
         if key not in obj:
-            raise KeyError(f"Primary PKL is missing {key!r}")
+            raise KeyError(f"Primary motion is missing {key!r}")
     return obj
 
 
@@ -356,7 +356,7 @@ def analyze_main_calibration(
     *,
     primary_pkl: Path | None = None,
     primary_motion: dict | None = None,
-    meva_csv: Path,
+    meva_csv: Path | None,
     primary_target_npz: Path | None = None,
     robot_xml: Path,
     settings: CalibrationSettings,
@@ -383,24 +383,36 @@ def analyze_main_calibration(
         else None
     )
     if target is None:
+        if meva_csv is None:
+            raise ValueError("Legacy calibration requires a MEVA CSV")
         source_frames = _source_frames(motion, n)
         meva_fields, meva_rows = _read_selected_meva_rows(meva_csv, source_frames)
     else:
         if len(target["frame"]) != n:
             raise ValueError("Primary target and Primary trajectory frame counts differ")
         source_frames = np.asarray(target["source_frame_nearest"], dtype=np.int64)
+        # Canonical Main preparation reads values from Primary target arrays;
+        # these transient dictionaries only feed the existing MappingTask
+        # preparation and never reopen the Capsule CSV.
+        source_config = dict((config or {}).get("source", {}))
+        pattern = str(source_config.get(
+            "quaternion_columns", "{segment}_q_gs_{component}"
+        ))
         segment_names = [str(value) for value in target["segment_names"].tolist()]
         segment_index = {name: index for index, name in enumerate(segment_names)}
-        pattern = str((config or {})["source"]["quaternion_columns"])
-        meva_fields = sorted(required_quaternion_columns(config or {}))
+        meva_fields = sorted(
+            pattern.format(segment=segment, component=component)
+            for segment in segment_names for component in "wxyz"
+        )
         meva_rows = []
         for frame_index in range(n):
-            values: dict[str, str] = {}
-            for segment, index in segment_index.items():
-                for component_index, component in enumerate("wxyz"):
-                    values[pattern.format(segment=segment, component=component)] = str(
-                        float(target["segment_quat"][frame_index, index, component_index])
-                    )
+            values = {
+                pattern.format(segment=segment, component=component): str(float(
+                    target["segment_quat"][frame_index, index, component_index]
+                ))
+                for segment, index in segment_index.items()
+                for component_index, component in enumerate("wxyz")
+            }
             meva_rows.append([values[field] for field in meva_fields])
 
     model = mujoco.MjModel.from_xml_path(str(robot_xml))

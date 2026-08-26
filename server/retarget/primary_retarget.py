@@ -5,22 +5,25 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import pickle
 import re
 import shutil
-from datetime import datetime
+import traceback
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
-from ik_solver import extract_output, solve_ik_sequence
+from ik_solver import IKSequenceFailure, extract_output, hinge_info, solve_ik_sequence
 from main_calibration import CalibrationSettings
 from main_input_diagnostics import (
     build_primary_post_diagnostics,
     write_primary_post_diagnostics,
 )
+from motion_io import canonical_motion, save_motion_npz
 from primary_prepare import prepare_primary
-from primary_target import build_primary_target
+from primary_target import build_primary_target, load_primary_target
+from primary_viewer import write_primary_viewer
 from validation_data import write_stage_validation_artifacts
 
 
@@ -197,21 +200,33 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
         cfg["output"]["run_id"],
         overwrite_existing=bool(cfg["output"].get("overwrite_existing", False)),
     )
-    shutil.copy2(config_path, run / f"{run.name}_primary_config.json")
-    shutil.copy2(preparation.offset_path, run / f"{run.name}_offsets.json")
-    residual_rows = []
-    for row in result.diagnostic_rows:
-        converted = dict(row)
-        converted["orientation_error_deg"] = converted.pop("value")
-        residual_rows.append(converted)
-    with (run / "orientation_residuals.csv").open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "source_frame", "source_segment", "target_link", "orientation_weight",
-            "orientation_mode", "orientation_error_deg",
-        ])
-        writer.writeheader()
-        writer.writerows(residual_rows)
-    _write_iteration_diagnostics(run, cfg, result)
+    snapshot = dict(cfg)
+    snapshot["schema_version"] = str(snapshot.get("schema_version") or "1.0")
+    snapshot["name"] = str(
+        snapshot.get("name") or snapshot.get("config_name") or config_path.stem
+    )
+    (run / f"{run.name}_primary_config.json").write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    debug_artifacts = bool(
+        iteration_diagnostics
+        or cfg.get("output", {}).get("save_debug_artifacts", False)
+    )
+    if debug_artifacts:
+        residual_rows = []
+        for row in result.diagnostic_rows:
+            converted = dict(row)
+            converted["orientation_error_deg"] = converted.pop("value")
+            residual_rows.append(converted)
+        with (run / "orientation_residuals.csv").open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "source_frame", "source_segment", "target_link", "orientation_weight",
+                "orientation_mode", "orientation_error_deg",
+            ])
+            writer.writeheader()
+            writer.writerows(residual_rows)
+        _write_iteration_diagnostics(run, cfg, result)
 
     resolved_offsets = {
         mapping["target_link"]: [
@@ -239,7 +254,7 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
                 "source_fps": float(cfg["source"]["sampling_rate_hz"]),
                 "primary_target_npz": f"{run.name}_primary_target.npz",
             },
-            "mapping_offset_method": "bvh_mjcf_geometry_cached",
+            "mapping_offset_method": "meva_canonical_mjcf_geometry_cached",
             "mapping_offset_asset": str(preparation.offset_path),
             "resolved_mapping_offsets_wxyz": resolved_offsets,
             "orientation_residual_summary_deg": residual_summary,
@@ -311,12 +326,7 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
     final_target_path = run / f"{run.name}_primary_target.npz"
     shutil.move(str(preparation.primary_target_path), final_target_path)
     out["metadata"]["timeline"]["primary_target_npz"] = final_target_path.name
-    primary_post_path, primary_post_metadata_path = write_primary_post_diagnostics(
-        run / f"{run.name}_primary_post.csv", diagnostics
-    )
     out["metadata"]["primary_post_diagnostics"] = {
-        "data_file": primary_post_path.name,
-        "metadata_file": primary_post_metadata_path.name,
         "pelvis_foot_scale_g": diagnostics.metadata["pelvis_foot_scale_g"],
     }
     out["primary_post_root_pos"] = diagnostics.postprocessed_root_pos
@@ -330,24 +340,40 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
     # translation to Pelvis, both Feet, and all contact GEOMs during FK.
     if diagnostics.metadata["primary_postprocess"]["completed"]:
         out["root_pos"] = diagnostics.postprocessed_root_pos.copy()
-    validation_metadata_path = write_stage_validation_artifacts(
-        output_dir=run,
-        file_id=run.name,
-        stage="primary",
+    joint_names = [name for _, name, _, _, _, _, _ in hinge_info(preparation.model)]
+    motion_path = run / f"{run.name}_primary.npz"
+    canonical = save_motion_npz(
+        motion_path,
+        out,
+        joint_names=joint_names,
+        root_rot_order=str(cfg["output"].get("root_rot_order", "xyzw")),
+    )
+    target = load_primary_target(final_target_path)
+    viewer_path = write_primary_viewer(
+        path=run / f"{run.name}_primary_viewer.bin",
         repo_root=repo_root_from(config_path),
         config=cfg,
-        motion=out,
+        motion=canonical,
+        target=target,
+        result=result,
+        mapping_offsets=preparation.mapping_offsets,
+        post_diagnostics=diagnostics,
     )
-    out["metadata"]["frame_validation"] = {
-        "metadata_file": validation_metadata_path.name,
-        "precomputed_after_stage": True,
-    }
-    # Persist Primary once, including diagnostics and precomputed view metadata.
-    with (run / cfg["output"]["pkl_name"]).open("wb") as f:
-        pickle.dump(out, f)
-    print("Primary post data:", primary_post_path)
-    print("Primary frame validation:", validation_metadata_path)
-    if cfg["output"].get("save_diagnostics_csv", True):
+    if debug_artifacts:
+        primary_post_path, _ = write_primary_post_diagnostics(
+            run / f"{run.name}_primary_post.csv", diagnostics
+        )
+        validation_metadata_path = write_stage_validation_artifacts(
+            output_dir=run,
+            file_id=run.name,
+            stage="primary",
+            repo_root=repo_root_from(config_path),
+            config=cfg,
+            motion=out,
+        )
+        print("Primary post debug data:", primary_post_path)
+        print("Primary frame validation debug data:", validation_metadata_path)
+    if debug_artifacts and cfg["output"].get("save_diagnostics_csv", True):
         with (run / "diagnostics.csv").open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -363,8 +389,121 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
         f"delta_threshold={settings.convergence_joint_delta_deg:g} deg)",
     )
     print("Done:", run)
+    print("Primary target:", final_target_path)
+    print("Primary motion:", motion_path)
+    print("Primary viewer:", viewer_path)
     print("dof_pos shape:", out["dof_pos"].shape)
     return run, out
+
+
+def _write_primary_failure_outputs(
+    *, config_path: Path, cfg: dict, preparation, failure: IKSequenceFailure,
+    initial_q: np.ndarray,
+) -> Path:
+    run_id = str(cfg["output"]["run_id"])
+    run = next_run_dir(
+        config_path.parent, run_id,
+        overwrite_existing=bool(cfg["output"].get("overwrite_existing", False)),
+    )
+    total = len(preparation.frame_specs)
+    completed = len(failure.result.qpos)
+    fallback = (
+        np.asarray(failure.result.qpos[-1], dtype=float)
+        if completed else np.asarray(initial_q, dtype=float)
+    )
+    qpos = []
+    for index, frame_spec in enumerate(preparation.frame_specs):
+        if index < completed:
+            qpos.append(failure.result.qpos[index])
+        elif frame_spec.initial_q is not None:
+            qpos.append(np.asarray(frame_spec.initial_q, dtype=float))
+        else:
+            qpos.append(fallback.copy())
+    frame_status = np.full(total, 3, dtype=np.uint8)
+    frame_status[:completed] = np.asarray(
+        [0 if bool(row[4]) else 1 for row in failure.result.diagnostics],
+        dtype=np.uint8,
+    )
+    frame_status[failure.output_index] = 2
+    diagnostics = list(failure.result.diagnostics)
+    for index in range(completed, total):
+        diagnostics.append((
+            int(preparation.frame_specs[index].source_frame),
+            0.0, 0.0, 0, False, 0.0,
+        ))
+    diagnostic_values = {
+        key: list(values) + [0.0] * (total - len(values))
+        for key, values in failure.result.diagnostic_values_by_key.items()
+    }
+    partial_result = replace(
+        failure.result, qpos=np.asarray(qpos), diagnostics=diagnostics,
+        diagnostic_values_by_key=diagnostic_values,
+    )
+    roots, rotations, joints = [], [], []
+    root_order = str(cfg["output"].get("root_rot_order", "xyzw"))
+    for q in partial_result.qpos:
+        pos, rot, dof = extract_output(preparation.model, q, root_order)
+        roots.append(pos);rotations.append(rot);joints.append(dof)
+    motion = canonical_motion({
+        "root_pos": np.asarray(roots),
+        "root_rot": np.asarray(rotations),
+        "dof_pos": np.asarray(joints),
+        "fps": float(preparation.target_fps),
+        "source_frame_indices": np.asarray(preparation.source_frame_indices, dtype=np.int32),
+        "source_frame_float": np.asarray(preparation.source_frame_float, dtype=np.float64),
+        "time_s": np.asarray(preparation.time_s, dtype=np.float64),
+    }, joint_names=[name for _, name, _, _, _, _, _ in hinge_info(preparation.model)],
+       root_rot_order=root_order)
+    frame_errors = [{
+        "frame_index": failure.output_index,
+        "source_frame": failure.source_frame,
+        "status": "solver error",
+        "error": str(failure),
+    }]
+    snapshot = dict(cfg)
+    snapshot["schema_version"] = str(snapshot.get("schema_version") or "1.0")
+    snapshot["name"] = str(
+        snapshot.get("name") or snapshot.get("config_name") or config_path.stem
+    )
+    snapshot["run_status"] = "partial"
+    snapshot["primary_runtime_context"] = {
+        "capsule_id": cfg.get("capsule_id"),
+        "fps": float(preparation.target_fps),
+        "frame_count": total,
+        "completed_frame_count": completed,
+        "failed_output_frame": failure.output_index,
+        "failed_source_frame": failure.source_frame,
+        "frame_range": cfg.get("frame_range", {}),
+    }
+    snapshot["frame_errors"] = frame_errors
+    (run / f"{run_id}_primary_config.json").write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    target = load_primary_target(preparation.primary_target_path)
+    write_primary_viewer(
+        path=run / f"{run_id}_primary_viewer.bin",
+        repo_root=repo_root_from(config_path), config=snapshot,
+        motion=motion, target=target, result=partial_result,
+        mapping_offsets=preparation.mapping_offsets, post_diagnostics=None,
+        frame_status=frame_status, frame_errors=frame_errors,
+    )
+    (run / f"{run_id}_error.log").write_text(
+        "\n".join((
+            f"timestamp_utc: {datetime.now(timezone.utc).isoformat()}",
+            f"capsule_id: {cfg.get('capsule_id', '')}",
+            f"primary_id: {run_id}",
+            f"completed_frames: {completed} / {total}",
+            f"failed_output_frame: {failure.output_index}",
+            f"failed_source_frame: {failure.source_frame}",
+            f"error: {type(failure).__name__}: {failure}",
+            "", "traceback:", "".join(traceback.format_exception(failure)),
+        )) + "\n",
+        encoding="utf-8",
+    )
+    preparation.primary_target_path.unlink(missing_ok=True)
+    print(f"Primary partial viewer: {run / f'{run_id}_primary_viewer.bin'}", flush=True)
+    print(f"Primary error log: {run / f'{run_id}_error.log'}", flush=True)
+    return run
 
 
 def main(config_path: Path, iteration_diagnostics: bool = False):
@@ -386,13 +525,21 @@ def main(config_path: Path, iteration_diagnostics: bool = False):
         primary_target_path=primary_target_path,
         iteration_diagnostics=iteration_diagnostics,
     )
-    result = solve_ik_sequence(
-        model=preparation.model,
-        initial_configuration=preparation.initial_configuration,
-        frame_specs=preparation.frame_specs,
-        solver_settings=preparation.solver_settings,
-        diagnostic_keys=preparation.diagnostic_keys,
-    )
+    initial_q = preparation.initial_configuration.q.copy()
+    try:
+        result = solve_ik_sequence(
+            model=preparation.model,
+            initial_configuration=preparation.initial_configuration,
+            frame_specs=preparation.frame_specs,
+            solver_settings=preparation.solver_settings,
+            diagnostic_keys=preparation.diagnostic_keys,
+        )
+    except IKSequenceFailure as failure:
+        _write_primary_failure_outputs(
+            config_path=config_path, cfg=cfg, preparation=preparation,
+            failure=failure, initial_q=initial_q,
+        )
+        raise RuntimeError(str(failure)) from failure
     return _write_primary_outputs(
         config_path=config_path,
         cfg=cfg,

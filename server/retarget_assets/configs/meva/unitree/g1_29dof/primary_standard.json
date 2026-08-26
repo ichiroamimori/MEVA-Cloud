@@ -1,0 +1,272 @@
+{
+  "schema_version": "1.0",
+  "robot": {
+    "manufacturer": "unitree",
+    "model": "g1",
+    "variant": "g1_29dof",
+    "mjcf": "server/robots/unitree/g1/g1_29dof.xml",
+    "initial_keyframe": "home"
+  },
+  "root": {
+    "position_mode": "keep_robot_initial",
+    "position_cost": 100
+  },
+  "world_alignment": {
+    "offset_quaternion_wxyz": [
+      1,
+      0,
+      0,
+      0
+    ]
+  },
+  "mappings": [
+    {
+      "source_segment": "Thoracic2",
+      "target_link": "torso_link",
+      "orientation_weight": 0.9,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    },
+    {
+      "source_segment": "Pelvis",
+      "target_link": "pelvis",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    },
+    {
+      "source_segment": "LeftUpperArm",
+      "target_link": "left_shoulder_yaw_link",
+      "orientation_weight": 0.8,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "LeftForearm",
+      "target_link": "left_elbow_link",
+      "orientation_weight": 0.2,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "LeftHand",
+      "target_link": "left_wrist_yaw_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    },
+    {
+      "source_segment": "RightUpperArm",
+      "target_link": "right_shoulder_yaw_link",
+      "orientation_weight": 0.8,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "RightForearm",
+      "target_link": "right_elbow_link",
+      "orientation_weight": 0.2,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "RightHand",
+      "target_link": "right_wrist_yaw_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    },
+    {
+      "source_segment": "LeftUpperLeg",
+      "target_link": "left_hip_yaw_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "LeftLowerLeg",
+      "target_link": "left_knee_link",
+      "orientation_weight": 0.5,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "LeftFoot",
+      "target_link": "left_ankle_roll_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    },
+    {
+      "source_segment": "RightUpperLeg",
+      "target_link": "right_hip_yaw_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "RightLowerLeg",
+      "target_link": "right_knee_link",
+      "orientation_weight": 0.5,
+      "position_weight": 0,
+      "orientation_mode": "axis"
+    },
+    {
+      "source_segment": "RightFoot",
+      "target_link": "right_ankle_roll_link",
+      "orientation_weight": 1,
+      "position_weight": 0,
+      "orientation_mode": "full"
+    }
+  ],
+  "joint_limit_avoidance": {
+    "enabled": true,
+    "enforce_hard_xml_limits": true,
+    "default": {
+      "limit_zone_percent": 5,
+      "base_cost": 0.01,
+      "max_cost": 0.2,
+      "exponent": 2
+    },
+    "overrides": {}
+  },
+  "solver": {
+    "name": "daqp",
+    "dt_s": 0.02,
+    "global_damping": 1E-08,
+    "task_lm_damping": 1E-06,
+    "max_iterations_per_frame": 100,
+    "convergence_joint_delta_deg": 0.01,
+    "convergence_consecutive_iterations": 2
+  },
+  "output": {
+    "root_rot_order": "xyzw",
+    "save_diagnostics_csv": false
+  },
+  "temporal_regularization": {
+    "enabled": true,
+    "cost": 0.1
+  },
+  "interframe_joint_velocity_limit": {
+    "enabled": true,
+    "default_rad_s": 9.42477796076938,
+    "overrides": {}
+  },
+  "spatial_constraints": {
+    "pelvis_foot_direction": {
+      "enabled": true,
+      "left_cost": 0.3,
+      "right_cost": 0.3
+    }
+  },
+  "ground_contact_estimation": {
+    "geom_flatness_threshold_m": 0.005,
+    "gcp_contact_threshold": 0.99,
+    "robot_foot_ground_height_m": 0.035
+  },
+  "self_collision_avoidance": {
+    "enabled": false,
+    "selected_pairs": [],
+    "damping": {
+      "limit_zone_m": 0.005,
+      "base_cost": 0.01,
+      "max_cost": 0.2
+    }
+  },
+  "interframe_joint_acceleration_limit": {
+    "enabled": true,
+    "default_rad_s2": 0,
+    "weight_at_2x_limit": 0.1,
+    "overrides": {
+      "waist_pitch_joint": {
+        "max_rad_s2": 140
+      },
+      "waist_roll_joint": {
+        "max_rad_s2": 140
+      },
+      "waist_yaw_joint": {
+        "max_rad_s2": 220
+      },
+      "left_shoulder_pitch_joint": {
+        "max_rad_s2": 220
+      },
+      "left_shoulder_roll_joint": {
+        "max_rad_s2": 220
+      },
+      "left_shoulder_yaw_joint": {
+        "max_rad_s2": 300
+      },
+      "left_elbow_joint": {
+        "max_rad_s2": 260
+      },
+      "left_wrist_roll_joint": {
+        "max_rad_s2": 350
+      },
+      "left_wrist_pitch_joint": {
+        "max_rad_s2": 300
+      },
+      "left_wrist_yaw_joint": {
+        "max_rad_s2": 400
+      },
+      "right_shoulder_pitch_joint": {
+        "max_rad_s2": 220
+      },
+      "right_shoulder_roll_joint": {
+        "max_rad_s2": 220
+      },
+      "right_shoulder_yaw_joint": {
+        "max_rad_s2": 300
+      },
+      "right_elbow_joint": {
+        "max_rad_s2": 260
+      },
+      "right_wrist_roll_joint": {
+        "max_rad_s2": 350
+      },
+      "right_wrist_pitch_joint": {
+        "max_rad_s2": 300
+      },
+      "right_wrist_yaw_joint": {
+        "max_rad_s2": 400
+      },
+      "left_hip_pitch_joint": {
+        "max_rad_s2": 150
+      },
+      "left_hip_roll_joint": {
+        "max_rad_s2": 150
+      },
+      "left_hip_yaw_joint": {
+        "max_rad_s2": 220
+      },
+      "left_knee_joint": {
+        "max_rad_s2": 180
+      },
+      "left_ankle_pitch_joint": {
+        "max_rad_s2": 220
+      },
+      "left_ankle_roll_joint": {
+        "max_rad_s2": 240
+      },
+      "right_hip_pitch_joint": {
+        "max_rad_s2": 150
+      },
+      "right_hip_roll_joint": {
+        "max_rad_s2": 150
+      },
+      "right_hip_yaw_joint": {
+        "max_rad_s2": 220
+      },
+      "right_knee_joint": {
+        "max_rad_s2": 180
+      },
+      "right_ankle_pitch_joint": {
+        "max_rad_s2": 220
+      },
+      "right_ankle_roll_joint": {
+        "max_rad_s2": 240
+      }
+    }
+  },
+  "name": "Primary Standard",
+  "retarget_stage": "primary"
+}
