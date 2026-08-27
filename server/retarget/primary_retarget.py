@@ -407,32 +407,24 @@ def _write_primary_failure_outputs(
     )
     total = len(preparation.frame_specs)
     completed = len(failure.result.qpos)
-    fallback = (
-        np.asarray(failure.result.qpos[-1], dtype=float)
-        if completed else np.asarray(initial_q, dtype=float)
+    partial_count = min(total, completed + 1)
+    failed_spec = preparation.frame_specs[failure.output_index]
+    failed_q = (
+        np.asarray(failed_spec.initial_q, dtype=float)
+        if failed_spec.initial_q is not None
+        else np.asarray(initial_q, dtype=float)
     )
-    qpos = []
-    for index, frame_spec in enumerate(preparation.frame_specs):
-        if index < completed:
-            qpos.append(failure.result.qpos[index])
-        elif frame_spec.initial_q is not None:
-            qpos.append(np.asarray(frame_spec.initial_q, dtype=float))
-        else:
-            qpos.append(fallback.copy())
-    frame_status = np.full(total, 3, dtype=np.uint8)
+    qpos = (list(failure.result.qpos) + [failed_q])[:partial_count]
+    frame_status = np.zeros(partial_count, dtype=np.uint8)
     frame_status[:completed] = np.asarray(
         [0 if bool(row[4]) else 1 for row in failure.result.diagnostics],
         dtype=np.uint8,
     )
-    frame_status[failure.output_index] = 2
+    frame_status[-1] = 2
     diagnostics = list(failure.result.diagnostics)
-    for index in range(completed, total):
-        diagnostics.append((
-            int(preparation.frame_specs[index].source_frame),
-            0.0, 0.0, 0, False, 0.0,
-        ))
+    diagnostics.append((failure.source_frame, 0.0, 0.0, 0, False, 0.0))
     diagnostic_values = {
-        key: list(values) + [0.0] * (total - len(values))
+        key: (list(values) + [0.0])[:partial_count]
         for key, values in failure.result.diagnostic_values_by_key.items()
     }
     partial_result = replace(
@@ -449,9 +441,13 @@ def _write_primary_failure_outputs(
         "root_rot": np.asarray(rotations),
         "dof_pos": np.asarray(joints),
         "fps": float(preparation.target_fps),
-        "source_frame_indices": np.asarray(preparation.source_frame_indices, dtype=np.int32),
-        "source_frame_float": np.asarray(preparation.source_frame_float, dtype=np.float64),
-        "time_s": np.asarray(preparation.time_s, dtype=np.float64),
+        "source_frame_indices": np.asarray(
+            preparation.source_frame_indices[:partial_count], dtype=np.int32
+        ),
+        "source_frame_float": np.asarray(
+            preparation.source_frame_float[:partial_count], dtype=np.float64
+        ),
+        "time_s": np.asarray(preparation.time_s[:partial_count], dtype=np.float64),
     }, joint_names=[name for _, name, _, _, _, _, _ in hinge_info(preparation.model)],
        root_rot_order=root_order)
     frame_errors = [{
@@ -480,10 +476,25 @@ def _write_primary_failure_outputs(
         json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     target = load_primary_target(preparation.primary_target_path)
+    primary_target_timeline_fields = {
+        "frame", "time_s", "source_frame_float", "source_frame_nearest",
+        "segment_quat", "pelvis_xyz_m", "left_foot_xyz_m", "right_foot_xyz_m",
+        "pelvis_z_m", "left_foot_z_m", "right_foot_z_m",
+        "gcp_left_ff", "gcp_left_ca", "gcp_right_ff", "gcp_right_ca",
+    }
+    partial_target = {
+        key: (
+            value[:partial_count]
+            if key in primary_target_timeline_fields
+            and isinstance(value, np.ndarray)
+            else value
+        )
+        for key, value in target.items()
+    }
     write_primary_viewer(
         path=run / f"{run_id}_primary_viewer.bin",
         repo_root=repo_root_from(config_path), config=snapshot,
-        motion=motion, target=target, result=partial_result,
+        motion=motion, target=partial_target, result=partial_result,
         mapping_offsets=preparation.mapping_offsets, post_diagnostics=None,
         frame_status=frame_status, frame_errors=frame_errors,
     )

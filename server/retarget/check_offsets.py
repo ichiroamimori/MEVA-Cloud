@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
 
 import mujoco
@@ -139,136 +140,6 @@ MEVA_TERMINAL_SEMANTICS = {
         "secondary": [0.0, 1.0, 0.0],
         "secondary_name": "sole_up_normal",
     },
-}
-
-
-# ============================================================
-# G1 terminal semantic frames
-# ============================================================
-#
-# G1 Hand:
-#   longitudinal axis = +X
-#
-# Zero-pose visual check:
-#   left palm  -> inward -> -Y
-#   right palm -> inward -> +Y
-#
-# G1 Foot:
-#   four contact geoms lie on constant local Z.
-#   +X = fore-aft
-#   +Z = upward sole normal
-# ============================================================
-
-G1_TERMINAL_SEMANTICS = {
-    "left_wrist_yaw_link": {
-        "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, -1.0, 0.0],
-        "secondary_name": "palm_normal",
-    },
-
-    "right_wrist_yaw_link": {
-        "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, 1.0, 0.0],
-        "secondary_name": "palm_normal",
-    },
-
-    "left_ankle_roll_link": {
-        "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, 0.0, 1.0],
-        "secondary_name": "sole_up_normal",
-    },
-
-    "right_ankle_roll_link": {
-        "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, 0.0, 1.0],
-        "secondary_name": "sole_up_normal",
-    },
-}
-
-
-# ============================================================
-# G1 non-terminal geometry
-# ============================================================
-#
-# body_to_body:
-#   vector from target body origin to distal body origin,
-#   expressed in target body local coordinates at qpos0.
-#
-# local_vector:
-#   fixed physical direction expressed directly in target-link local frame.
-# ============================================================
-
-G1_TARGET_GEOMETRY = {
-    "pelvis": (
-        "body_to_body",
-        "torso_link",
-    ),
-
-    "torso_link": (
-        "local_vector",
-        [0.0, 0.0, 1.0],
-    ),
-
-    "left_shoulder_yaw_link": (
-        "body_to_body",
-        "left_elbow_link",
-    ),
-
-    "left_elbow_link": (
-        "body_to_body",
-        "left_wrist_roll_link",
-    ),
-
-    "right_shoulder_yaw_link": (
-        "body_to_body",
-        "right_elbow_link",
-    ),
-
-    "right_elbow_link": (
-        "body_to_body",
-        "right_wrist_roll_link",
-    ),
-
-    "left_hip_yaw_link": (
-        "body_to_body",
-        "left_knee_link",
-    ),
-
-    "left_knee_link": (
-        "body_to_body",
-        "left_ankle_roll_link",
-    ),
-
-    "right_hip_yaw_link": (
-        "body_to_body",
-        "right_knee_link",
-    ),
-
-    "right_knee_link": (
-        "body_to_body",
-        "right_ankle_roll_link",
-    ),
-
-    # Kept for compatibility / diagnostics.
-    "left_wrist_yaw_link": (
-        "local_vector",
-        [1.0, 0.0, 0.0],
-    ),
-
-    "right_wrist_yaw_link": (
-        "local_vector",
-        [1.0, 0.0, 0.0],
-    ),
-
-    "left_ankle_roll_link": (
-        "local_vector",
-        [1.0, 0.0, 0.0],
-    ),
-
-    "right_ankle_roll_link": (
-        "local_vector",
-        [1.0, 0.0, 0.0],
-    ),
 }
 
 
@@ -815,25 +686,25 @@ def body_world_pose_qpos0(
 def robot_long_axis_local(
     model,
     target_link,
+    target_geometry,
 ):
 
-    if target_link not in G1_TARGET_GEOMETRY:
+    if target_link not in target_geometry:
 
         raise KeyError(
             f"No robot geometry rule for target link: {target_link}. "
-            "Add it to G1_TARGET_GEOMETRY."
+            "Add it to the Variant manifest retargeting.target_geometry."
         )
 
-    kind, value = (
-        G1_TARGET_GEOMETRY[
-            target_link
-        ]
-    )
+    rule = target_geometry[target_link]
+    if not isinstance(rule, dict):
+        raise ValueError(f"Invalid robot geometry rule for {target_link}")
+    kind = str(rule.get("type") or "")
 
     if kind == "local_vector":
 
         return normalize(
-            value
+            rule.get("vector")
         )
 
     if kind == "body_to_body":
@@ -848,7 +719,7 @@ def robot_long_axis_local(
         p1, _, _ = (
             body_world_pose_qpos0(
                 model,
-                value,
+                str(rule.get("distal_body") or ""),
             )
         )
 
@@ -870,6 +741,7 @@ def robot_long_axis_local(
 def build_terminal_semantic_offset(
     source_segment,
     target_link,
+    terminal_semantics,
 ):
     """
     Build Hand / Foot full-orientation offset
@@ -890,7 +762,7 @@ def build_terminal_semantic_offset(
     if (
         target_link
         not in
-        G1_TERMINAL_SEMANTICS
+        terminal_semantics
     ):
         raise KeyError(
             f"No terminal semantic rule for target link: {target_link}"
@@ -903,7 +775,7 @@ def build_terminal_semantic_offset(
     )
 
     robot = (
-        G1_TERMINAL_SEMANTICS[
+        terminal_semantics[
             target_link
         ]
     )
@@ -1022,6 +894,8 @@ def build_mapping_offset(
     model,
     source_segment,
     target_link,
+    target_geometry,
+    terminal_semantics,
     bvh_offsets=None,
     bvh_endsites=None,
 ):
@@ -1055,6 +929,7 @@ def build_mapping_offset(
             build_terminal_semantic_offset(
                 source_segment,
                 target_link,
+                terminal_semantics,
             )
         )
 
@@ -1101,6 +976,7 @@ def build_mapping_offset(
         robot_long_axis_local(
             model,
             target_link,
+            target_geometry,
         )
     )
 
@@ -1193,6 +1069,7 @@ def offset_fingerprint(
     algorithm_version: str = ALGORITHM_VERSION,
     geometry_version: str = CANONICAL_GEOMETRY_VERSION,
     geometry_hash: str | None = None,
+    robot_retargeting: dict | None = None,
 ) -> dict:
     """Return the complete Capsule-independent offset cache identity."""
     return {
@@ -1204,6 +1081,11 @@ def offset_fingerprint(
             else canonical_geometry_hash(terminal_semantics=MEVA_TERMINAL_SEMANTICS)
         ),
         "mjcf_sha256": sha256(mjcf_path),
+        "robot_retargeting_sha256": hashlib.sha256(
+            json.dumps(
+                robot_retargeting or {}, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest(),
         "mappings": _mapping_signature(cfg["mappings"]),
     }
 
@@ -1257,8 +1139,8 @@ def offsets_path_for_config(
     fingerprint_hash: str,
 ) -> Path:
     repo = find_repo_root(config_path)
-    manufacturer = str(cfg.get("robot", {}).get("manufacturer", "unitree"))
-    variant = str(cfg.get("robot", {}).get("variant", "g1_29dof"))
+    manufacturer = str(cfg.get("robot", {}).get("manufacturer") or "")
+    variant = str(cfg.get("robot", {}).get("variant") or "")
     safe = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
     if not safe.fullmatch(manufacturer) or not safe.fullmatch(variant):
         raise ValueError("Unsafe Robot identity for offset cache")
@@ -1296,6 +1178,28 @@ def compute_offsets(
         config_path
     )
 
+    application_root = Path(__file__).resolve().parents[2]
+    if str(application_root) not in sys.path:
+        sys.path.insert(0, str(application_root))
+    from server.robot_registry import resolve_variant, variant_retargeting_metadata
+
+    robot_identity = cfg.get("robot", {})
+    variant_record = resolve_variant(
+        str(robot_identity.get("variant") or ""),
+        manufacturer_id=str(robot_identity.get("manufacturer") or "") or None,
+        robot_id=str(robot_identity.get("model") or "") or None,
+        root=application_root,
+    )
+    robot_retargeting = variant_retargeting_metadata(variant_record)
+    target_geometry = robot_retargeting.get("target_geometry")
+    terminal_semantics = robot_retargeting.get("terminal_semantics")
+    if not isinstance(target_geometry, dict) or not isinstance(terminal_semantics, dict):
+        raise ValueError(
+            "Variant manifest requires retargeting.target_geometry and "
+            f"retargeting.terminal_semantics: {variant_record.manufacturer_id}/"
+            f"{variant_record.robot_id}/{variant_record.variant_id}"
+        )
+
     mjcf_path = (
         repo
         /
@@ -1312,7 +1216,8 @@ def compute_offsets(
     # NOT included here.
     canonical_hash = canonical_geometry_hash(terminal_semantics=MEVA_TERMINAL_SEMANTICS)
     fingerprint = offset_fingerprint(
-        cfg, mjcf_path, geometry_hash=canonical_hash
+        cfg, mjcf_path, geometry_hash=canonical_hash,
+        robot_retargeting=robot_retargeting,
     )
     fingerprint_hash = hashlib.sha256(
         json.dumps(fingerprint, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -1401,6 +1306,8 @@ def compute_offsets(
             model,
             src,
             dst,
+            target_geometry,
+            terminal_semantics,
         )
 
         offsets[

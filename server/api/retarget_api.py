@@ -9,7 +9,6 @@ import subprocess
 import sys
 import threading
 import uuid
-import xml.etree.ElementTree as ET
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +27,15 @@ from server.retarget_config_store import (
     save_user_config,
     workspace_root,
 )
+from server.robot_registry import (
+    RobotRegistryError,
+    RobotVariant,
+    apply_variant_to_runtime_config,
+    public_catalog,
+    resolve_variant,
+    validate_retarget_config,
+    variant_retargeting_metadata,
+)
 
 
 router = APIRouter(prefix="/api/retarget", tags=["retarget"])
@@ -43,6 +51,57 @@ JOBS_LOCK = threading.Lock()
 def repo_root() -> Path:
     # server/api/retarget_api.py -> repo root
     return Path(__file__).resolve().parents[2]
+
+
+def _registered_variant(
+    robot_variant: str,
+    *,
+    manufacturer: str | None = None,
+    robot_id: str | None = None,
+) -> RobotVariant:
+    try:
+        return resolve_variant(
+            robot_variant,
+            manufacturer_id=manufacturer,
+            robot_id=robot_id,
+            root=repo_root(),
+        )
+    except RobotRegistryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _runtime_robot_config(config: dict[str, Any], record: RobotVariant) -> dict[str, Any]:
+    return apply_variant_to_runtime_config(config, record, root=repo_root())
+
+
+def _assert_config_robot(config: dict[str, Any], record: RobotVariant) -> None:
+    robot = config.get("robot")
+    if not isinstance(robot, dict):
+        raise HTTPException(status_code=400, detail="Config robot identity is required")
+    actual = (
+        str(robot.get("manufacturer") or ""),
+        str(robot.get("model") or ""),
+        str(robot.get("variant") or ""),
+    )
+    expected = (record.manufacturer_id, record.robot_id, record.variant_id)
+    if actual != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Config Robot identity mismatch: "
+                f"expected {expected[0]}/{expected[1]}/{expected[2]}, "
+                f"found {actual[0]}/{actual[1]}/{actual[2]}"
+            ),
+        )
+
+
+def _validate_retarget_config_or_http(
+    record: RobotVariant, config: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        return validate_retarget_config(record, config)
+    except RobotRegistryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def robot_dir(
@@ -91,66 +150,76 @@ def main_run_config_path(
 
 
 def _sole_geom_descriptors(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """Read the four contact GEOMs directly from the configured MJCF, in XML order."""
-    mjcf = config.get("robot", {}).get("mjcf")
-    if not mjcf:
-        return {"left": [], "right": []}
-    xml_path = (repo_root() / str(mjcf)).resolve()
-    try:
-        root = ET.parse(xml_path).getroot()
-    except (OSError, ET.ParseError):
-        return {"left": [], "right": []}
-
-    mapped = {
-        str(item.get("source_segment")): str(item.get("target_link"))
-        for item in config.get("mappings", [])
-        if item.get("source_segment") and item.get("target_link")
-    }
-    bodies = {
-        "left": mapped.get("LeftFoot", "left_ankle_roll_link"),
-        "right": mapped.get("RightFoot", "right_ankle_roll_link"),
-    }
+    """Expose the manifest-defined Foot support points to the existing UI."""
+    robot = config.get("robot", {})
+    contacts = robot.get("foot_contacts") if isinstance(robot, dict) else None
+    if not isinstance(contacts, dict):
+        contacts = None
+    if contacts is None:
+        try:
+            variant = resolve_variant(
+                str(robot.get("variant") or ""),
+                manufacturer_id=str(robot.get("manufacturer") or "") or None,
+                robot_id=str(robot.get("model") or "") or None,
+                root=repo_root(),
+            )
+            value = variant_retargeting_metadata(variant).get("foot_contacts")
+            contacts = value if isinstance(value, dict) else None
+        except RobotRegistryError:
+            contacts = None
     result: dict[str, list[dict[str, Any]]] = {"left": [], "right": []}
-    for side, body_name in bodies.items():
-        body = root.find(f".//body[@name='{body_name}']")
-        if body is None:
+    if contacts is None:
+        return result
+    for side in ("left", "right"):
+        definition = contacts.get(side)
+        if not isinstance(definition, dict):
             continue
-        contact_geoms = [
-            geom for geom in body.findall("geom")
-            if geom.get("mesh") is None and geom.get("size") is not None
-        ]
-        for index, geom in enumerate(contact_geoms):
-            name = geom.get("name")
-            pos = geom.get("pos", "0 0 0")
-            size = geom.get("size", "")
-            display = name if name else f'geom pos="{pos}" size="{size}"'
+        points = definition.get("support_points")
+        if not isinstance(points, list):
+            continue
+        for index, point in enumerate(points):
+            if not isinstance(point, dict):
+                continue
+            position = point.get("local_position")
+            if not isinstance(position, list) or len(position) != 3:
+                continue
+            name = str(point.get("name") or f"support_{index + 1}")
             result[side].append({
                 "index": index,
                 "name": name,
-                "display": display,
-                "pos": pos,
-                "size": size,
+                "display": f"{side}_{name}",
+                "pos": " ".join(f"{float(value):g}" for value in position),
+                "size": "",
+                "body": str(definition.get("body") or ""),
+                "generation_method": str(
+                    definition.get("generation_method") or "explicit"
+                ),
             })
     return result
 
 
-def _robot_foot_to_ground_offset(config: dict[str, Any]) -> float | None:
-    """Derive Foot-origin-to-ground distance from existing spherical sole GEOMs."""
-    offsets: list[float] = []
-    for items in _sole_geom_descriptors(config).values():
-        bottoms: list[float] = []
-        for item in items:
-            try:
-                z = float(str(item["pos"]).split()[2])
-                radius = float(str(item["size"]).split()[0])
-            except (KeyError, IndexError, TypeError, ValueError):
-                continue
-            bottoms.append(z - radius)
-        if bottoms:
-            offsets.append(-min(bottoms))
-    if not offsets:
+def _manifest_robot_foot_to_ground_offset(config: dict[str, Any]) -> float | None:
+    """Read the installer-confirmed Robot Foot offset from manifest metadata."""
+    robot = config.get("robot", {})
+    contacts = robot.get("foot_contacts") if isinstance(robot, dict) else None
+    if not isinstance(contacts, dict):
+        try:
+            variant = resolve_variant(
+                str(robot.get("variant") or ""),
+                manufacturer_id=str(robot.get("manufacturer") or "") or None,
+                robot_id=str(robot.get("model") or "") or None,
+                root=repo_root(),
+            )
+            value = variant_retargeting_metadata(variant).get("foot_contacts")
+            contacts = value if isinstance(value, dict) else None
+        except RobotRegistryError:
+            contacts = None
+    if not isinstance(contacts, dict):
         return None
-    value = round(float(sum(offsets) / len(offsets)), 12)
+    try:
+        value = float(contacts["robot_foot_to_ground_offset_m"])
+    except (KeyError, TypeError, ValueError):
+        return None
     return value if math.isfinite(value) and value >= 0.0 else None
 
 
@@ -770,6 +839,14 @@ def _shared_error(exc: ConfigStoreError, status_code: int = 400) -> HTTPExceptio
     return HTTPException(status_code=status_code, detail=str(exc))
 
 
+@router.get("/robots")
+def get_robot_catalog():
+    try:
+        return public_catalog(repo_root())
+    except RobotRegistryError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.get("/configs")
 def get_shared_configs(
     source_type: str = "meva",
@@ -778,6 +855,7 @@ def get_shared_configs(
     user_id: str = "local_user",
     stage: Literal["primary", "main"] = "primary",
 ):
+    _registered_variant(robot_variant, manufacturer=manufacturer)
     try:
         configs = list_shared_configs(
             source_type=source_type,
@@ -803,6 +881,7 @@ def get_shared_config(
     stage: Literal["primary", "main"] = "primary",
     run_id: str | None = None,
 ):
+    variant = _registered_variant(robot_variant, manufacturer=manufacturer)
     if stage == "main":
         if not CAPSULE_RE.fullmatch(capsule_id) or user_id != "local_user":
             raise HTTPException(status_code=404, detail="Capsule not found")
@@ -831,6 +910,8 @@ def get_shared_config(
                 shared,
                 _capsule_runtime_context(capsule_id, robot_variant, user_id),
             )
+        runtime = _runtime_robot_config(runtime, variant)
+        _validate_retarget_config_or_http(variant, runtime)
     except ConfigStoreError as exc:
         raise _shared_error(exc, 404) from exc
     return {
@@ -842,6 +923,9 @@ def get_shared_config(
 
 @router.post("/configs")
 def save_shared_config(req: SharedConfigSaveRequest):
+    variant = _registered_variant(req.robot_variant, manufacturer=req.manufacturer)
+    _assert_config_robot(req.config, variant)
+    _validate_retarget_config_or_http(variant, req.config)
     try:
         primary: dict[str, Any] | None = None
         if req.stage == "main":
@@ -883,6 +967,7 @@ def save_shared_config(req: SharedConfigSaveRequest):
             runtime["name"] = record.name
             runtime["config_name"] = record.name
             runtime["retarget_stage"] = "main"
+            runtime = _runtime_robot_config(runtime, variant)
             atomic_write_json(
                 main_default_config_path(req.capsule_id, req.robot_variant, req.user_id),
                 runtime,
@@ -896,8 +981,9 @@ def save_shared_config(req: SharedConfigSaveRequest):
             # older clients. It is a composed runtime document, not a Shared Config.
             atomic_write_json(
                 default_config_path(req.capsule_id, req.robot_variant, req.user_id),
-                runtime,
+                _runtime_robot_config(runtime, variant),
             )
+        runtime = _runtime_robot_config(runtime, variant)
     except ConfigNameCollision as exc:
         raise HTTPException(
             status_code=409,
@@ -921,14 +1007,19 @@ def save_shared_config(req: SharedConfigSaveRequest):
 def get_context(
     capsule_id: str,
     robot_variant: str = "g1_29dof",
+    manufacturer: str | None = None,
+    robot_id: str | None = None,
     user_id: str = "local_user",
 ):
+    variant = _registered_variant(
+        robot_variant, manufacturer=manufacturer, robot_id=robot_id
+    )
     rdir = robot_dir(capsule_id, robot_variant, user_id)
     cfg_path = default_config_path(capsule_id, robot_variant, user_id)
 
     default_config = None
     if cfg_path.exists():
-        default_config = load_json(cfg_path)
+        default_config = _runtime_robot_config(load_json(cfg_path), variant)
         _normalize_ground_contact_estimation(default_config)
     else:
         # A newly uploaded Capsule has no per-Capsule config file. Compose the
@@ -938,7 +1029,7 @@ def get_context(
                 scope="xenoma",
                 filename="primary_standard.json",
                 source_type="meva",
-                manufacturer="unitree",
+                manufacturer=variant.manufacturer_id,
                 robot_variant=robot_variant,
                 user_id=user_id,
                 stage="primary",
@@ -947,6 +1038,7 @@ def get_context(
                 shared_default,
                 _capsule_runtime_context(capsule_id, robot_variant, user_id),
             )
+            default_config = _runtime_robot_config(default_config, variant)
             _normalize_ground_contact_estimation(default_config)
         except ConfigStoreError:
             default_config = None
@@ -961,8 +1053,11 @@ def get_context(
     model_metadata = {"joints": [], "joint_symmetry": {}, "body_symmetry": {}, "collision_pairs": []}
     if default_config:
         try:
+            _validate_retarget_config_or_http(variant, default_config)
             from server.retarget.robot_model_info import robot_model_metadata
             model_metadata = robot_model_metadata(repo_root(), default_config)
+        except HTTPException:
+            raise
         except Exception as exc:
             model_metadata["warning"] = f"{type(exc).__name__}: {exc}"
     source_metadata = metadata.get("meva_source") or {}
@@ -985,6 +1080,13 @@ def get_context(
             "sampling_rate_hz": source_fps,
         },
         "robot": robot,
+        "robot_registration": {
+            "manufacturer_id": variant.manufacturer_id,
+            "manufacturer_name": variant.manufacturer_name,
+            "robot_id": variant.robot_id,
+            "robot_name": variant.robot_name,
+            "variant": variant.public_dict(),
+        },
         "robot_variant": robot_variant,
         "default_config_exists": cfg_path.exists(),
         "default_config": default_config,
@@ -1323,6 +1425,14 @@ def get_main_config(
 @router.post("/main/default")
 def save_main_default(req: DefaultConfigRequest):
     cfg = deepcopy(req.config)
+    robot = cfg.get("robot", {})
+    variant = _registered_variant(
+        req.robot_variant,
+        manufacturer=str(robot.get("manufacturer") or "") or None,
+        robot_id=str(robot.get("model") or "") or None,
+    )
+    cfg = _runtime_robot_config(cfg, variant)
+    _validate_retarget_config_or_http(variant, cfg)
     cfg["config_name"] = str(cfg.get("config_name") or "Main Standard")
     cfg.setdefault("main", {})
     cfg.pop("main_id", None)
@@ -1384,6 +1494,14 @@ def get_run_config(
 @router.post("/default")
 def save_default(req: DefaultConfigRequest):
     cfg = deepcopy(req.config)
+    robot = cfg.get("robot", {})
+    variant = _registered_variant(
+        req.robot_variant,
+        manufacturer=str(robot.get("manufacturer") or "") or None,
+        robot_id=str(robot.get("model") or "") or None,
+    )
+    cfg = _runtime_robot_config(cfg, variant)
+    _validate_retarget_config_or_http(variant, cfg)
     cfg.pop("frame_range", None)
     _normalize_ground_contact_estimation(cfg)
     cfg.setdefault("output", {})
@@ -1408,10 +1526,10 @@ def _normalize_ground_contact_estimation(cfg: dict[str, Any]) -> dict[str, Any]:
     legacy = dict(cfg.get("ground_contact_estimation", {}))
     offsets = cfg.setdefault("foot_to_ground_offset", {})
     meva_height = float(offsets.get("meva_m", 0.030))
-    automatic_robot = _robot_foot_to_ground_offset(cfg)
+    manifest_robot = _manifest_robot_foot_to_ground_offset(cfg)
     robot_height = float(
-        automatic_robot
-        if automatic_robot is not None
+        manifest_robot
+        if manifest_robot is not None
         else offsets.get("robot_m", legacy.get("robot_foot_ground_height_m", 0.035))
     )
     if not all(math.isfinite(value) and value >= 0.0 for value in (meva_height, robot_height)):
@@ -1422,7 +1540,7 @@ def _normalize_ground_contact_estimation(cfg: dict[str, Any]) -> dict[str, Any]:
     offsets.update({
         "meva_m": meva_height,
         "robot_m": robot_height,
-        "robot_source": "robot_collision_geometry" if automatic_robot is not None else "config_fallback",
+        "robot_source": "robot_manifest" if manifest_robot is not None else "config_fallback",
     })
     cfg.pop("ground_contact_estimation", None)
     return offsets
@@ -1870,20 +1988,22 @@ def prepare_viewer(
     rdir = robot_dir(capsule_id, robot_variant, user_id)
 
     if meva_only:
+        variant = _registered_variant(robot_variant)
         capsule_default = default_config_path(capsule_id, robot_variant, user_id)
         if capsule_default.exists():
-            cfg = load_json(capsule_default)
+            cfg = _runtime_robot_config(load_json(capsule_default), variant)
         else:
             try:
                 _, shared_default = load_shared_config(
                     scope="xenoma", filename="primary_standard.json",
-                    source_type="meva", manufacturer="unitree",
+                    source_type="meva", manufacturer=variant.manufacturer_id,
                     robot_variant=robot_variant, user_id=user_id, stage="primary",
                 )
                 cfg = merge_runtime_config(
                     shared_default,
                     _capsule_runtime_context(capsule_id, robot_variant, user_id),
                 )
+                cfg = _runtime_robot_config(cfg, variant)
             except ConfigStoreError as exc:
                 raise _shared_error(exc, 404) from exc
         run_dir = None

@@ -127,8 +127,8 @@ def build_main_target(
     }
     data = mujoco.MjData(model)
     foot_links = {
-        "left": _mapped_link(cfg, "LeftFoot", "left_ankle_roll_link"),
-        "right": _mapped_link(cfg, "RightFoot", "right_ankle_roll_link"),
+        side: str(contact_geometry[side]["body_name"])
+        for side in ("left", "right")
     }
     foot_ids = {
         side: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
@@ -148,10 +148,10 @@ def build_main_target(
             if not np.isfinite(direction_norm) or direction_norm <= 1e-12:
                 raise ValueError(f"Primary {side} Pelvis-to-Foot direction is degenerate")
             pelvis_to_foot_direction[side][i] = direction / direction_norm
-            relative_z[side][i] = np.asarray([
-                data.geom_xpos[int(geom_id), 2] - foot_z
-                for geom_id in contact_geometry[side]["geom_ids"]
-            ])
+            relative_z[side][i] = (
+                np.asarray(contact_geometry[side]["xyz"][i], dtype=np.float64)[:, 2]
+                - foot_z
+            )
 
     pelvis_norm = np.linalg.norm(pelvis_quat, axis=1, keepdims=True)
     if np.any(pelvis_norm <= 1e-12):
@@ -224,12 +224,24 @@ def build_main_target(
         right_pelvis_to_foot_direction=pelvis_to_foot_direction["right"],
         left_gcp_corrected=corrected["left"],
         right_gcp_corrected=corrected["right"],
+        left_gcp_raw=selected_raw["left"],
+        right_gcp_raw=selected_raw["right"],
+        left_gcp_smoothed=smoothed["left"],
+        right_gcp_smoothed=smoothed["right"],
         left_min_geom_index=min_index["left"],
         right_min_geom_index=min_index["right"],
         left_geom_target_z=geom_target_z["left"],
         right_geom_target_z=geom_target_z["right"],
         left_geom_names=np.asarray(contact_geometry["left"]["display_names"]),
         right_geom_names=np.asarray(contact_geometry["right"]["display_names"]),
+        left_support_local_position=np.asarray(
+            contact_geometry["left"]["local_positions"], dtype=np.float64
+        ),
+        right_support_local_position=np.asarray(
+            contact_geometry["right"]["local_positions"], dtype=np.float64
+        ),
+        left_support_body=np.asarray(contact_geometry["left"]["body_name"]),
+        right_support_body=np.asarray(contact_geometry["right"]["body_name"]),
     )
     load_main_target(output_path, expected_frames=n, expected_fps=primary_fps)
     return MainTargetBuildResult(output_path, base_z, selected_raw, smoothed)
@@ -250,6 +262,13 @@ def load_main_target(
         "right_geom_target_z": (n, 4), "left_geom_names": (4,),
         "right_geom_names": (4,),
     }
+    optional_shapes = {
+        "left_gcp_raw": (n,), "right_gcp_raw": (n,),
+        "left_gcp_smoothed": (n,), "right_gcp_smoothed": (n,),
+        "left_support_local_position": (4, 3),
+        "right_support_local_position": (4, 3),
+        "left_support_body": (), "right_support_body": (),
+    }
     if "link_names" not in target or target["link_names"].ndim != 1:
         raise ValueError("Invalid main target field link_names")
     link_count = len(target["link_names"])
@@ -262,6 +281,9 @@ def load_main_target(
     })
     for key, shape in expected_shapes.items():
         if key not in target or target[key].shape != shape:
+            raise ValueError(f"Invalid main target field {key}: expected {shape}")
+    for key, shape in optional_shapes.items():
+        if key in target and target[key].shape != shape:
             raise ValueError(f"Invalid main target field {key}: expected {shape}")
     if expected_frames is not None and n != expected_frames:
         raise ValueError("Main target frame count does not match Primary")

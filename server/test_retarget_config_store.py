@@ -157,6 +157,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertEqual(saved["schema_version"], "1.0")
         self.assertEqual(saved["name"], "Factory Picking")
         self.assertIn("mappings", saved)
+        self.assertNotIn("mjcf", saved["robot"])
         for field in ("capsule_id", "source", "frame_range", "sampling", "offsets", "config_id"):
             self.assertNotIn(field, saved)
         self.assertEqual(saved["output"], {"root_rot_order": "xyzw"})
@@ -335,12 +336,18 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn('if(updateBaseline){', html)
         self.assertIn('applyConfig(data.config, {updateBaseline:true})', html)
         self.assertIn('loadRetargetContext({preserveWorkingConfig:true})', html)
-        self.assertIn('loadRetargetedData({preserveWorkingConfig:true})', html)
+        # After a run, reapply the authoritative Run Config so model-driven
+        # controls such as selected collision pairs reflect the executed
+        # snapshot. applyConfig intentionally does not update the Shared
+        # Config baseline, so unsaved changes remain marked dirty.
+        self.assertIn('loadRetargetedData({preserveWorkingConfig:false})', html)
         self.assertIn('A Run Config is a reproducibility snapshot', html)
         self.assertIn('/api/retarget/configs/load?', html)
         self.assertIn('applyConfig(data.config)', html)
         self.assertIn('stage: "main"', html)
         self.assertIn('loadSelectedMainSharedConfig(runId)', html)
+        self.assertIn('id="targetRobotSelect"', html)
+        self.assertIn('fetch("/api/retarget/robots"', html)
         self.assertIn('saveConfigStage === "main"', html)
         self.assertIn('Main Result Config is a Run snapshot', html)
         self.assertIn('Primary Standard', html)

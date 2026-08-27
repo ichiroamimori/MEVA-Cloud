@@ -221,6 +221,9 @@ def write_motion_viewer(
         "joint_limit_margin_rad": "rad", "self_collision_signed_distance_m": "m",
         "link_pos": "m", "geom_pos": "m", "foot_geom_target_z_m": "m",
         "foot_geom_result_z_m": "m", "foot_geom_residual_z_m": "m",
+        "foot_support_point_pos": "m", "foot_support_target_z_m": "m",
+        "foot_support_result_z_m": "m", "foot_support_residual_z_m": "m",
+        "foot_contact_delta_z_m": "m",
         "pelvis_to_foot_residual_angle_rad": "rad",
     }
     combined_metadata["array_metadata"] = {

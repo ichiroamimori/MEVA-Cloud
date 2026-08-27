@@ -170,6 +170,18 @@ def normalized_shared_config(
     shared["retarget_stage"] = stage
     # config_name remains a runtime compatibility alias only.
     shared.pop("config_name", None)
+    robot = shared.get("robot")
+    if isinstance(robot, dict):
+        # Model location and initial pose are fixed Variant metadata resolved
+        # from server/robots at runtime. Keep only the reusable Robot identity
+        # in newly saved Shared Configs. Legacy Configs containing these keys
+        # remain readable.
+        for key in (
+            "mjcf", "model_file", "model_format", "manifest",
+            "initial_keyframe", "initial_pose", "root_body", "floating_base",
+            "output_joint_order",
+        ):
+            robot.pop(key, None)
     for key in ("capsule_id", "source", "frame_range", "sampling", "offsets"):
         shared.pop(key, None)
     for key in (

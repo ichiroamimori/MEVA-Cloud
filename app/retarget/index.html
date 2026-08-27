@@ -1329,6 +1329,7 @@ input[type="checkbox"]{
   border-top:1px solid var(--line);
   justify-content:flex-end;
 }
+.target-robot-select{min-width:0;width:100%}
 .self-collision-card .self-collision-algorithm-row .setting-control{min-width:0}
 @media(max-width:1100px){
   .self-collision-card .ik-one-line{flex-wrap:wrap}
@@ -1389,7 +1390,7 @@ input[type="checkbox"]{
   <div class="summary">
     <div class="card"><div class="k">Capsule</div><div class="v" id="capsuleSummary">—</div><div class="frame-count" id="frameCount">—</div></div>
     <div class="card"><div class="k">Source</div><div class="v">MEVA / 18 segments</div></div>
-    <div class="card"><div class="k">Target Robot</div><div class="v" id="targetRobotSummary">—</div></div>
+    <div class="card"><div class="k">Target Robot</div><div class="v"><select id="targetRobotSelect" class="retargeted-data-select target-robot-select" aria-label="Target Robot"></select></div></div>
     <div class="card">
       <div class="k">Retargeted Data ID</div>
       <div class="v">
@@ -1446,7 +1447,7 @@ input[type="checkbox"]{
               <div class="ik-title-line">
                 <div class="ik-card-title">Foot-to-ground offset</div>
                 <span class="info-mark" tabindex="0">?
-                  <span class="info-pop">Foot座標原点からGroundまでの固定Z offsetです。MEVA値はPrimary Targetへ保存され、Robot値はcollision GEOMから自動取得します。</span>
+                  <span class="info-pop">Foot座標原点からGroundまでの固定Z offsetです。MEVA値はPrimary Targetへ保存され、Robot値はRobot manifestの確定値を使用します。</span>
                 </span>
               </div>
               <div class="ik-flex-spacer"></div>
@@ -2231,7 +2232,7 @@ input[type="checkbox"]{
   const frameCount = document.getElementById("frameCount");
   const capsuleSummary = document.getElementById("capsuleSummary");
   const mainCapsuleSummary = document.getElementById("mainCapsuleSummary");
-  const targetRobotSummary = document.getElementById("targetRobotSummary");
+  const targetRobotSelect = document.getElementById("targetRobotSelect");
   const mainTargetRobotSummary = document.getElementById("mainTargetRobotSummary");
   const startFrame = document.getElementById("startFrame");
   const endFrame = document.getElementById("endFrame");
@@ -2245,6 +2246,7 @@ input[type="checkbox"]{
   const saveConfigCancelBtn = document.getElementById("saveConfigCancelBtn");
   const saveConfigCloseBtn = document.getElementById("saveConfigCloseBtn");
   let configCatalog = [];
+  let robotCatalog = {robots:[]};
   let selectedSharedConfig = null;
   let baselineConfigSignature = "";
   let saveConfigStage = "primary";
@@ -3009,7 +3011,7 @@ input[type="checkbox"]{
     if(!Number.isFinite(mevaOffset)||mevaOffset<0||!Number.isFinite(robotOffset)||robotOffset<0){
       throw new Error("Foot-to-ground offsets must be non-negative.");
     }
-    cfg.foot_to_ground_offset={meva_m:mevaOffset,robot_m:robotOffset,robot_source:"robot_collision_geometry"};
+    cfg.foot_to_ground_offset={meva_m:mevaOffset,robot_m:robotOffset,robot_source:"robot_manifest"};
     delete cfg.ground_contact_estimation;
     const samplingValue=Number(samplingRate?.value??samplingRateBottom?.value??30);
     if(!Number.isFinite(samplingValue)||samplingValue<=0)throw new Error("Sampling Rate must be greater than zero.");
@@ -3485,7 +3487,7 @@ input[type="checkbox"]{
         const label = document.createElement("div");
         label.className = "sole-geom-info";
         const display=geom.display || geom.name || "";
-        label.innerHTML = `<span class="sole-geom-name">${display}</span><small>XML contact GEOM</small>`;
+        label.innerHTML = `<span class="sole-geom-name">${display}</span><small>Foot support point</small>`;
         label.title = display;
         row.append(label);
         for(const axis of ["x", "y", "z"]){
@@ -3946,9 +3948,16 @@ input[type="checkbox"]{
     try{
       const previousSettingRun = retargetedDataSelect?.value || "new";
       const previousMainRun = mainRetargetedDataSelect?.value || "";
-      const robotVariant = workingConfig.robot?.variant || "g1_29dof";
+      const registration = selectedRobotRegistration();
+      const robotVariant = registration.variant?.id || workingConfig.robot?.variant || "g1_29dof";
+      const contextQuery = new URLSearchParams({
+        capsule_id: capsuleId,
+        robot_variant: robotVariant,
+        manufacturer: registration.manufacturer_id,
+        robot_id: registration.robot_id,
+      });
       const res = await fetch(
-        `/api/retarget/context?capsule_id=${encodeURIComponent(capsuleId)}&robot_variant=${encodeURIComponent(robotVariant)}`
+        `/api/retarget/context?${contextQuery}`
       );
       const data = await res.json();
       if(!res.ok) throw new Error(JSON.stringify(data.detail));
@@ -4044,9 +4053,16 @@ input[type="checkbox"]{
     const value = retargetedDataSelect?.value || "new";
     try{
       if(value === "new"){
-        const robotVariant = workingConfig.robot?.variant || "g1_29dof";
+        const registration = selectedRobotRegistration();
+        const robotVariant = registration.variant?.id || workingConfig.robot?.variant || "g1_29dof";
+        const contextQuery = new URLSearchParams({
+          capsule_id: capsuleId,
+          robot_variant: robotVariant,
+          manufacturer: registration.manufacturer_id,
+          robot_id: registration.robot_id,
+        });
         const res = await fetch(
-          `/api/retarget/context?capsule_id=${encodeURIComponent(capsuleId)}&robot_variant=${encodeURIComponent(robotVariant)}`
+          `/api/retarget/context?${contextQuery}`
         );
         const data = await res.json();
         if(!res.ok) throw new Error(JSON.stringify(data.detail));
@@ -4588,7 +4604,97 @@ input[type="checkbox"]{
       .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join(" ");
   }
-  function robotDisplayName(robot){
+  function robotSelectionValue(manufacturerId,robotId,variantId){
+    return [manufacturerId,robotId,variantId].join("|");
+  }
+  function selectedRobotRegistration(){
+    const option = targetRobotSelect?.selectedOptions?.[0];
+    if(option?.dataset?.variantId){
+      const catalogRobot = (robotCatalog?.robots || []).find(robot =>
+        robot.manufacturer_id === option.dataset.manufacturerId
+        && robot.robot_id === option.dataset.robotId
+      );
+      const catalogVariant = (catalogRobot?.variants || []).find(variant =>
+        variant.id === option.dataset.variantId
+      );
+      return {
+        manufacturer_id: option.dataset.manufacturerId,
+        manufacturer_name: catalogRobot?.manufacturer_name || option.dataset.manufacturerName,
+        robot_id: option.dataset.robotId,
+        robot_name: catalogRobot?.robot_name || option.dataset.robotName,
+        variant: catalogVariant || {
+          id: option.dataset.variantId,
+          name: option.dataset.variantName,
+          short_name: option.dataset.variantShortName,
+        },
+      };
+    }
+    const robot = workingConfig?.robot || {};
+    return {
+      manufacturer_id: robot.manufacturer || "unitree",
+      robot_id: robot.model || "g1",
+      variant: {id: robot.variant || "g1_29dof"},
+    };
+  }
+  function selectRegisteredRobot(registration){
+    if(!targetRobotSelect || !registration) return;
+    const value = robotSelectionValue(
+      registration.manufacturer_id,
+      registration.robot_id,
+      registration.variant?.id,
+    );
+    if([...targetRobotSelect.options].some(option => option.value === value)){
+      targetRobotSelect.value = value;
+    }
+  }
+  async function loadRobotCatalog(){
+    const response = await fetch("/api/retarget/robots", {cache:"no-store"});
+    const data = await response.json();
+    if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    robotCatalog = data;
+    if(!targetRobotSelect) return;
+    targetRobotSelect.innerHTML = "";
+    for(const robot of (data.robots || []).filter(item => item.enabled !== false)){
+      const variants = (robot.variants || []).filter(item => item.enabled !== false);
+      if(!variants.length) continue;
+      const group = document.createElement("optgroup");
+      group.label = robot.manufacturer_name || robot.manufacturer_id;
+      for(const variant of variants){
+        const option = document.createElement("option");
+        option.value = robotSelectionValue(robot.manufacturer_id,robot.robot_id,variant.id);
+        option.textContent = `${robot.robot_name} / ${variant.short_name || variant.name || variant.id}`;
+        option.dataset.manufacturerId = robot.manufacturer_id;
+        option.dataset.manufacturerName = robot.manufacturer_name || robot.manufacturer_id;
+        option.dataset.robotId = robot.robot_id;
+        option.dataset.robotName = robot.robot_name || robot.robot_id;
+        option.dataset.variantId = variant.id;
+        option.dataset.variantName = variant.name || variant.id;
+        option.dataset.variantShortName = variant.short_name || variant.name || variant.id;
+        group.appendChild(option);
+      }
+      targetRobotSelect.appendChild(group);
+    }
+    if(!targetRobotSelect.options.length){
+      const option = document.createElement("option");
+      option.textContent = "No enabled Robot Variant";
+      option.value = "";
+      targetRobotSelect.appendChild(option);
+      targetRobotSelect.disabled = true;
+      return;
+    }
+    targetRobotSelect.disabled = false;
+    const robot = workingConfig?.robot || {};
+    selectRegisteredRobot({
+      manufacturer_id: robot.manufacturer || "unitree",
+      robot_id: robot.model || "g1",
+      variant: {id: robot.variant || "g1_29dof"},
+    });
+  }
+  function robotDisplayName(robot,registration){
+    if(registration?.robot_name){
+      const variant = registration.variant || {};
+      return `${registration.robot_name} / ${variant.short_name || variant.name || variant.id}`;
+    }
     const manufacturer = titleCaseIdentifier(robot?.manufacturer);
     const model = String(robot?.model || "").toUpperCase();
     const variant = String(robot?.variant || "");
@@ -4606,8 +4712,19 @@ input[type="checkbox"]{
       capsuleBack.textContent = capsuleTitle;
       capsuleBack.href = `../capsule/?capsule=${encodeURIComponent(capsuleId)}&title=${encodeURIComponent(capsuleTitle)}`;
     }
-    const robotText = robotDisplayName(data.robot || data.default_config?.robot || workingConfig?.robot);
-    if(targetRobotSummary) targetRobotSummary.textContent = robotText;
+    selectRegisteredRobot(data.robot_registration);
+    const manifestOffset = Number(
+      data.robot_registration?.variant?.retargeting?.foot_contacts
+        ?.robot_foot_to_ground_offset_m
+    );
+    if(Number.isFinite(manifestOffset) && manifestOffset >= 0){
+      if(primaryRobotFootGroundOffset) primaryRobotFootGroundOffset.value = manifestOffset;
+      if(mainRobotFootGroundOffset) mainRobotFootGroundOffset.value = manifestOffset;
+    }
+    const robotText = robotDisplayName(
+      data.robot || data.default_config?.robot || workingConfig?.robot,
+      data.robot_registration,
+    );
     if(mainTargetRobotSummary) mainTargetRobotSummary.textContent = robotText;
   }
   applyContextSummary({capsule:{id:capsuleId,title:capsuleTitle},robot:workingConfig?.robot});
@@ -5611,16 +5728,21 @@ input[type="checkbox"]{
           }
           select.appendChild(dg);
         }
-        const footTasks=bin.header.foot_geom_task_names||[];
+        const footTasks=bin.header.foot_support_point_names||bin.header.foot_geom_task_names||[];
         if(footTasks.length){
-          const fg=document.createElement("optgroup");fg.label="Main Foot GEOM Z tasks";
+          const fg=document.createElement("optgroup");fg.label="Main Foot Support Points";
           footTasks.forEach((name,index)=>{const o=document.createElement("option");o.value=`footz:${index}`;o.textContent=name;fg.appendChild(o)});
           select.appendChild(fg);
         }
         if(bin.arrays.gcp_left_corrected||bin.arrays.gcp_right_corrected){
-          const gg=document.createElement("optgroup");gg.label="Main corrected GCP";
-          for(const [side,label] of [["left","Left corrected GCP"],["right","Right corrected GCP"]]){const o=document.createElement("option");o.value=`gcp:${side}`;o.textContent=label;gg.appendChild(o)}
+          const gg=document.createElement("optgroup");gg.label="Main GCP";
+          for(const [side,label] of [["left","Left GCP"],["right","Right GCP"]]){const o=document.createElement("option");o.value=`gcp:${side}`;o.textContent=label;gg.appendChild(o)}
           select.appendChild(gg);
+        }
+        if(bin.arrays.support_state){
+          const cg=document.createElement("optgroup");cg.label="Main Contact Diagnostics";
+          for(const [value,label] of [["support_state","Support state"],["left","Left correction"],["right","Right correction"]]){const o=document.createElement("option");o.value=`contact:${value}`;o.textContent=label;cg.appendChild(o)}
+          select.appendChild(cg);
         }
       }
     }else{
@@ -5659,6 +5781,7 @@ input[type="checkbox"]{
     if(v.startsWith("ik:")) return {kind:"ik",name:v.slice(3)};
     if(v.startsWith("footz:")) return {kind:"footz",name:v.slice(6)};
     if(v.startsWith("gcp:")) return {kind:"gcp",name:v.slice(4)};
+    if(v.startsWith("contact:")) return {kind:"contact",name:v.slice(8)};
     if(v.startsWith("segment:")) return {kind:"segment",name:v.slice(8)};
     return {kind:"none",name:""};
   }
@@ -5725,7 +5848,8 @@ input[type="checkbox"]{
     else if(node.kind==="pres")options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_norm","Residual magnitude"],["target_x","Target X"],["target_y","Target Y"],["target_z","Target Z"],["result_x","Result X"],["result_y","Result Y"],["result_z","Result Z"]];
     else if(node.kind==="ik")options=[["value",({iterations:"Iterations",converged:"Convergence",final_delta:"Final joint delta"})[node.name]||"Value"]];
     else if(node.kind==="footz")options=[["target","Target Z"],["result","Result Z"],["residual","Residual Z"]];
-    else if(node.kind==="gcp")options=[["value","Corrected GCP"]];
+    else if(node.kind==="gcp")options=[["raw","Raw GCP"],["smoothed","Smoothed GCP"],["corrected","Corrected GCP"],["used","Used GCP"]];
+    else if(node.kind==="contact")options=node.name==="support_state"?[["value","Support state"]]:[["strength","Correction strength"],["delta_z","Correction delta Z"]];
     else if(node.kind==="joint")options=[["joint_angle","Joint Angle"],["joint_velocity","Joint Velocity"],["joint_acceleration","Joint Acceleration"]];
     else if(node.kind==="geom")options=[["x","X"],["y","Y"],["z","Z"]];
     else if(node.kind==="link"||node.kind==="segment")options=[["x","X"],["y","Y"],["z","Z"],["pitch","Pitch"],["yaw","Yaw"],["roll","Roll"]];
@@ -5950,7 +6074,7 @@ input[type="checkbox"]{
   }
 
   function embeddedViewerDiagnosticTraces(bin,node,metric,start,end,labelPrefix){
-    if(!bin||!["ik","footz","gcp"].includes(node.kind))return [];
+    if(!bin||!["ik","footz","gcp","contact"].includes(node.kind))return [];
     const frames=sourceFrames(bin),frameCount=frames.length,traces=[];
     const seriesFrom=(array,getValue)=>frames.map((frame,index)=>[
       frame,getValue(array,index)
@@ -5961,13 +6085,24 @@ input[type="checkbox"]{
       const unit=node.name==="final_delta"?"rad":node.name==="iterations"?"iterations":"1";
       traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · IK ${node.name.replace("_"," ")}`,color:"#7c3aed",dash:[],unit});
     }else if(node.kind==="footz"){
-      const taskIndex=Number(node.name),taskCount=(bin.header.foot_geom_task_names||[]).length;
-      const field={target:"foot_geom_target_z_m",result:"foot_geom_result_z_m",residual:"foot_geom_residual_z_m"}[metric];
+      const taskNames=bin.header.foot_support_point_names||bin.header.foot_geom_task_names||[];
+      const taskIndex=Number(node.name),taskCount=taskNames.length;
+      const preferred={target:"foot_support_target_z_m",result:"foot_support_result_z_m",residual:"foot_support_residual_z_m"}[metric];
+      const legacy={target:"foot_geom_target_z_m",result:"foot_geom_result_z_m",residual:"foot_geom_residual_z_m"}[metric];
+      const field=bin.arrays[preferred]?preferred:legacy;
       const array=bin.arrays[field];if(!array||!Number.isInteger(taskIndex)||taskIndex<0||taskIndex>=taskCount)return [];
-      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i*taskCount+taskIndex])),label:`${labelPrefix} · ${bin.header.foot_geom_task_names[taskIndex]} · ${metric}`,color:"#c2413b",dash:[],unit:"m"});
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i*taskCount+taskIndex])),label:`${labelPrefix} · ${taskNames[taskIndex]} · ${metric}`,color:"#c2413b",dash:[],unit:"m"});
+    }else if(node.kind==="gcp"){
+      const array=bin.arrays[`gcp_${node.name}_${metric}`];if(!array)return [];
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · ${node.name} ${metric} GCP`,color:node.name==="left"?"#2f5f8f":"#91abc5",dash:[],unit:"probability"});
+    }else if(node.name==="support_state"){
+      const array=bin.arrays.support_state;if(!array)return [];
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · Support state`,color:"#7c3aed",dash:[],unit:"state"});
     }else{
-      const array=bin.arrays[`gcp_${node.name}_corrected`];if(!array)return [];
-      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · ${node.name} corrected GCP`,color:node.name==="left"?"#2f5f8f":"#91abc5",dash:[],unit:"probability"});
+      const sideIndex=node.name==="left"?0:1;
+      const field=metric==="delta_z"?"foot_contact_delta_z_m":"foot_contact_correction_strength";
+      const array=bin.arrays[field];if(!array)return [];
+      traces.push({series:seriesFrom(array,(a,i)=>Number(a[i*2+sideIndex])),label:`${labelPrefix} · ${node.name} ${metric}`,color:sideIndex===0?"#2f5f8f":"#91abc5",dash:[],unit:metric==="delta_z"?"m":"1"});
     }
     return traces.filter(trace=>trace.series.length);
   }
@@ -6556,8 +6691,43 @@ input[type="checkbox"]{
 
   window.addEventListener("resize",()=>{if(resultModal?.classList.contains("open"))drawViewer()});
 
-  applyConfig(loadedConfig);
-  loadRetargetContext();
+  targetRobotSelect?.addEventListener("change",async()=>{
+    const registration = selectedRobotRegistration();
+    if(!registration.variant?.id) return;
+    const identity = {
+      manufacturer: registration.manufacturer_id,
+      model: registration.robot_id,
+      variant: registration.variant.id,
+    };
+    workingConfig = {...deepClone(workingConfig || {}),robot:identity};
+    loadedConfig = deepClone(workingConfig);
+    configCatalog = [];
+    mainConfigCatalog = [];
+    selectedSharedConfig = null;
+    selectedMainSharedConfig = null;
+    mainLoadedConfig = null;
+    mainWorkingConfig = null;
+    targetRobotSelect.disabled = true;
+    try{
+      await loadRetargetContext();
+    }catch(err){
+      alert("Target Robotを読み込めませんでした: " + err.message);
+    }finally{
+      targetRobotSelect.disabled = false;
+    }
+  });
+
+  async function initializeRetargetPage(){
+    applyConfig(loadedConfig);
+    try{
+      await loadRobotCatalog();
+      await loadRetargetContext();
+    }catch(err){
+      console.warn("Robot catalog/context not loaded:",err);
+      if(runStatus) runStatus.textContent = "API not connected";
+    }
+  }
+  initializeRetargetPage();
 })();
 </script>
 

@@ -8,6 +8,14 @@
       "robot_name": "Unitree G1",
       "manifest": "unitree/g1/manifest.json",
       "enabled": true
+    },
+    {
+      "manufacturer_id": "booster",
+      "manufacturer_name": "Booster Robotics",
+      "robot_id": "k1",
+      "robot_name": "Booster K1",
+      "manifest": "booster/k1/manifest.json",
+      "enabled": true
     }
   ]
 }

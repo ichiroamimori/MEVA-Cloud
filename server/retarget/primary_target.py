@@ -139,9 +139,15 @@ def build_primary_target(*, cfg: dict, repo_root: Path, output_path: Path) -> Pa
 
     offsets = cfg.get("foot_to_ground_offset", {})
     meva_offset = float(offsets.get("meva_m", 0.030))
-    robot_offset = float(offsets.get(
-        "robot_m",
-        cfg.get("ground_contact_estimation", {}).get("robot_foot_ground_height_m", 0.035),
+    manifest_contacts = cfg.get("robot", {}).get("foot_contacts", {})
+    robot_offset = float(manifest_contacts.get(
+        "robot_foot_to_ground_offset_m",
+        offsets.get(
+            "robot_m",
+            cfg.get("ground_contact_estimation", {}).get(
+                "robot_foot_ground_height_m", 0.035
+            ),
+        ),
     ))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(

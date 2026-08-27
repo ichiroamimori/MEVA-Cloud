@@ -1,18 +1,13 @@
 {
   "schema_version": "1.0",
-
   "manufacturer": {
     "id": "unitree",
     "name": "Unitree Robotics"
   },
-
   "robot": {
     "id": "g1",
     "name": "Unitree G1"
   },
-
-  "vendor_directory": "vendor",
-
   "variants": [
     {
       "id": "g1_29dof",
@@ -20,11 +15,85 @@
       "short_name": "29DoF",
       "dof": 29,
       "model": {
-        "format": "mujoco",
-        "file": "vendor/g1_29dof.xml"
+        "format": "mjcf",
+        "file": "g1_29dof.xml"
       },
       "source": {
-        "urdf": "vendor/g1_29dof.urdf"
+        "urdf": "g1_29dof.urdf"
+      },
+      "floating_base": true,
+      "root_body": "pelvis",
+      "initial_pose": {
+        "type": "model_default"
+      },
+      "output_joint_order": "model_hinge_order",
+      "retargeting": {
+        "target_geometry": {
+          "pelvis": {"type": "body_to_body", "distal_body": "torso_link"},
+          "torso_link": {"type": "local_vector", "vector": [0.0, 0.0, 1.0]},
+          "left_shoulder_yaw_link": {"type": "body_to_body", "distal_body": "left_elbow_link"},
+          "left_elbow_link": {"type": "body_to_body", "distal_body": "left_wrist_roll_link"},
+          "right_shoulder_yaw_link": {"type": "body_to_body", "distal_body": "right_elbow_link"},
+          "right_elbow_link": {"type": "body_to_body", "distal_body": "right_wrist_roll_link"},
+          "left_hip_yaw_link": {"type": "body_to_body", "distal_body": "left_knee_link"},
+          "left_knee_link": {"type": "body_to_body", "distal_body": "left_ankle_roll_link"},
+          "right_hip_yaw_link": {"type": "body_to_body", "distal_body": "right_knee_link"},
+          "right_knee_link": {"type": "body_to_body", "distal_body": "right_ankle_roll_link"},
+          "left_wrist_yaw_link": {"type": "local_vector", "vector": [1.0, 0.0, 0.0]},
+          "right_wrist_yaw_link": {"type": "local_vector", "vector": [1.0, 0.0, 0.0]},
+          "left_ankle_roll_link": {"type": "local_vector", "vector": [1.0, 0.0, 0.0]},
+          "right_ankle_roll_link": {"type": "local_vector", "vector": [1.0, 0.0, 0.0]}
+        },
+        "terminal_semantics": {
+          "left_wrist_yaw_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, -1.0, 0.0],
+            "secondary_name": "palm_normal"
+          },
+          "right_wrist_yaw_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, 1.0, 0.0],
+            "secondary_name": "palm_normal"
+          },
+          "left_ankle_roll_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, 0.0, 1.0],
+            "secondary_name": "sole_up_normal"
+          },
+          "right_ankle_roll_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, 0.0, 1.0],
+            "secondary_name": "sole_up_normal"
+          }
+        },
+        "foot_contacts": {
+          "robot_foot_to_ground_offset_m": 0.035,
+          "left": {
+            "body": "left_ankle_roll_link",
+            "generation_method": "sphere_centers_compatibility",
+            "support_points": [
+              {"name": "CA_ypos", "local_position": [-0.05, 0.025, -0.03]},
+              {"name": "CA_yneg", "local_position": [-0.05, -0.025, -0.03]},
+              {"name": "FF_ypos", "local_position": [0.12, 0.03, -0.03]},
+              {"name": "FF_yneg", "local_position": [0.12, -0.03, -0.03]}
+            ]
+          },
+          "right": {
+            "body": "right_ankle_roll_link",
+            "generation_method": "sphere_centers_compatibility",
+            "support_points": [
+              {"name": "CA_ypos", "local_position": [-0.05, 0.025, -0.03]},
+              {"name": "CA_yneg", "local_position": [-0.05, -0.025, -0.03]},
+              {"name": "FF_ypos", "local_position": [0.12, 0.03, -0.03]},
+              {"name": "FF_yneg", "local_position": [0.12, -0.03, -0.03]}
+            ]
+          }
+        },
+        "self_collision": {
+          "pair_generation": "mjcf_contact_metadata",
+          "honor_parent_filter": true,
+          "honor_explicit_excludes": true
+        }
       },
       "enabled": true
     },
@@ -33,28 +102,26 @@
       "name": "Unitree G1 23DoF",
       "short_name": "23DoF",
       "dof": 23,
-      "model": {
-        "format": "mujoco",
-        "file": "vendor/g1_23dof.xml"
-      },
-      "source": {
-        "urdf": "vendor/g1_23dof.urdf"
-      },
-      "enabled": true
+      "model": {"format": "mjcf", "file": "g1_23dof.xml"},
+      "source": {"urdf": "g1_23dof.urdf"},
+      "floating_base": true,
+      "root_body": "pelvis",
+      "initial_pose": {"type": "model_default"},
+      "output_joint_order": "model_hinge_order",
+      "enabled": false
     },
     {
       "id": "g1_23dof_rev_1_0",
       "name": "Unitree G1 23DoF Rev 1.0",
       "short_name": "23DoF Rev 1.0",
       "dof": 23,
-      "model": {
-        "format": "mujoco",
-        "file": "vendor/g1_23dof_rev_1_0.xml"
-      },
-      "source": {
-        "urdf": "vendor/g1_23dof_rev_1_0.urdf"
-      },
-      "enabled": true
+      "model": {"format": "mjcf", "file": "g1_23dof_rev_1_0.xml"},
+      "source": {"urdf": "g1_23dof_rev_1_0.urdf"},
+      "floating_base": true,
+      "root_body": "pelvis",
+      "initial_pose": {"type": "model_default"},
+      "output_joint_order": "model_hinge_order",
+      "enabled": false
     }
   ]
 }

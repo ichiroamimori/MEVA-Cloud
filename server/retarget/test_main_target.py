@@ -9,10 +9,8 @@ from pathlib import Path
 import numpy as np
 import mujoco
 
-from main_calibration import (
-    _free_joint_qpos_addr, _hinge_joints, _mapped_link, _qpos_from_primary_frame,
-    contact_geom_display_name, foot_contact_geom_ids,
-)
+from main_calibration import _free_joint_qpos_addr, _hinge_joints, _qpos_from_primary_frame
+from foot_support import load_foot_support_definition, support_point_world_positions
 from main_prepare import GeomZTask, prepare_main_ik_from_target
 from main_target import _target_z, build_main_target, load_main_target
 
@@ -80,19 +78,30 @@ class MainTargetTest(unittest.TestCase):
         with (primary_dir / "2608230006_primary.pkl").open("rb") as stream:
             primary = pickle.load(stream)
         model = mujoco.MjModel.from_xml_path(str(root / cfg["robot"]["mjcf"]))
+        support = load_foot_support_definition(model, cfg)
+        data = mujoco.MjData(model)
+        free_qadr = _free_joint_qpos_addr(model)
+        hinges = _hinge_joints(model)
         contact = {}
-        for side, segment, fallback in (
-            ("left", "LeftFoot", "left_ankle_roll_link"),
-            ("right", "RightFoot", "right_ankle_roll_link"),
-        ):
-            ordered = foot_contact_geom_ids(model, _mapped_link(cfg, segment, fallback))
+        positions = {"left": [], "right": []}
+        for frame_index in range(len(primary["root_pos"])):
+            data.qpos[:] = _qpos_from_primary_frame(
+                model, primary, frame_index, free_qadr, hinges
+            )
+            mujoco.mj_forward(model, data)
+            for side in ("left", "right"):
+                positions[side].append(
+                    support_point_world_positions(data, support.sides[side])
+                )
+        for side in ("left", "right"):
+            definition = support.sides[side]
             contact[side] = {
-                "labels": list(ordered),
-                "geom_ids": list(ordered.values()),
-                "display_names": [
-                    contact_geom_display_name(model, geom_id)
-                    for geom_id in ordered.values()
-                ],
+                "labels": list(definition.names),
+                "display_names": definition.display_names,
+                "body_name": definition.body_name,
+                "body_id": definition.body_id,
+                "local_positions": definition.local_positions,
+                "xyz": np.asarray(positions[side]),
             }
         main_cfg = cfg["main"]
         offsets = cfg["foot_to_ground_offset"]

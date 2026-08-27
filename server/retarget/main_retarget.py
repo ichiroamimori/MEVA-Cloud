@@ -265,8 +265,12 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         "gcp_power_number",
         main_cfg.get("gcp_multiplier", 2.0),
     ))
-    robot_foot_ground_height = float(offset_cfg.get(
-        "robot_m", ground_cfg.get("robot_foot_ground_height_m", 0.035)
+    manifest_contacts = cfg.get("robot", {}).get("foot_contacts", {})
+    robot_foot_ground_height = float(manifest_contacts.get(
+        "robot_foot_to_ground_offset_m",
+        offset_cfg.get(
+            "robot_m", ground_cfg.get("robot_foot_ground_height_m", 0.035)
+        ),
     ))
     meva_foot_ground_height = float(offset_cfg.get("meva_m", 0.030))
     if not np.isfinite(robot_foot_ground_height) or robot_foot_ground_height < 0.0:
@@ -392,32 +396,30 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
             diagnostic_keys=preparation.diagnostic_keys,
         )
     except IKSequenceFailure as failure:
-        # A failed Main does not publish a motion/result export, but a complete
-        # frame-shaped Viewer remains useful for inspecting the successful
-        # prefix and locating the fatal frame.  Failed/uncomputed poses use the
-        # same-frame Primary-derived initial pose and are explicitly masked.
+        # Stop at the fatal frame.  The partial Viewer contains the successful
+        # prefix plus one masked failure pose; no FK/collision work is performed
+        # for the uncomputed suffix.
         total = len(preparation.solver_frame_specs)
         completed = len(failure.result.qpos)
-        fallback_qpos = []
-        for index, frame_spec in enumerate(preparation.solver_frame_specs):
-            if index < completed:
-                fallback_qpos.append(failure.result.qpos[index])
-            elif frame_spec.initial_q is not None:
-                fallback_qpos.append(np.asarray(frame_spec.initial_q, dtype=float))
-            else:
-                fallback_qpos.append(preparation.initial_configuration.q.copy())
-        frame_status = np.full(total, 3, dtype=np.uint8)
+        partial_count = min(total, completed + 1)
+        fallback_qpos = list(failure.result.qpos)
+        failed_spec = preparation.solver_frame_specs[failure.output_index]
+        fallback_qpos.append(
+            np.asarray(failed_spec.initial_q, dtype=float)
+            if failed_spec.initial_q is not None
+            else preparation.initial_configuration.q.copy()
+        )
+        fallback_qpos = fallback_qpos[:partial_count]
+        frame_status = np.zeros(partial_count, dtype=np.uint8)
         frame_status[:completed] = np.asarray(
             [0 if bool(row[4]) else 1 for row in failure.result.diagnostics],
             dtype=np.uint8,
         )
-        frame_status[failure.output_index] = 2
+        frame_status[-1] = 2
         padded_diagnostics = list(failure.result.diagnostics)
-        for index in range(completed, total):
-            source_frame = int(preparation.solver_frame_specs[index].source_frame)
-            padded_diagnostics.append((source_frame, 0.0, 0.0, 0, False, 0.0))
+        padded_diagnostics.append((failure.source_frame, 0.0, 0.0, 0, False, 0.0))
         padded_values = {
-            key: list(values) + [0.0] * (total - len(values))
+            key: (list(values) + [0.0])[:partial_count]
             for key, values in failure.result.diagnostic_values_by_key.items()
         }
         partial_result = replace(
@@ -427,6 +429,14 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
             diagnostic_values_by_key=padded_values,
         )
         partial_motion = apply_main_ik_result(preparation, partial_result)
+        for key in (
+            "frame", "time_s", "source_frame_float", "source_frame_nearest",
+            "source_frame_indices",
+        ):
+            if key in partial_motion:
+                value = np.asarray(partial_motion[key])
+                if value.ndim > 0 and len(value) >= partial_count:
+                    partial_motion[key] = value[:partial_count]
         joint_names = [name for _, name, _, _, _, _, _ in hinge_info(preparation.model)]
         root_rot_order = str(
             partial_motion.get("metadata", {}).get("root_rot_order", "xyzw")
@@ -434,6 +444,25 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         canonical_partial = canonical_motion(
             partial_motion, joint_names=joint_names, root_rot_order=root_rot_order,
         )
+        main_target_timeline_fields = {
+            "frame", "time_s", "source_frame_float", "source_frame_nearest",
+            "pelvis_target_xyz", "pelvis_target_quat", "link_target_quat",
+            "left_pelvis_to_foot_direction", "right_pelvis_to_foot_direction",
+            "left_gcp_corrected", "right_gcp_corrected",
+            "left_gcp_raw", "right_gcp_raw",
+            "left_gcp_smoothed", "right_gcp_smoothed",
+            "left_min_geom_index", "right_min_geom_index",
+            "left_geom_target_z", "right_geom_target_z",
+        }
+        partial_target = {
+            key: (
+                value[:partial_count]
+                if key in main_target_timeline_fields
+                and isinstance(value, np.ndarray)
+                else value
+            )
+            for key, value in main_target.items()
+        }
         cfg["main_id"] = main_id
         cfg["primary_run_id"] = primary_run_id
         cfg["primary_motion_file"] = primary_pkl.name
@@ -469,10 +498,11 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
             repo_root=root,
             config=cfg,
             motion=canonical_partial,
-            target=main_target,
+            target=partial_target,
             result=partial_result,
             frame_status=frame_status,
             frame_errors=frame_errors,
+            main_rows=rows[:partial_count],
         )
         error_path = output_dir / f"{main_id}_error.log"
         error_path.write_text(
@@ -768,6 +798,7 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         motion=canonical_main,
         target=main_target,
         result=final_ik_result,
+        main_rows=rows,
     )
     save_gmr_pickle(pkl_path, {
         "fps": float(canonical_main["fps"]),

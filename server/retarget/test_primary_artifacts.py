@@ -379,8 +379,14 @@ class MotionArtifactTests(unittest.TestCase):
                 "foot_geom_target_z_m", "foot_geom_result_z_m",
                 "foot_geom_residual_z_m", "gcp_left_corrected",
                 "gcp_right_corrected", "pelvis_to_foot_residual_angle_rad",
+                "foot_support_point_pos", "foot_support_target_z_m",
+                "foot_support_result_z_m", "foot_support_residual_z_m",
+                "gcp_left_raw", "gcp_right_raw", "gcp_left_smoothed",
+                "gcp_right_smoothed", "gcp_left_used", "gcp_right_used",
+                "support_state", "foot_support_min_point_index",
             ):
                 self.assertIn(name, main_blocks)
+            self.assertEqual(len(main_header["foot_support_points"]), 8)
             main_payload_start = 16 + main_header_length
 
             def main_viewer_array(name: str) -> np.ndarray:
@@ -396,6 +402,12 @@ class MotionArtifactTests(unittest.TestCase):
                 main_viewer_array("foot_geom_residual_z_m"),
                 main_viewer_array("foot_geom_target_z_m")
                 - main_viewer_array("foot_geom_result_z_m"),
+                rtol=1e-6, atol=1e-7,
+            )
+            np.testing.assert_allclose(
+                main_viewer_array("foot_support_residual_z_m"),
+                main_viewer_array("foot_support_target_z_m")
+                - main_viewer_array("foot_support_result_z_m"),
                 rtol=1e-6, atol=1e-7,
             )
             main_orientation_xyz = main_viewer_array("orientation_residual_rotvec_rad")

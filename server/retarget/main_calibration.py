@@ -4,7 +4,7 @@
 This module deliberately does *not* modify the retargeted motion.
 It derives two quantities from an existing Primary result:
 
-1. Pelvis-Foot Z scale between MEVA and G1 (least-squares through origin).
+1. Pelvis-Foot Z scale between MEVA and Robot (least-squares through origin).
 2. The fixed MEVA Foot-origin-to-ground offset inherited from Primary.
 
 MEVA source columns are fixed.  No header-name search is used for Pelvis/Foot
@@ -17,7 +17,7 @@ import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 import mujoco
 import numpy as np
@@ -31,6 +31,10 @@ try:
     )
     from .primary_target import load_primary_target
     from .motion_io import load_motion
+    from .foot_support import (
+        load_foot_support_definition,
+        support_point_world_positions,
+    )
 except ImportError:
     from mapping_tasks import required_quaternion_columns
     from meva_schema import (
@@ -40,6 +44,7 @@ except ImportError:
     )
     from primary_target import load_primary_target
     from motion_io import load_motion
+    from foot_support import load_foot_support_definition, support_point_world_positions
 
 
 @dataclass(frozen=True)
@@ -285,52 +290,6 @@ def _body_id(model: mujoco.MjModel, name: str) -> int:
     return int(bid)
 
 
-def foot_contact_geom_ids(model: mujoco.MjModel, foot_body_name: str) -> dict[str, int]:
-    """Identify the four spherical sole-contact GEOMs on a G1 Foot body."""
-    body_id = _body_id(model, foot_body_name)
-    start = int(model.body_geomadr[body_id])
-    count = int(model.body_geomnum[body_id])
-    gids = [
-        gid
-        for gid in range(start, start + count)
-        if int(model.geom_type[gid]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
-    ]
-    if len(gids) != 4:
-        raise ValueError(
-            f"Expected 4 spherical contact GEOMs directly on {foot_body_name}; "
-            f"found {len(gids)}"
-        )
-
-    # Smaller local X = CA (heel), larger local X = FF (forefoot).
-    by_x = sorted(gids, key=lambda gid: float(model.geom_pos[gid, 0]))
-    ca_pair = by_x[:2]
-    ff_pair = by_x[2:]
-
-    def pair_labels(pair: Iterable[int], prefix: str) -> dict[str, int]:
-        pair = list(pair)
-        ypos = max(pair, key=lambda gid: float(model.geom_pos[gid, 1]))
-        yneg = min(pair, key=lambda gid: float(model.geom_pos[gid, 1]))
-        return {f"{prefix}_ypos": int(ypos), f"{prefix}_yneg": int(yneg)}
-
-    out: dict[str, int] = {}
-    out.update(pair_labels(ca_pair, "CA"))
-    out.update(pair_labels(ff_pair, "FF"))
-    return out
-
-
-def contact_geom_display_name(model: mujoco.MjModel, geom_id: int) -> str:
-    """Use the XML name, or an XML-attribute representation for unnamed GEOMs."""
-    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, int(geom_id))
-    if name:
-        return str(name)
-    pos = " ".join(f"{float(value):g}" for value in model.geom_pos[geom_id])
-    if int(model.geom_type[geom_id]) == int(mujoco.mjtGeom.mjGEOM_SPHERE):
-        size = f"{float(model.geom_size[geom_id, 0]):g}"
-    else:
-        size = " ".join(f"{float(value):g}" for value in model.geom_size[geom_id])
-    return f'geom pos="{pos}" size="{size}"'
-
-
 def _fit_scale_through_origin(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
@@ -421,13 +380,14 @@ def analyze_main_calibration(
     hinges = _hinge_joints(model)
 
     pelvis_link = _mapped_link(config, "Pelvis", "pelvis")
-    left_foot_link = _mapped_link(config, "LeftFoot", "left_ankle_roll_link")
-    right_foot_link = _mapped_link(config, "RightFoot", "right_ankle_roll_link")
+    support = load_foot_support_definition(model, config or {})
+    left_support = support.sides["left"]
+    right_support = support.sides["right"]
+    left_foot_link = left_support.body_name
+    right_foot_link = right_support.body_name
     pelvis_bid = _body_id(model, pelvis_link)
     left_bid = _body_id(model, left_foot_link)
     right_bid = _body_id(model, right_foot_link)
-    left_geoms = foot_contact_geom_ids(model, left_foot_link)
-    right_geoms = foot_contact_geom_ids(model, right_foot_link)
 
     fps = float(motion.get("fps", 100.0))
     rows: list[dict] = []
@@ -439,10 +399,8 @@ def analyze_main_calibration(
     right_selected_gcp: list[float] = []
     left_contact_xyz: list[np.ndarray] = []
     right_contact_xyz: list[np.ndarray] = []
-    # MuJoCo GEOM ids retain MJCF declaration order; keep that order for the
-    # UI/config arrays and the pre-IK target arrays.
-    left_geom_items = sorted(left_geoms.items(), key=lambda item: item[1])
-    right_geom_items = sorted(right_geoms.items(), key=lambda item: item[1])
+    left_labels = list(left_support.names)
+    right_labels = list(right_support.names)
 
     for i, (source_frame, meva_row) in enumerate(zip(source_frames, meva_rows)):
         if target is None:
@@ -467,12 +425,10 @@ def analyze_main_calibration(
         )
         mujoco.mj_forward(model, data)
 
-        left_contact_xyz.append(np.asarray([
-            data.geom_xpos[gid].copy() for _, gid in left_geom_items
-        ], dtype=np.float64))
-        right_contact_xyz.append(np.asarray([
-            data.geom_xpos[gid].copy() for _, gid in right_geom_items
-        ], dtype=np.float64))
+        left_points = support_point_world_positions(data, left_support)
+        right_points = support_point_world_positions(data, right_support)
+        left_contact_xyz.append(left_points.copy())
+        right_contact_xyz.append(right_points.copy())
 
         g1_pelvis = np.asarray(data.xpos[pelvis_bid], dtype=np.float64).copy()
         g1_left = np.asarray(data.xpos[left_bid], dtype=np.float64).copy()
@@ -490,19 +446,24 @@ def analyze_main_calibration(
         g1_left_rel.append(gl)
         g1_right_rel.append(gr)
 
-        def shifted_geom_z(
-            geom_map: dict[str, int],
+        def shifted_support_z(
+            labels: list[str],
+            positions: np.ndarray,
             meva_foot_z: float,
-            g1_foot_z: float,
+            robot_foot_z: float,
         ) -> dict[str, float]:
-            shift = float(meva_foot_z - g1_foot_z)
+            shift = float(meva_foot_z - robot_foot_z)
             return {
-                label: float(data.geom_xpos[gid, 2]) + shift
-                for label, gid in geom_map.items()
+                label: float(positions[index, 2]) + shift
+                for index, label in enumerate(labels)
             }
 
-        left_geom_z = shifted_geom_z(left_geoms, float(meva_left[2]), g1_left_z)
-        right_geom_z = shifted_geom_z(right_geoms, float(meva_right[2]), g1_right_z)
+        left_geom_z = shifted_support_z(
+            left_labels, left_points, float(meva_left[2]), g1_left_z
+        )
+        right_geom_z = shifted_support_z(
+            right_labels, right_points, float(meva_right[2]), g1_right_z
+        )
         left_min_label = min(left_geom_z, key=left_geom_z.get)
         right_min_label = min(right_geom_z, key=right_geom_z.get)
         left_contact = "CA" if left_min_label.startswith("CA_") else "FF"
@@ -643,19 +604,23 @@ def analyze_main_calibration(
         "_meva_fields": meva_fields,
         "_meva_rows": meva_rows,
         "left": {
-            "labels": [label for label, _ in left_geom_items],
-            "display_names": [
-                contact_geom_display_name(model, gid) for _, gid in left_geom_items
-            ],
-            "geom_ids": [int(gid) for _, gid in left_geom_items],
+            "labels": left_labels,
+            "display_names": left_support.display_names,
+            "body_name": left_support.body_name,
+            "body_id": left_support.body_id,
+            "local_positions": left_support.local_positions.copy(),
+            "generation_method": left_support.generation_method,
+            "source_geom": left_support.source_geom,
             "xyz": np.asarray(left_contact_xyz, dtype=np.float64),
         },
         "right": {
-            "labels": [label for label, _ in right_geom_items],
-            "display_names": [
-                contact_geom_display_name(model, gid) for _, gid in right_geom_items
-            ],
-            "geom_ids": [int(gid) for _, gid in right_geom_items],
+            "labels": right_labels,
+            "display_names": right_support.display_names,
+            "body_name": right_support.body_name,
+            "body_id": right_support.body_id,
+            "local_positions": right_support.local_positions.copy(),
+            "generation_method": right_support.generation_method,
+            "source_geom": right_support.source_geom,
             "xyz": np.asarray(right_contact_xyz, dtype=np.float64),
         },
     }

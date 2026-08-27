@@ -37,14 +37,19 @@ from main_calibration import (
     _mapped_link,
     _qpos_from_primary_frame,
     analyze_main_calibration,
-    contact_geom_display_name,
-    foot_contact_geom_ids,
     preprocess_gcp,
 )
 from check_offsets import compute_offsets
 from support_state import SupportState
 from main_target import load_main_target
 from motion_io import load_motion
+from foot_support import (
+    FootSupportSide,
+    load_foot_support_definition,
+    support_point_jacobian,
+    support_point_world_position,
+    support_point_world_positions,
+)
 
 
 @dataclass
@@ -145,79 +150,84 @@ def load_main_input_csv(path: Path, preparation: MainPreparation) -> list[Suppor
     return states
 
 
-class GeomPositionTask(mink.Task):
-    """World-XYZ position task for a MuJoCo GEOM selected by numeric id.
-
-    The G1 sole contact spheres have no MJCF ``name`` attribute, so Mink's
-    name-based FrameTask cannot address them.  Numeric ids remain the MJCF
-    declaration order used by calibration and the UI.
-    """
+class FootSupportPointPositionTask(mink.Task):
+    """World-XYZ task for a manifest-defined point fixed to a Foot body."""
 
     k = 3
 
-    def __init__(self, model, geom_id: int, cost, gain=1.0, lm_damping=0.0):
+    def __init__(self, model, support: FootSupportSide, point_index: int,
+                 cost, gain=1.0, lm_damping=0.0):
         cost = np.asarray(cost, dtype=float)
         if cost.shape != (3,) or not np.all(np.isfinite(cost)) or np.any(cost < 0.0):
-            raise ValueError("GeomPositionTask cost must be three non-negative values")
+            raise ValueError("Foot support task cost must be three non-negative values")
         super().__init__(cost=cost, gain=gain, lm_damping=lm_damping)
         self.model = model
-        self.geom_id = int(geom_id)
+        self.support = support
+        self.point_index = int(point_index)
         self.target_xyz: np.ndarray | None = None
 
     def set_target(self, target_xyz) -> None:
         target = np.asarray(target_xyz, dtype=float)
         if target.shape != (3,) or not np.all(np.isfinite(target)):
-            raise ValueError("GeomPositionTask target must be a finite XYZ vector")
+            raise ValueError("Foot support target must be a finite XYZ vector")
         self.target_xyz = target.copy()
 
     def compute_error(self, configuration) -> np.ndarray:
         if self.target_xyz is None:
-            raise RuntimeError("GeomPositionTask target is not set")
-        return configuration.data.geom_xpos[self.geom_id] - self.target_xyz
+            raise RuntimeError("Foot support target is not set")
+        return (
+            support_point_world_position(
+                configuration.data, self.support, self.point_index
+            )
+            - self.target_xyz
+        )
 
     def compute_jacobian(self, configuration) -> np.ndarray:
-        jac_pos = np.empty((3, self.model.nv), dtype=float)
-        jac_rot = np.empty((3, self.model.nv), dtype=float)
-        mujoco.mj_jacGeom(
-            self.model, configuration.data, jac_pos, jac_rot, self.geom_id
+        return support_point_jacobian(
+            self.model, configuration.data, self.support, self.point_index
         )
-        return jac_pos
 
 
-class GeomZTask(mink.Task):
+class FootSupportPointZTask(mink.Task):
     """One-axis world-Z task; X/Y are deliberately absent from the objective."""
 
     k = 1
 
-    def __init__(self, model, geom_id: int, cost: float, gain=1.0, lm_damping=0.0):
+    def __init__(self, model, support: FootSupportSide, point_index: int,
+                 cost: float, gain=1.0, lm_damping=0.0):
         value = float(cost)
         if not np.isfinite(value) or value < 0.0:
-            raise ValueError("GeomZTask cost must be finite and non-negative")
+            raise ValueError("Foot support Z task cost must be finite and non-negative")
         super().__init__(cost=np.asarray([value]), gain=gain, lm_damping=lm_damping)
         self.model = model
-        self.geom_id = int(geom_id)
+        self.support = support
+        self.point_index = int(point_index)
         self.target_z: float | None = None
 
     def set_target(self, target_z: float) -> None:
         value = float(target_z)
         if not np.isfinite(value):
-            raise ValueError("GeomZTask target must be finite")
+            raise ValueError("Foot support Z target must be finite")
         self.target_z = value
 
     def compute_error(self, configuration) -> np.ndarray:
         if self.target_z is None:
-            raise RuntimeError("GeomZTask target is not set")
+            raise RuntimeError("Foot support Z target is not set")
         return np.asarray([
-            float(configuration.data.geom_xpos[self.geom_id, 2]) - self.target_z
+            float(support_point_world_position(
+                configuration.data, self.support, self.point_index
+            )[2]) - self.target_z
         ])
 
     def compute_jacobian(self, configuration) -> np.ndarray:
-        jac_pos = np.empty((3, self.model.nv), dtype=float)
-        jac_rot = np.empty((3, self.model.nv), dtype=float)
-        mujoco.mj_jacGeom(
-            self.model, configuration.data, jac_pos, jac_rot, self.geom_id
-        )
-        return jac_pos[2:3]
+        return support_point_jacobian(
+            self.model, configuration.data, self.support, self.point_index
+        )[2:3]
+
+
+# Import compatibility for existing callers/tests; new code uses Support Point names.
+GeomPositionTask = FootSupportPointPositionTask
+GeomZTask = FootSupportPointZTask
 
 
 def load_pickle(path: Path) -> dict:
@@ -640,11 +650,15 @@ def prepare_main(
         q_initial[free_qadr + 2] += shifts[i]
         initial_qpos[i] = q_initial
 
-    sole_tasks: dict[str, list[GeomPositionTask]] = {"left": [], "right": []}
+    support_definition = load_foot_support_definition(model, cfg)
+    sole_tasks: dict[str, list[FootSupportPointPositionTask]] = {
+        "left": [], "right": []
+    }
     for side in ("left", "right"):
-        for geom_id, weight in zip(contact_geometry[side]["geom_ids"], weights[side]):
-            sole_tasks[side].append(GeomPositionTask(
-                model, geom_id, cost=weight, gain=1.0, lm_damping=lm_damping
+        for point_index, weight in enumerate(weights[side]):
+            sole_tasks[side].append(FootSupportPointPositionTask(
+                model, support_definition.sides[side], point_index,
+                cost=weight, gain=1.0, lm_damping=lm_damping
             ))
 
     frame_specs: list[IKFrameSpec] = []
@@ -700,7 +714,9 @@ def prepare_main(
                     def measure(current, side=side, geom_index=geom_index,
                                 task=task, active_axes=active_axes):
                         error = (
-                            current.data.geom_xpos[task.geom_id]
+                            support_point_world_position(
+                                current.data, task.support, task.point_index
+                            )
                             - sole_targets[side][frame_index, geom_index]
                         )
                         return float(np.max(np.abs(error[active_axes]))) if np.any(active_axes) else 0.0
@@ -710,7 +726,7 @@ def prepare_main(
                         metadata={
                             "source_frame": source_frame,
                             "target": f"{side}_sole_{geom_index + 1}",
-                            "geom": contact_geometry[side]["display_names"][geom_index],
+                            "support_point": contact_geometry[side]["display_names"][geom_index],
                         },
                         measure=measure,
                     ))
@@ -817,41 +833,37 @@ def prepare_main_ik_from_target(
     if pelvis_link not in mapping_tasks or modes[link_names.index(pelvis_link)] != "full":
         raise ValueError("Main Pelvis Mapping must be a full orientation task")
 
+    support_definition = load_foot_support_definition(model, cfg)
     spatial_cfg = dict(cfg.get("spatial_constraints", {}).get(
         "pelvis_foot_direction", {}
     ))
     spatial_tasks: dict[str, RelativeDirectionTask] = {}
     if bool(spatial_cfg.get("enabled", False)):
-        for side, source, fallback in (
-            ("left", "LeftFoot", "left_ankle_roll_link"),
-            ("right", "RightFoot", "right_ankle_roll_link"),
-        ):
+        for side in ("left", "right"):
             cost = float(spatial_cfg.get(f"{side}_cost", 0.0))
             if cost > 0.0:
                 spatial_tasks[side] = RelativeDirectionTask(
                     pelvis_link,
-                    _mapped_link(cfg, source, fallback),
+                    support_definition.sides[side].body_name,
                     cost=cost,
                     gain=1.0,
                     lm_damping=lm_damping,
                 )
 
-    geom_ids: dict[str, list[int]] = {}
-    geom_tasks: dict[str, list[GeomZTask]] = {"left": [], "right": []}
-    for side, segment, fallback in (
-        ("left", "LeftFoot", "left_ankle_roll_link"),
-        ("right", "RightFoot", "right_ankle_roll_link"),
-    ):
-        foot_link = _mapped_link(cfg, segment, fallback)
-        ordered = foot_contact_geom_ids(model, foot_link)
-        geom_ids[side] = list(ordered.values())
-        actual_names = [contact_geom_display_name(model, geom_id) for geom_id in geom_ids[side]]
+    support_tasks: dict[str, list[FootSupportPointZTask]] = {
+        "left": [], "right": []
+    }
+    for side in ("left", "right"):
+        actual_names = support_definition.sides[side].display_names
         saved_names = [str(value) for value in target[f"{side}_geom_names"]]
         if actual_names != saved_names:
-            raise ValueError(f"{side} Main target GEOM order does not match Robot XML")
-        for geom_id, weight in zip(geom_ids[side], weights[side]):
-            geom_tasks[side].append(GeomZTask(
-                model, geom_id, cost=float(weight[2]), gain=1.0,
+            raise ValueError(
+                f"{side} Main target Support Point order does not match Robot manifest"
+            )
+        for point_index, weight in enumerate(weights[side]):
+            support_tasks[side].append(FootSupportPointZTask(
+                model, support_definition.sides[side], point_index,
+                cost=float(weight[2]), gain=1.0,
                 lm_damping=lm_damping,
             ))
 
@@ -937,7 +949,7 @@ def prepare_main_ik_from_target(
                 ))),
             )] + diagnostics
             for side in ("left", "right"):
-                for geom_index, task in enumerate(geom_tasks[side]):
+                for geom_index, task in enumerate(support_tasks[side]):
                     task.set_target(float(target[f"{side}_geom_target_z"][frame_index, geom_index]))
                     tasks.append(task)
                     diagnostics.append(IKDiagnosticTarget(
@@ -945,11 +957,13 @@ def prepare_main_ik_from_target(
                         metadata={
                             "source_frame": source_frame,
                             "target": "main_target_npz_z_only",
-                            "geom": str(target[f"{side}_geom_names"][geom_index]),
+                            "support_point": str(target[f"{side}_geom_names"][geom_index]),
                         },
                         measure=lambda current, side=side, geom_index=geom_index, task=task,
                             frame_index=frame_index: abs(float(
-                                current.data.geom_xpos[task.geom_id, 2]
+                                support_point_world_position(
+                                    current.data, task.support, task.point_index
+                                )[2]
                                 - target[f"{side}_geom_target_z"][frame_index, geom_index]
                             )),
                     ))
@@ -1008,10 +1022,15 @@ def apply_main_ik_result(
             pelvis_actual_z - float(preparation.pelvis_targets_z[frame_index])
         )
         for side, title in (("left", "Left"), ("right", "Right")):
-            actual_z = np.asarray([
-                data.geom_xpos[geom_id, 2]
-                for geom_id in preparation.contact_geometry[side]["geom_ids"]
-            ], dtype=float)
+            geometry = preparation.contact_geometry[side]
+            rotation = np.asarray(
+                data.xmat[int(geometry["body_id"])], dtype=float
+            ).reshape(3, 3)
+            origin = np.asarray(data.xpos[int(geometry["body_id"])], dtype=float)
+            positions = origin[None, :] + np.asarray(
+                geometry["local_positions"], dtype=float
+            ) @ rotation.T
+            actual_z = positions[:, 2]
             target_z = preparation.sole_targets_xyz[side][frame_index, :, 2]
             for geom_index in range(4):
                 row[f"{title}_contact_GEOM_{geom_index + 1}_z_after_IK"] = float(

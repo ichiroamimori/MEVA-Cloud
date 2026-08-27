@@ -89,16 +89,21 @@ def apply_global_contact_anchoring(
     _, free_qadr, free_body_id = _free_joint(model)
     hinge_qadrs = _hinge_qpos_addresses(model)
     sides = (("left", "Left"), ("right", "Right"))
-    geom_ids = {
-        side: [int(value) for value in contact_geometry[side]["geom_ids"]]
-        for side, _ in sides
-    }
-    geom_names = {
+    support_names = {
         side: [str(value) for value in contact_geometry[side]["display_names"]]
         for side, _ in sides
     }
-    if any(len(geom_ids[side]) != 4 for side, _ in sides):
-        raise ValueError("Each Foot Contact Anchoring input requires four GEOMs")
+    if any(len(support_names[side]) != 4 for side, _ in sides):
+        raise ValueError("Each Foot Contact Anchoring input requires four Support Points")
+
+    def support_xyz(side: str, data: mujoco.MjData) -> np.ndarray:
+        geometry = contact_geometry[side]
+        body_id = int(geometry["body_id"])
+        rotation = np.asarray(data.xmat[body_id], dtype=np.float64).reshape(3, 3)
+        return (
+            np.asarray(data.xpos[body_id], dtype=np.float64)[None, :]
+            + np.asarray(geometry["local_positions"], dtype=np.float64) @ rotation.T
+        )
 
     post_qpos = raw_qpos.copy()
     active_side: str | None = None
@@ -119,7 +124,7 @@ def apply_global_contact_anchoring(
         mujoco.mj_forward(model, data)
         raw_pelvis_z = float(data.xpos[free_body_id, 2])
         raw_xyz = {
-            side: np.asarray([data.geom_xpos[geom_id].copy() for geom_id in geom_ids[side]])
+            side: support_xyz(side, data)
             for side, _ in sides
         }
         minimum_index = {
@@ -133,7 +138,6 @@ def apply_global_contact_anchoring(
                 min_index = minimum_index[active_side]
                 anchor.active = True
                 anchor.geom_index = min_index
-                anchor.geom_id = geom_ids[active_side][min_index]
                 anchor.anchor_world_xy = (
                     raw_xyz[active_side][min_index, :2] + global_translation
                 ).copy()
@@ -157,7 +161,7 @@ def apply_global_contact_anchoring(
         mujoco.mj_forward(model, data)
         post_pelvis_z = float(data.xpos[free_body_id, 2])
         post_xyz = {
-            side: np.asarray([data.geom_xpos[geom_id].copy() for geom_id in geom_ids[side]])
+            side: support_xyz(side, data)
             for side, _ in sides
         }
         max_pelvis_z_diff = max(max_pelvis_z_diff, abs(post_pelvis_z - raw_pelvis_z))
@@ -187,10 +191,10 @@ def apply_global_contact_anchoring(
             diag.update({
                 f"{title}_contact_active": side_active,
                 f"{title}_corrected_GCP": float(row[f"{title}_corrected_GCP"]),
-                f"{title}_minimum_GEOM_name": geom_names[side][min_index],
+                f"{title}_minimum_GEOM_name": support_names[side][min_index],
                 f"{title}_minimum_GEOM_z": float(raw_xyz[side][min_index, 2]),
                 f"{title}_anchor_GEOM_name": (
-                    geom_names[side][anchor.geom_index]
+                    support_names[side][anchor.geom_index]
                     if side_active and anchor.geom_index is not None else ""
                 ),
                 f"{title}_anchor_world_x": _blank_or_float(

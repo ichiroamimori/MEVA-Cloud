@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "manufacturer": {
+    "id": "booster",
+    "name": "Booster Robotics"
+  },
+  "robot": {
+    "id": "k1",
+    "name": "Booster K1"
+  },
+  "variants": [
+    {
+      "id": "k1_22dof",
+      "name": "Booster K1 22DoF",
+      "short_name": "K1 22DoF",
+      "dof": 22,
+      "model": {
+        "format": "mjcf",
+        "file": "K1_22dof.xml"
+      },
+      "source": {
+        "urdf": "K1_22dof.urdf"
+      },
+      "floating_base": true,
+      "root_body": "Trunk",
+      "initial_pose": {
+        "type": "model_default"
+      },
+      "output_joint_order": "model_hinge_order",
+      "retargeting": {
+        "foot_contacts": {
+          "robot_foot_to_ground_offset_m": 0.038,
+          "left": {
+            "body": "left_foot_link",
+            "generation_method": "box_bottom_corners",
+            "source_geom": "left_foot_link/box",
+            "support_points": [
+              {"name": "CA_ypos", "local_position": [-0.064, 0.035, -0.038]},
+              {"name": "CA_yneg", "local_position": [-0.064, -0.035, -0.038]},
+              {"name": "FF_ypos", "local_position": [0.116, 0.035, -0.038]},
+              {"name": "FF_yneg", "local_position": [0.116, -0.035, -0.038]}
+            ]
+          },
+          "right": {
+            "body": "right_foot_link",
+            "generation_method": "box_bottom_corners",
+            "source_geom": "right_foot_link/box",
+            "support_points": [
+              {"name": "CA_ypos", "local_position": [-0.064, 0.035, -0.038]},
+              {"name": "CA_yneg", "local_position": [-0.064, -0.035, -0.038]},
+              {"name": "FF_ypos", "local_position": [0.116, 0.035, -0.038]},
+              {"name": "FF_yneg", "local_position": [0.116, -0.035, -0.038]}
+            ]
+          }
+        },
+        "self_collision": {
+          "pair_generation": "mjcf_contact_metadata",
+          "honor_parent_filter": true,
+          "honor_explicit_excludes": true
+        }
+      },
+      "enabled": true
+    }
+  ]
+}

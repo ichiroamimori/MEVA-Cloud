@@ -12,10 +12,10 @@ import mujoco
 import numpy as np
 
 try:
-    from .main_calibration import foot_contact_geom_ids
+    from .foot_support import load_foot_support_definition, support_point_world_positions
     from .motion_io import load_motion
 except ImportError:
-    from main_calibration import foot_contact_geom_ids
+    from foot_support import load_foot_support_definition, support_point_world_positions
     from motion_io import load_motion
 
 LEGACY_MAGIC = b"MEVAVW01"
@@ -256,22 +256,10 @@ def build_retarget_viewer_bytes(
     link_pos = np.empty((n, len(body_ids), 3), dtype=np.float32)
     link_quat = np.empty((n, len(body_ids), 4), dtype=np.float32)
 
-    mapped_links = {
-        str(item.get("source_segment")): str(item.get("target_link"))
-        for item in cfg.get("mappings", [])
-        if item.get("source_segment") and item.get("target_link")
-    }
-    sole_geom_ids: dict[str, list[int]] = {}
+    support_definition = load_foot_support_definition(model, cfg)
     geom_names: list[str] = []
-    for side, source_segment, fallback in (
-        ("left", "LeftFoot", "left_ankle_roll_link"),
-        ("right", "RightFoot", "right_ankle_roll_link"),
-    ):
-        ids = list(foot_contact_geom_ids(
-            model, mapped_links.get(source_segment, fallback)
-        ).values())
-        sole_geom_ids[side] = ids
-        geom_names.extend([f"{side}_sole_{index}" for index in range(1, 5)])
+    for side in ("left", "right"):
+        geom_names.extend(support_definition.sides[side].display_names)
         geom_names.append(f"{side}_sole_min")
     geom_pos = np.empty((n, len(geom_names), 3), dtype=np.float32)
 
@@ -315,8 +303,10 @@ def build_retarget_viewer_bytes(
         link_quat[i] = data.xquat[body_ids]
         geom_index = 0
         for side in ("left", "right"):
-            ids = sole_geom_ids[side]
-            positions = np.asarray(data.geom_xpos[ids], dtype=np.float32)
+            positions = np.asarray(
+                support_point_world_positions(data, support_definition.sides[side]),
+                dtype=np.float32,
+            )
             geom_pos[i, geom_index:geom_index + 4] = positions
             geom_pos[i, geom_index + 4] = positions[int(np.argmin(positions[:, 2]))]
             geom_index += 5

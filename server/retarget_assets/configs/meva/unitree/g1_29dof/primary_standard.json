@@ -3,9 +3,7 @@
   "robot": {
     "manufacturer": "unitree",
     "model": "g1",
-    "variant": "g1_29dof",
-    "mjcf": "server/robots/unitree/g1/g1_29dof.xml",
-    "initial_keyframe": "home"
+    "variant": "g1_29dof"
   },
   "root": {
     "position_mode": "keep_robot_initial",

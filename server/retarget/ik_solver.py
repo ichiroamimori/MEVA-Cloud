@@ -871,6 +871,14 @@ def solve_ik_sequence(
                     message, result=current_result(), output_index=output_index,
                     source_frame=source_frame,
                 ) from exc
+            except Exception as exc:
+                raise IKSequenceFailure(
+                    "IK solver failed at "
+                    f"output frame {output_index}, source frame {source_frame}, "
+                    f"iteration {iteration_index}: {type(exc).__name__}: {exc}",
+                    result=current_result(), output_index=output_index,
+                    source_frame=source_frame,
+                ) from exc
             if collision_damping_task is not None:
                 collision_step_scale = _integrate_with_collision_backtracking(
                     conf,

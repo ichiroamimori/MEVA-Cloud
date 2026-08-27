@@ -17,8 +17,10 @@ import numpy as np
 
 try:
     from .robot_model_info import collision_pair_descriptors, joint_descriptors
+    from .foot_support import load_foot_support_definition, support_point_world_positions
 except ImportError:
     from robot_model_info import collision_pair_descriptors, joint_descriptors
+    from foot_support import load_foot_support_definition, support_point_world_positions
 
 
 FORMAT_VERSION = 1
@@ -118,15 +120,19 @@ def write_stage_validation_artifacts(*, output_dir: Path, file_id: str, stage: s
         "geom_a_id": pair["geom_a_id"], "geom_b_id": pair["geom_b_id"],
     } for column, pair in zip(pair_columns, pairs)]
 
-    mapped = {str(item.get("source_segment")): str(item.get("target_link")) for item in config.get("mappings", [])}
+    support_definition = load_foot_support_definition(model, config)
     foot_entries = []
-    for side, segment in (("left", "LeftFoot"), ("right", "RightFoot")):
-        body_name = mapped.get(segment)
-        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name) if body_name else -1
-        geom_ids = [gid for gid in range(model.ngeom) if int(model.geom_bodyid[gid]) == body_id and (int(model.geom_contype[gid]) or int(model.geom_conaffinity[gid]))][:4]
-        for index, geom_id in enumerate(geom_ids, 1):
-            foot_entries.append({"column": f"{side}_geom_{index}", "side": side, "geom_id": geom_id, "label": f"{side.title()} Foot GEOM {index} Z"})
-        foot_entries.append({"column": f"{side}_minimum", "side": side, "geom_id": None, "label": f"{side.title()} Foot GEOM MIN Z", "source_geom_ids": geom_ids})
+    for side in ("left", "right"):
+        for index, name in enumerate(support_definition.sides[side].names):
+            foot_entries.append({
+                "column": f"{side}_support_{index + 1}", "side": side,
+                "point_index": index,
+                "label": f"{side.title()} Foot Support Point {name} Z",
+            })
+        foot_entries.append({
+            "column": f"{side}_minimum", "side": side, "point_index": None,
+            "label": f"{side.title()} Foot Support Point MIN Z",
+        })
     foot_columns = [entry["column"] for entry in foot_entries]
     foot_z = np.empty((frame_count, len(foot_entries)), dtype=float)
 
@@ -144,12 +150,16 @@ def write_stage_validation_artifacts(*, output_dir: Path, file_id: str, stage: s
             distance = float(mujoco.mj_geomDistance(model, data, int(pair["geom_a_id"]), int(pair["geom_b_id"]), 1e6, np.empty(6, dtype=float)))
             pair_distance[frame_index, pair_index] = distance
             pair_severity[frame_index, pair_index] = self_collision_severity(distance, collision_zone)
+        positions_by_side = {
+            side: support_point_world_positions(data, support_definition.sides[side])
+            for side in ("left", "right")
+        }
         for entry_index, entry in enumerate(foot_entries):
-            if entry["geom_id"] is not None:
-                value = float(data.geom_xpos[int(entry["geom_id"]), 2])
+            positions = positions_by_side[entry["side"]]
+            if entry["point_index"] is not None:
+                value = float(positions[int(entry["point_index"]), 2])
             else:
-                source_ids = entry["source_geom_ids"]
-                value = min(float(data.geom_xpos[int(gid), 2]) for gid in source_ids) if source_ids else np.nan
+                value = float(np.min(positions[:, 2]))
             foot_z[frame_index, entry_index] = value
 
     prefix = f"{file_id}_{stage}_validation"
