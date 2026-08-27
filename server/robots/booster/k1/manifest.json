@@ -27,6 +27,43 @@
         "type": "model_default"
       },
       "output_joint_order": "model_hinge_order",
+      "ui": {
+        "groups": [
+          {
+            "id": "trunk_head",
+            "name": "TRUNK / HEAD",
+            "bodies": ["Trunk", "Head_1", "Head_2"]
+          },
+          {
+            "id": "left_arm",
+            "name": "LEFT ARM",
+            "root_body": "Left_Arm_1"
+          },
+          {
+            "id": "right_arm",
+            "name": "RIGHT ARM",
+            "root_body": "Right_Arm_1",
+            "collapsed": true
+          },
+          {
+            "id": "left_leg",
+            "name": "LEFT LEG",
+            "root_body": "Left_Hip_Pitch"
+          },
+          {
+            "id": "right_leg",
+            "name": "RIGHT LEG",
+            "root_body": "Right_Hip_Pitch",
+            "collapsed": true
+          }
+        ],
+        "symmetry": {
+          "group_pairs": [
+            ["left_arm", "right_arm"],
+            ["left_leg", "right_leg"]
+          ]
+        }
+      },
       "retargeting": {
         "foot_contacts": {
           "robot_foot_to_ground_offset_m": 0.038,

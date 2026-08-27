@@ -24,6 +24,12 @@ def joint_descriptors(model: mujoco.MjModel) -> list[dict[str, Any]]:
             int(mujoco.mjtJoint.mjJNT_SLIDE): 1,
             int(mujoco.mjtJoint.mjJNT_HINGE): 1,
         }.get(jtype, 0)
+        type_name = {
+            int(mujoco.mjtJoint.mjJNT_FREE): "free",
+            int(mujoco.mjtJoint.mjJNT_BALL): "ball",
+            int(mujoco.mjtJoint.mjJNT_SLIDE): "slide",
+            int(mujoco.mjtJoint.mjJNT_HINGE): "revolute",
+        }.get(jtype, "unknown")
         rows.append({
             "id": jid,
             "name": name,
@@ -32,6 +38,9 @@ def joint_descriptors(model: mujoco.MjModel) -> list[dict[str, Any]]:
                 f"body_{int(model.jnt_bodyid[jid])}",
             ),
             "dof_count": dof_count,
+            "type_name": type_name,
+            "axis": [float(x) for x in model.jnt_axis[jid]],
+            "controllable": type_name != "free" and dof_count > 0,
             "qpos_address": int(model.jnt_qposadr[jid]),
             "dof_address": int(model.jnt_dofadr[jid]),
             "limited": bool(model.jnt_limited[jid]),
@@ -39,6 +48,178 @@ def joint_descriptors(model: mujoco.MjModel) -> list[dict[str, Any]]:
             "type": jtype,
         })
     return rows
+
+
+def body_descriptors(
+    model: mujoco.MjModel, joints: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    joints_by_body: dict[int, list[int]] = {}
+    for joint in joints:
+        joints_by_body.setdefault(int(model.jnt_bodyid[int(joint["id"])]), []).append(
+            int(joint["id"])
+        )
+    depths = [0] * model.nbody
+    for body_id in range(1, model.nbody):
+        parent_id = int(model.body_parentid[body_id])
+        depths[body_id] = depths[parent_id] + 1
+    rows: list[dict[str, Any]] = []
+    for body_id in range(1, model.nbody):
+        parent_id = int(model.body_parentid[body_id])
+        rows.append({
+            "id": body_id,
+            "name": object_name(
+                model, mujoco.mjtObj.mjOBJ_BODY, body_id, f"body_{body_id}"
+            ),
+            "parent_id": parent_id,
+            "parent_name": (
+                object_name(
+                    model, mujoco.mjtObj.mjOBJ_BODY, parent_id, f"body_{parent_id}"
+                ) if parent_id else "world"
+            ),
+            "depth": depths[body_id] - 1,
+            "joint_ids": joints_by_body.get(body_id, []),
+        })
+    return rows
+
+
+def _pair_map(
+    raw_pairs: Any, available: set[str], *, label: str
+) -> dict[str, str]:
+    result: dict[str, str] = {}
+    if raw_pairs is None:
+        return result
+    if not isinstance(raw_pairs, list):
+        raise ValueError(f"Robot UI {label} must be an array")
+    for raw in raw_pairs:
+        if not isinstance(raw, list) or len(raw) != 2:
+            raise ValueError(f"Robot UI {label} entries must contain two names")
+        left, right = (str(raw[0]), str(raw[1]))
+        if left not in available or right not in available:
+            raise ValueError(
+                f"Robot UI {label} references an unknown name: {left}, {right}"
+            )
+        if left == right or left in result or right in result:
+            raise ValueError(f"Robot UI {label} contains a duplicate pair")
+        result[left] = right
+        result[right] = left
+    return result
+
+
+def ui_metadata(
+    model: mujoco.MjModel,
+    bodies: list[dict[str, Any]],
+    joints: list[dict[str, Any]],
+    raw_ui: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Validate optional manifest presentation metadata against the Runtime Model."""
+    raw_ui = raw_ui or {}
+    if not isinstance(raw_ui, dict):
+        raise ValueError("Robot UI metadata must be an object")
+    body_by_name = {str(body["name"]): body for body in bodies}
+    children: dict[str, list[str]] = {}
+    for body in bodies:
+        children.setdefault(str(body["parent_name"]), []).append(str(body["name"]))
+
+    def subtree(root_name: str) -> list[str]:
+        if root_name not in body_by_name:
+            raise ValueError(f"Robot UI group root_body not found: {root_name}")
+        result: list[str] = []
+        stack = [root_name]
+        while stack:
+            current = stack.pop()
+            result.append(current)
+            stack.extend(reversed(children.get(current, [])))
+        return result
+
+    groups: list[dict[str, Any]] = []
+    assigned: set[str] = set()
+    raw_groups = raw_ui.get("groups", [])
+    if not isinstance(raw_groups, list):
+        raise ValueError("Robot UI groups must be an array")
+    group_ids: set[str] = set()
+    for index, raw in enumerate(raw_groups):
+        if not isinstance(raw, dict):
+            raise ValueError("Robot UI group must be an object")
+        group_id = str(raw.get("id") or f"group_{index + 1}")
+        if group_id in group_ids:
+            raise ValueError(f"Duplicate Robot UI group id: {group_id}")
+        group_ids.add(group_id)
+        if "bodies" in raw:
+            if not isinstance(raw["bodies"], list) or not raw["bodies"]:
+                raise ValueError(f"Robot UI group bodies must be non-empty: {group_id}")
+            names = [str(name) for name in raw["bodies"]]
+            missing = [name for name in names if name not in body_by_name]
+            if missing:
+                raise ValueError(
+                    f"Robot UI group {group_id} references unknown bodies: {missing}"
+                )
+        else:
+            names = subtree(str(raw.get("root_body") or ""))
+        duplicate = assigned.intersection(names)
+        if duplicate:
+            raise ValueError(
+                f"Robot UI body belongs to multiple groups: {sorted(duplicate)}"
+            )
+        assigned.update(names)
+        groups.append({
+            "id": group_id,
+            "name": str(raw.get("name") or group_id),
+            "body_names": names,
+            "collapsed": bool(raw.get("collapsed", False)),
+        })
+    if not raw_groups:
+        roots = [body for body in bodies if int(body["parent_id"]) == 0]
+        for root in roots:
+            names = subtree(str(root["name"]))
+            groups.append({
+                "id": str(root["name"]), "name": str(root["name"]),
+                "body_names": names, "collapsed": False,
+            })
+            group_ids.add(str(root["name"]))
+            assigned.update(names)
+    else:
+        unassigned = [
+            str(body["name"]) for body in bodies if body["name"] not in assigned
+        ]
+        if unassigned:
+            groups.append({
+                "id": "other", "name": "OTHER", "body_names": unassigned,
+                "collapsed": False,
+            })
+            group_ids.add("other")
+
+    symmetry = raw_ui.get("symmetry", {})
+    if symmetry is not None and not isinstance(symmetry, dict):
+        raise ValueError("Robot UI symmetry must be an object")
+    symmetry = symmetry or {}
+    explicit_body = _pair_map(
+        symmetry.get("body_pairs"), set(body_by_name), label="body_pairs"
+    )
+    explicit_joint = _pair_map(
+        symmetry.get("joint_pairs"), {str(joint["name"]) for joint in joints},
+        label="joint_pairs",
+    )
+    group_pairs = _pair_map(
+        symmetry.get("group_pairs"), group_ids, label="group_pairs"
+    )
+    inferred_body = symmetry_map(list(body_by_name))
+    inferred_joint = symmetry_map([str(joint["name"]) for joint in joints])
+    inferred_body.update(explicit_body)
+    inferred_joint.update(explicit_joint)
+    for group in groups:
+        partner = group_pairs.get(str(group["id"]))
+        if partner:
+            group["symmetry_partner"] = partner
+            raw_pair = next(
+                pair for pair in symmetry.get("group_pairs", [])
+                if str(group["id"]) in (str(pair[0]), str(pair[1]))
+            )
+            group["symmetry_primary"] = str(raw_pair[0]) == str(group["id"])
+    return {
+        "groups": groups,
+        "body_symmetry": inferred_body,
+        "joint_symmetry": inferred_joint,
+    }
 
 
 def _counterpart(name: str) -> str | None:
@@ -129,13 +310,31 @@ def robot_model_metadata(repo_root: Path, config: dict[str, Any]) -> dict[str, A
     xml_path = (repo_root / str(config["robot"]["mjcf"])).resolve()
     model = mujoco.MjModel.from_xml_path(str(xml_path))
     joints = joint_descriptors(model)
-    body_names = [
-        object_name(model, mujoco.mjtObj.mjOBJ_BODY, i, f"body_{i}")
-        for i in range(1, model.nbody)
-    ]
+    bodies = body_descriptors(model, joints)
+    raw_mapping_targets = config["robot"].get("mapping_target_links", [])
+    if not isinstance(raw_mapping_targets, list):
+        raise ValueError("Robot mapping_target_links must be an array")
+    mapping_target_links = [str(name) for name in raw_mapping_targets]
+    body_names = {str(body["name"]) for body in bodies}
+    unknown_mapping_targets = sorted(set(mapping_target_links) - body_names)
+    if unknown_mapping_targets:
+        raise ValueError(
+            "Robot mapping_target_links reference unknown bodies: "
+            f"{unknown_mapping_targets}"
+        )
+    mapping_target_set = set(mapping_target_links)
+    for body in bodies:
+        body["mapping_target"] = str(body["name"]) in mapping_target_set
+    presentation = ui_metadata(model, bodies, joints, config["robot"].get("ui", {}))
     return {
         "joints": joints,
-        "joint_symmetry": symmetry_map([x["name"] for x in joints]),
-        "body_symmetry": symmetry_map(body_names),
+        "bodies": bodies,
+        "actuated_dof_count": sum(
+            int(joint["dof_count"]) for joint in joints if joint["controllable"]
+        ),
+        "groups": presentation["groups"],
+        "joint_symmetry": presentation["joint_symmetry"],
+        "body_symmetry": presentation["body_symmetry"],
+        "mapping_target_links": mapping_target_links,
         "collision_pairs": collision_pair_descriptors(model, xml_path),
     }

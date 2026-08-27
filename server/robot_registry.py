@@ -65,6 +65,7 @@ class RobotVariant:
             "output_joint_order": deepcopy(
                 self.variant.get("output_joint_order", "model_hinge_order")
             ),
+            "ui": deepcopy(self.variant.get("ui", {})),
         }
         initial_pose = value["initial_pose"]
         if isinstance(initial_pose, dict) and initial_pose.get("type") == "keyframe":
@@ -72,6 +73,11 @@ class RobotVariant:
         retargeting = variant_retargeting_metadata(self)
         if "foot_contacts" in retargeting:
             value["foot_contacts"] = deepcopy(retargeting["foot_contacts"])
+        target_geometry = retargeting.get("target_geometry")
+        if isinstance(target_geometry, dict):
+            # The Mapping editor may show every body in the model, but only
+            # links with an orientation-geometry rule are valid IK targets.
+            value["mapping_target_links"] = list(target_geometry)
         return value
 
     def public_dict(self) -> dict[str, Any]:
@@ -91,6 +97,7 @@ class RobotVariant:
             "output_joint_order": deepcopy(
                 self.variant.get("output_joint_order", "model_hinge_order")
             ),
+            "ui": deepcopy(self.variant.get("ui", {})),
             "retargeting": deepcopy(self.variant.get("retargeting", {})),
         }
 
@@ -268,12 +275,18 @@ def _validate_manifest(
             raise RobotRegistryError(
                 f"Invalid output_joint_order: {manufacturer_id}/{robot_id}/{variant_id}"
             )
+        ui = variant.get("ui", {})
+        if ui is not None and not isinstance(ui, dict):
+            raise RobotRegistryError(
+                f"Variant ui must be an object: {manufacturer_id}/{robot_id}/{variant_id}"
+            )
         variant["model"] = model
         variant["source"] = source
         variant["initial_pose"] = initial_pose
         variant["root_body"] = root_body
         variant["floating_base"] = floating_base
         variant["output_joint_order"] = output_joint_order
+        variant["ui"] = deepcopy(ui or {})
         variants.append(variant)
     return variants
 

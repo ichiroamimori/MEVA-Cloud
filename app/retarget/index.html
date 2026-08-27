@@ -47,6 +47,7 @@ select{min-width:215px}
 .notice{background:#eef8fb;border:1px solid #c9e3ea;border-radius:11px;padding:10px 12px;font-size:12px;color:#486c73;margin-bottom:14px}
 .map-workspace{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px}
 .robot-area{border:1px solid var(--line);border-radius:14px;background:var(--soft2);padding:16px}
+.robot-area.model-pending>.region{display:none}
 .palette{border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px;align-self:start;position:sticky;top:14px}
 .robot-area h3,.palette h3{margin:0 0 8px;font-size:14px}
 .help{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px}
@@ -1624,11 +1625,12 @@ input[type="checkbox"]{
 
       <div class="link-mapping-head">
         Link / Joint Mapping
+        <span id="modelDofSummary" class="joint-chip">—</span>
         <span class="info-mark" tabindex="0">?<span class="info-pop">Link = 剛体、Joint = Link間の可動部です。Joint行は構造確認用で、MEVA Segmentの割り当て対象にはしません。</span></span>
       </div>
 
       <div class="map-workspace">
-        <div class="robot-area">
+        <div class="robot-area model-pending">
           <div class="head-row">
             <div>Robot Link</div>
             <div>MEVA Segment</div>
@@ -2580,6 +2582,7 @@ input[type="checkbox"]{
 
   function setupModelDrivenUi(metadata){
     robotModelMetadata = metadata || robotModelMetadata;
+    renderRobotMappingTree(robotModelMetadata);
     const ikGrid = [...document.querySelectorAll("#tab-mapping .ik-condition-grid")].find(grid =>
       [...grid.querySelectorAll(".ik-card-title")].some(title=>title.textContent.trim()==="Temporal regularization")
     );
@@ -2614,7 +2617,7 @@ input[type="checkbox"]{
       const input = document.createElement("input");input.type="number";input.min="0";input.step="0.1";
       input.value="0";input.className="joint-acceleration-input";input.dataset.joint=jointName;
       input.title="Inter-frame joint acceleration limit (rad/s²)";
-      const hasDof = Boolean(descriptor) && Number(descriptor.dof_count) > 0;
+      const hasDof = Boolean(descriptor?.controllable) && Number(descriptor.dof_count) > 0;
       enabled.dataset.hasDof = hasDof ? "true" : "false";
       input.dataset.hasDof = hasDof ? "true" : "false";
       enabled.disabled = !hasDof;
@@ -2629,16 +2632,92 @@ input[type="checkbox"]{
     });
     document.querySelectorAll("#tab-mapping .region").forEach(region=>{
       const title=region.querySelector(":scope > .region-title");if(!title||title.dataset.ready)return;
-      title.dataset.ready="1";const name=title.textContent.trim();
-      if(name.startsWith("RIGHT ARM")||name.startsWith("RIGHT LEG"))setRegionCollapsed(region,true);
+      title.dataset.ready="1";
+      if(region.dataset.defaultCollapsed==="true")setRegionCollapsed(region,true);
       title.addEventListener("click",e=>{if(e.target.closest("label"))return;setRegionCollapsed(region,!region.classList.contains("collapsed"))});
-      if(name.startsWith("LEFT ARM")||name.startsWith("LEFT LEG")){
+      if(region.dataset.symmetryPrimary==="true"){
         const label=document.createElement("label");label.className="symmetric-setting";
         label.innerHTML='<input type="checkbox" checked> Symmetric setting';title.appendChild(label);
         region.dataset.symmetric="on";label.querySelector("input").addEventListener("change",e=>region.dataset.symmetric=e.target.checked?"on":"off");
       }
     });
     installSymmetryListeners();
+  }
+
+  function renderRobotMappingTree(metadata){
+    const robotArea=document.querySelector("#tab-mapping .robot-area");
+    if(!robotArea)return;
+    const bodies=Array.isArray(metadata?.bodies)?metadata.bodies:[];
+    const groups=Array.isArray(metadata?.groups)?metadata.groups:[];
+    const joints=Array.isArray(metadata?.joints)?metadata.joints:[];
+    robotArea.querySelectorAll(":scope > .region").forEach(region=>region.remove());
+    robotArea.classList.remove("model-pending");
+    if(!bodies.length||!groups.length){
+      const unavailable=document.createElement("div");unavailable.className="region";
+      unavailable.innerHTML='<div class="region-title">ROBOT MODEL UNAVAILABLE</div>';
+      robotArea.appendChild(unavailable);
+      return;
+    }
+    const byBody=new Map(bodies.map(body=>[String(body.name),body]));
+    const byJointId=new Map(joints.map(joint=>[Number(joint.id),joint]));
+    const dofSummary=document.getElementById("modelDofSummary");
+    if(dofSummary)dofSummary.textContent=`${Number(metadata.actuated_dof_count||0)} DoF`;
+
+    const jointRow=(joint,depth)=>{
+      const row=document.createElement("div");row.className="joint-row";
+      const line=document.createElement("div");line.className="joint-line";
+      const info=document.createElement("div");info.className="joint-info";
+      info.style.paddingLeft=`${40+Math.max(0,depth)*14}px`;
+      const name=document.createElement("span");name.className="joint-name";
+      name.textContent=joint?.name||"fixed connection";
+      const chip=document.createElement("span");chip.className="joint-chip";
+      chip.textContent=joint?.type_name||"fixed";
+      const dof=document.createElement("span");dof.textContent=`${Number(joint?.dof_count||0)} DoF`;
+      info.append(name,chip,dof);
+      if(joint?.axis&&joint.type_name!=="free"){
+        const axis=document.createElement("span");
+        axis.textContent=`axis [${joint.axis.map(value=>String(Number(value))).join(", ")}]`;
+        info.appendChild(axis);
+      }
+      row.append(line,info);return row;
+    };
+
+    for(const group of groups){
+      const region=document.createElement("div");region.className="region";
+      region.dataset.groupId=String(group.id||"");
+      region.dataset.defaultCollapsed=group.collapsed?"true":"false";
+      region.dataset.symmetryPrimary=group.symmetry_primary?"true":"false";
+      if(group.symmetry_partner)region.dataset.symmetryPartner=String(group.symmetry_partner);
+      const title=document.createElement("div");title.className="region-title";
+      title.append(document.createTextNode(String(group.name||group.id||"ROBOT")));
+      region.appendChild(title);
+      const groupBodies=(group.body_names||[]).map(name=>byBody.get(String(name))).filter(Boolean);
+      const baseDepth=groupBodies.length?Math.min(...groupBodies.map(body=>Number(body.depth||0))):0;
+      for(const body of groupBodies){
+        const depth=Math.max(0,Number(body.depth||0)-baseDepth);
+        const bodyJoints=(body.joint_ids||[]).map(id=>byJointId.get(Number(id))).filter(Boolean);
+        if(bodyJoints.length){
+          bodyJoints.forEach(joint=>region.appendChild(jointRow(joint,depth)));
+        }else{
+          region.appendChild(jointRow(null,depth));
+        }
+        const row=document.createElement("div");row.className="link-row";
+        row.dataset.body=String(body.name);
+        const linkName=document.createElement("div");linkName.className="link-name";
+        linkName.textContent=String(body.name);linkName.style.paddingLeft=`${depth*14}px`;
+        const slot=document.createElement("div");
+        if(body.mapping_target){
+          slot.className="mapping-slot unused";
+        }else{
+          slot.className="mapping-slot fixed";
+          slot.textContent="intermediate / no target";
+        }
+        row.append(linkName,slot);region.appendChild(row);
+      }
+      robotArea.appendChild(region);
+    }
+    prepareMappingColumns();
+    installSelectors();
   }
 
   function setRegionCollapsed(region,collapsed){

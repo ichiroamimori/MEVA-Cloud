@@ -27,6 +27,43 @@
         "type": "model_default"
       },
       "output_joint_order": "model_hinge_order",
+      "ui": {
+        "groups": [
+          {
+            "id": "head_torso",
+            "name": "HEAD / TORSO",
+            "bodies": ["pelvis", "waist_yaw_link", "waist_roll_link", "torso_link"]
+          },
+          {
+            "id": "left_arm",
+            "name": "LEFT ARM",
+            "root_body": "left_shoulder_pitch_link"
+          },
+          {
+            "id": "right_arm",
+            "name": "RIGHT ARM",
+            "root_body": "right_shoulder_pitch_link",
+            "collapsed": true
+          },
+          {
+            "id": "left_leg",
+            "name": "LEFT LEG",
+            "root_body": "left_hip_pitch_link"
+          },
+          {
+            "id": "right_leg",
+            "name": "RIGHT LEG",
+            "root_body": "right_hip_pitch_link",
+            "collapsed": true
+          }
+        ],
+        "symmetry": {
+          "group_pairs": [
+            ["left_arm", "right_arm"],
+            ["left_leg", "right_leg"]
+          ]
+        }
+      },
       "retargeting": {
         "target_geometry": {
           "pelvis": {"type": "body_to_body", "distal_body": "torso_link"},

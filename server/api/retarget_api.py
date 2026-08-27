@@ -1050,16 +1050,31 @@ def get_context(
         # meva_source.frame_count.
         total_frames = count_source_frames(default_config)
 
-    model_metadata = {"joints": [], "joint_symmetry": {}, "body_symmetry": {}, "collision_pairs": []}
-    if default_config:
-        try:
+    model_metadata = {
+        "joints": [], "bodies": [], "groups": [], "actuated_dof_count": 0,
+        "joint_symmetry": {}, "body_symmetry": {}, "collision_pairs": [],
+    }
+    try:
+        # Robot structure belongs to the registered Runtime Model, not to a
+        # Retargeting Config.  It must therefore be available before the first
+        # Primary/Main standard Config is installed.
+        model_config = {
+            "robot": variant.runtime_robot(repo_root()),
+        }
+        from server.retarget.robot_model_info import robot_model_metadata
+        model_metadata = robot_model_metadata(repo_root(), model_config)
+        if int(model_metadata.get("actuated_dof_count", 0)) != int(variant.variant["dof"]):
+            raise ValueError(
+                f"Robot manifest DOF mismatch: manufacturer={variant.manufacturer_id}, "
+                f"robot={variant.robot_id}, variant={variant.variant_id}, "
+                f"manifest={variant.variant['dof']}, model={model_metadata.get('actuated_dof_count')}"
+            )
+        if default_config:
             _validate_retarget_config_or_http(variant, default_config)
-            from server.retarget.robot_model_info import robot_model_metadata
-            model_metadata = robot_model_metadata(repo_root(), default_config)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            model_metadata["warning"] = f"{type(exc).__name__}: {exc}"
+    except HTTPException:
+        raise
+    except Exception as exc:
+        model_metadata["warning"] = f"{type(exc).__name__}: {exc}"
     source_metadata = metadata.get("meva_source") or {}
     config_source = (default_config or {}).get("source") or {}
     source_fps = float(

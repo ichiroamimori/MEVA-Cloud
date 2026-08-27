@@ -45,6 +45,11 @@ class RobotRegistryTests(unittest.TestCase):
         self.assertEqual(runtime["robot"]["root_body"], "pelvis")
         self.assertTrue(runtime["robot"]["floating_base"])
         self.assertEqual(runtime["robot"]["output_joint_order"], "model_hinge_order")
+        self.assertEqual(len(runtime["robot"]["ui"]["groups"]), 5)
+        self.assertEqual(
+            runtime["robot"]["ui"]["symmetry"]["group_pairs"],
+            [["left_arm", "right_arm"], ["left_leg", "right_leg"]],
+        )
         self.assertNotIn("initial_keyframe", runtime["robot"])
 
     def test_catalog_keeps_disabled_variants_for_management(self) -> None:
@@ -63,6 +68,7 @@ class RobotRegistryTests(unittest.TestCase):
         self.assertEqual(contacts["robot_foot_to_ground_offset_m"], 0.038)
         self.assertEqual(len(contacts["left"]["support_points"]), 4)
         self.assertEqual(len(contacts["right"]["support_points"]), 4)
+        self.assertEqual(len(runtime["robot"]["ui"]["groups"]), 5)
 
     def test_standard_configs_match_registered_model(self) -> None:
         record = resolve_variant("g1_29dof", root=self.root)
