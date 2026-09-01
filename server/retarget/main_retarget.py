@@ -318,6 +318,7 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         primary_target_path=primary_target_npz,
         model=preparation.model,
         cfg=cfg,
+        pelvis_reference=preparation.pelvis_reference,
         contact_geometry=preparation.contact_geometry,
         mapping_offset_path=preparation.mapping_offset_path,
         fallback_common_scale=preparation.scale_common,
@@ -351,7 +352,10 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         row["Right_used_GCP"] = right_used
         row["Support_State"] = int(state)
         preparation.pelvis_targets_z[frame_index] = float(
-            main_target["pelvis_target_xyz"][frame_index, 2]
+            main_target.get(
+                "pelvis_reference_target_xyz",
+                main_target["pelvis_target_xyz"],
+            )[frame_index, 2]
         )
         for side, title in (("left", "Left"), ("right", "Right")):
             preparation.sole_targets_xyz[side][frame_index, :, 2] = (
@@ -384,7 +388,6 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
     scale_right = preparation.scale_right
     scale_rmse = preparation.scale_rmse_m
     scale_r2 = preparation.scale_r2
-    sole_targets = preparation.sole_targets_xyz
     print("Main target:", main_target_path, flush=True)
     print("Main IK: common Mink solver", flush=True)
     try:
@@ -446,8 +449,11 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         )
         main_target_timeline_fields = {
             "frame", "time_s", "source_frame_float", "source_frame_nearest",
-            "pelvis_target_xyz", "pelvis_target_quat", "link_target_quat",
+            "pelvis_target_xyz", "pelvis_reference_target_xyz",
+            "pelvis_target_quat", "link_target_quat",
             "left_pelvis_to_foot_direction", "right_pelvis_to_foot_direction",
+            "left_meva_pelvis_to_foot_direction",
+            "right_meva_pelvis_to_foot_direction",
             "left_gcp_corrected", "right_gcp_corrected",
             "left_gcp_raw", "right_gcp_raw",
             "left_gcp_smoothed", "right_gcp_smoothed",
@@ -692,7 +698,12 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         "frame_count": int(len(ik_result.diagnostics)),
         "initial_pose": "same-frame qpos assembled directly from Primary motion NPZ",
         "pelvis_task": {
-            "position": "main_target.npz pelvis_target_xyz",
+            "reference_body": ik_preparation.pelvis_reference.body_name,
+            "reference_local_position": list(
+                ik_preparation.pelvis_reference.local_position
+            ),
+            "reference_position": "main_target.npz pelvis_reference_target_xyz",
+            "body_position": "main_target.npz pelvis_target_xyz",
             "orientation": "main_target.npz pelvis_target_quat",
         },
         "mapping_orientation_tasks": mapping_residual_summary,

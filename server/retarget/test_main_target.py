@@ -13,6 +13,9 @@ from main_calibration import _free_joint_qpos_addr, _hinge_joints, _qpos_from_pr
 from foot_support import load_foot_support_definition, support_point_world_positions
 from main_prepare import GeomZTask, prepare_main_ik_from_target
 from main_target import _target_z, build_main_target, load_main_target
+from server.retarget.robot_runtime_definition import (
+    load_robot_runtime_definition_for_config,
+)
 
 
 class MainTargetTest(unittest.TestCase):
@@ -75,6 +78,7 @@ class MainTargetTest(unittest.TestCase):
         if not config_path.exists():
             self.skipTest("Representative Capsule is not available")
         cfg = json.loads(config_path.read_text(encoding="utf-8"))
+        runtime = load_robot_runtime_definition_for_config(root, cfg)
         with (primary_dir / "2608230006_primary.pkl").open("rb") as stream:
             primary = pickle.load(stream)
         model = mujoco.MjModel.from_xml_path(str(root / cfg["robot"]["mjcf"]))
@@ -113,6 +117,7 @@ class MainTargetTest(unittest.TestCase):
                 primary_target_path=primary_dir / "2608230006_primary_target.npz",
                 model=model,
                 cfg=cfg,
+                pelvis_reference=runtime.pelvis_reference,
                 contact_geometry=contact,
                 mapping_offset_path=config_path.parent / cfg["offsets"]["file"],
                 fallback_common_scale=1.0,

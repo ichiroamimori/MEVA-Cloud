@@ -528,6 +528,18 @@ select{min-width:215px}
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.link-name[data-axis-summary]::after{
+  content:attr(data-axis-summary);
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-family:inherit;
+  font-size:10px;
+  font-weight:600;
+  line-height:1.15;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
 .mapping-slot,
 .mapping-slot select{
   min-width:0;
@@ -910,6 +922,7 @@ body.rv-open{overflow:hidden}
 .rv-num{
   width:72px;height:29px;border:1px solid #bfd0d3;border-radius:7px;
   padding:0 6px;font-size:10px;color:var(--ink);background:#fff;
+  box-sizing:border-box;min-height:29px!important;height:29px!important;line-height:27px!important;
 }
 .rv-range-dash{font-size:11px;color:var(--muted)}
 .rv-plot-secondary{display:none}
@@ -976,11 +989,20 @@ body.rv-open{overflow:hidden}
 .rv-control-row #rvYAxis,.rv-control-row #rvYAxis2,
 .rv-control-row #rvYAxis3,.rv-control-row #rvYAxis4{flex:0 1 150px}
 .rv-control-row-main select{flex:1 1 0}
-.rv-control-row-range{justify-content:flex-start}
+.rv-control-row-range{justify-content:flex-start;min-height:29px}
 .rv-range-normal,.rv-range-moving{display:inline-flex;align-items:center;gap:6px}
 .rv-range-moving{display:none}
+.rv-range-moving>span{
+  color:var(--muted);font:400 10px/1 "Segoe UI",sans-serif;
+  letter-spacing:0;text-transform:none;white-space:nowrap;
+}
+.rv-range-moving>.rv-num{
+  box-sizing:border-box;height:29px!important;min-height:29px!important;
+  padding:0 6px!important;line-height:27px!important;
+}
 .rv-moving-window-toggle{display:inline-flex!important;align-items:center;gap:4px;letter-spacing:0!important;text-transform:none}
 .rv-moving-window-toggle input{margin:0}
+.rv-moving-window-toggle+label{margin-left:12px}
 .rv-plot-wrap{position:relative}
 .rv-heatmap-tooltip{
   position:absolute;display:none;z-index:5;pointer-events:none;white-space:pre-line;
@@ -993,6 +1015,18 @@ body.rv-open{overflow:hidden}
 .rv-pair-row select{flex:1 1 0}
 .rv-num{flex:0 0 70px}
 .rv-plot-title{padding-bottom:2px !important}
+.run-note-row{margin:8px 0 0;display:grid;grid-template-columns:62px minmax(0,1fr);gap:9px;align-items:start}
+.run-note-row label{padding-top:8px;color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.run-note-row textarea{width:100%;min-height:48px;max-height:110px;resize:vertical;border:1px solid var(--line);border-radius:9px;padding:8px 10px;color:var(--ink);background:#fff;font:12px/1.45 "Segoe UI",sans-serif}
+.run-note-row textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(47,95,143,.14)}
+.data-tree-content{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:2px}
+.data-tree-note{color:var(--muted);font:400 11px/1.4 "Segoe UI",sans-serif;white-space:pre-wrap;overflow-wrap:anywhere}
+.rv-main-grid.mode-a,.rv-main-grid.mode-b{grid-template-rows:repeat(2,minmax(230px,1fr))}
+.rv-main-grid.mode-a .rv-plot-wrap,.rv-main-grid.mode-b .rv-plot-wrap{min-height:120px}
+.rv-plot-wrap canvas{display:block}
+@media(max-width:1180px){
+  .rv-main-grid.mode-a,.rv-main-grid.mode-b{grid-template-rows:auto}
+}
 
 
 /* ===== Viewer/site palette refinement 16:48 ===== */
@@ -1439,6 +1473,10 @@ input[type="checkbox"]{
           </div>
         </div>
       </div>
+      <div class="run-note-row">
+        <label for="primaryRunNote">Note</label>
+        <textarea id="primaryRunNote" maxlength="2000" placeholder="Primary result note"></textarea>
+      </div>
 
       <div class="section-title">Ground Contact Setting</div>
       <div class="ik-condition-wrap primary-ground-setting">
@@ -1636,9 +1674,9 @@ input[type="checkbox"]{
             <div>MEVA Segment</div>
             <div>Ori. weight</div>
             <div class="ignore-head">Ignore<br>axial rot.</div>
-            <div>Pos. X</div>
-            <div>Pos. Y</div>
-            <div>Pos. Z</div>
+            <div>Pos. weight X</div>
+            <div>Pos. weight Y</div>
+            <div>Pos. weight Z</div>
           </div>
 
           <div class="region">
@@ -1859,6 +1897,10 @@ input[type="checkbox"]{
               <button class="btn retarget-now" id="mainRetargetBtn" type="button" disabled>RETARGET NOW</button>
             </div>
           </div>
+        </div>
+        <div class="run-note-row">
+          <label for="mainRunNote">Note</label>
+          <textarea id="mainRunNote" maxlength="2000" placeholder="Main result note"></textarea>
         </div>
 
         <div class="section-title" style="margin-top:18px">Ground Contact Setting</div>
@@ -2217,6 +2259,7 @@ input[type="checkbox"]{
   const statusLine = document.getElementById("statusLine");
   const resetBtn = document.getElementById("resetBtn");
   const configName = document.getElementById("configName");
+  const primaryRunNote = document.getElementById("primaryRunNote");
   const changeDefaultBtn = document.getElementById("changeDefaultBtn");
   const retargetedDataSelect = document.getElementById("retargetedDataSelect");
   const retargetNowBtn = document.getElementById("retargetNowBtn");
@@ -2298,6 +2341,7 @@ input[type="checkbox"]{
   const mainRetargetBottomBtn = document.getElementById("mainRetargetBottomBtn");
   const mainInheritedSnapshot = document.getElementById("mainInheritedSnapshot");
   const mainConfigName = document.getElementById("mainConfigName");
+  const mainRunNote = document.getElementById("mainRunNote");
   const mainConfigNameBottom = document.getElementById("mainConfigNameBottom");
   const mainConfigDirtyIndicator = document.getElementById("mainConfigDirtyIndicator");
   const mainConfigDirtyIndicatorBottom = document.getElementById("mainConfigDirtyIndicatorBottom");
@@ -2334,7 +2378,7 @@ input[type="checkbox"]{
     for(const key of [
       "capsule_id", "source", "frame_range", "sampling", "offsets",
       "config_name", "name", "primary_run_id", "main_id",
-      "artifact_generation_id", "main_runtime_context",
+      "artifact_generation_id", "main_runtime_context", "note",
       "primary_motion_file", "primary_target_npz", "main_target_npz",
       "primary_post_csv", "main_input_csv", "main_calibration", "main_target_analysis"
     ]){
@@ -2479,8 +2523,8 @@ input[type="checkbox"]{
     return preferred;
   }
 
-  async function loadMainConfigCatalog(preferredName=""){
-    const robot = mainWorkingConfig?.robot || workingConfig?.robot || {};
+  async function loadMainConfigCatalog(preferredName="", robotOverride=null){
+    const robot = robotOverride || mainWorkingConfig?.robot || workingConfig?.robot || {};
     const query = new URLSearchParams({
       source_type: "meva",
       manufacturer: robot.manufacturer || "unitree",
@@ -2703,8 +2747,19 @@ input[type="checkbox"]{
         }
         const row=document.createElement("div");row.className="link-row";
         row.dataset.body=String(body.name);
+        row.dataset.fullOrientationSupported=body.full_orientation_supported===false?"false":"true";
+        row.dataset.axisAlignmentSupported=body.axis_alignment_supported?"true":"false";
         const linkName=document.createElement("div");linkName.className="link-name";
         linkName.textContent=String(body.name);linkName.style.paddingLeft=`${depth*14}px`;
+        const formatAxis=value=>Array.isArray(value)&&value.length===3
+          ? `[${value.map(component=>Number(component).toFixed(3).replace(/\.000$/, "")).join(", ")}]`
+          : null;
+        const primaryAxis=formatAxis(body.primary_axis);
+        const secondaryAxis=formatAxis(body.secondary_axis);
+        const axisParts=[];
+        if(primaryAxis)axisParts.push(`Primary ${primaryAxis}`);
+        if(secondaryAxis)axisParts.push(`Secondary ${secondaryAxis}`);
+        if(axisParts.length)linkName.dataset.axisSummary=axisParts.join(" / ");
         const slot=document.createElement("div");
         if(body.mapping_target){
           slot.className="mapping-slot unused";
@@ -2824,7 +2879,12 @@ input[type="checkbox"]{
 
       const axisCell = row.children[3];
       axisCell.className = "axis-mode";
-      axisCell.innerHTML = '<input type="checkbox" class="axis-mode-check" aria-label="Ignore axial rotation">';
+      const axisSupported = row.dataset.axisAlignmentSupported === "true";
+      axisCell.classList.toggle("disabled", !axisSupported);
+      axisCell.title = axisSupported
+        ? "Use the Robot Link Primary axis and ignore rotation around it"
+        : "Primary axis is not defined for this Robot Link";
+      axisCell.innerHTML = `<input type="checkbox" class="axis-mode-check" aria-label="Ignore axial rotation" ${axisSupported ? "" : "disabled"}>`;
       const axisCheck = axisCell.querySelector(".axis-mode-check");
 
       sel.addEventListener("change", () => {
@@ -2839,6 +2899,7 @@ input[type="checkbox"]{
 
   function applyConfig(cfg, {updateBaseline=false}={}){
     workingConfig = deepClone(cfg);
+    if(primaryRunNote) primaryRunNote.value = String(cfg?.note || "");
     baselineByLink = mapByLink(cfg);
     const byLink = mapByLink(cfg);
 
@@ -2925,7 +2986,7 @@ input[type="checkbox"]{
       const m = byLink.get(link);
       sel.value = m?.source_segment || "";
       if(ori) ori.value = Number(m?.orientation_weight ?? 0).toFixed(2);
-      if(axisCheck) axisCheck.checked = (m?.orientation_mode === "axis");
+      if(axisCheck) axisCheck.checked = !axisCheck.disabled && (m?.orientation_mode === "axis");
     }
     const acceleration = cfg.interframe_joint_acceleration_limit || {};
     if(accelerationWeightAt2x){
@@ -2976,6 +3037,7 @@ input[type="checkbox"]{
 
   function collectConfig(){
     const cfg = deepClone(workingConfig);
+    cfg.note = String(primaryRunNote?.value || "").trim();
     const rawMappings = editableRows().map(mappingForRow).filter(Boolean);
     const seenLinks = new Set();
     cfg.mappings = rawMappings.filter(m => {
@@ -3140,8 +3202,12 @@ input[type="checkbox"]{
       slot.classList.toggle("changed", pairChanged);
       slot.classList.toggle("mapped", Boolean(seg) && !pairChanged);
       slot.classList.toggle("unused", !seg);
-      if(axisCheck) axisCheck.disabled = !seg;
-      axisCell?.classList.toggle("disabled", !seg);
+      const axisSupported = row.dataset.axisAlignmentSupported === "true";
+      if(axisCheck){
+        axisCheck.disabled = !seg || !axisSupported;
+        if(!axisSupported) axisCheck.checked = false;
+      }
+      axisCell?.classList.toggle("disabled", !seg || !axisSupported);
       if(pairChanged) changed++;
     }
     const cfg = collectConfig();
@@ -3453,8 +3519,9 @@ input[type="checkbox"]{
       const axis = row.querySelector(".axis-mode-check");
       if(sel) sel.value = mapping?.source_segment || "";
       if(ori) ori.value = Number(mapping?.orientation_weight ?? 0);
-      if(axis) axis.checked = (mapping?.orientation_mode === "axis");
-      if(axis) axis.disabled = !mapping?.source_segment;
+      const axisSupported = row.dataset.axisAlignmentSupported === "true";
+      if(axis) axis.checked = axisSupported && (mapping?.orientation_mode === "axis");
+      if(axis) axis.disabled = !mapping?.source_segment || !axisSupported;
     }
   }
 
@@ -3468,7 +3535,11 @@ input[type="checkbox"]{
       }
       const row = select.closest(".link-row");
       const axis = row?.querySelector(".axis-mode-check");
-      if(axis) axis.disabled = !select.value;
+      const axisSupported = row?.dataset.axisAlignmentSupported === "true";
+      if(axis){
+        axis.disabled = !select.value || !axisSupported;
+        if(!axisSupported) axis.checked = false;
+      }
     }
   }
 
@@ -3555,7 +3626,6 @@ input[type="checkbox"]{
       }else{
         setRegionCollapsed(region,true);
       }
-      title.addEventListener("click",event=>{if(!event.target.closest("label"))setRegionCollapsed(region,!region.classList.contains("collapsed"))});
       region.appendChild(title);
       geoms.forEach((geom, index) => {
         const weight = configured?.[side]?.[index] || defaultSoleWeight();
@@ -3566,7 +3636,11 @@ input[type="checkbox"]{
         const label = document.createElement("div");
         label.className = "sole-geom-info";
         const display=geom.display || geom.name || "";
-        label.innerHTML = `<span class="sole-geom-name">${display}</span><small>Foot support point</small>`;
+        const source=geom.source_geom || geom.body || "Robot Definition";
+        const detail=`${source} · local [${geom.pos || "—"}] m`;
+        const name=document.createElement("span");name.className="sole-geom-name";name.textContent=display;
+        const metadata=document.createElement("small");metadata.textContent=detail;
+        label.append(name,metadata);
         label.title = display;
         row.append(label);
         for(const axis of ["x", "y", "z"]){
@@ -3609,6 +3683,7 @@ input[type="checkbox"]{
 
   function collectMainConfig(){
     const cfg = deepClone(mainWorkingConfig || {});
+    cfg.note = String(mainRunNote?.value || "").trim();
     cfg.name = selectedMainConfigDisplayName();
     cfg.config_name = cfg.name;
     cfg.retarget_stage = "main";
@@ -3777,6 +3852,7 @@ input[type="checkbox"]{
 
   function applyMainConfig(cfg, {updateBaseline=false}={}){
     mainWorkingConfig = deepClone(cfg || {});
+    if(mainRunNote) mainRunNote.value = String(cfg?.note || "");
     const mainCfg = mainWorkingConfig.main || {};
     if(mainGcpSmoothingMs) mainGcpSmoothingMs.value = Number(mainCfg.gcp_smoothing_ms ?? 150);
     if(mainGcpMinOffset) mainGcpMinOffset.value = Number(mainCfg.gcp_min_offset ?? 0.2);
@@ -3997,11 +4073,26 @@ input[type="checkbox"]{
         mainCsvExists: Boolean(data.main_csv_exists),
       };
       const snapshotIsNew = (data.main_id || requestedMainId) === "new";
-      if(!mainConfigCatalog.length){
-        await loadMainConfigCatalog(data.config?.name || data.config?.config_name || "");
-      }
+      // The catalog is Robot-specific.  A previous Robot can leave a valid-looking
+      // selection in memory whose filename does not exist for this Robot.  Resolve
+      // it again after the selected Primary has established the Robot identity.
+      await loadMainConfigCatalog(
+        data.config?.name || data.config?.config_name || "",
+        data.config?.robot || null
+      );
       if(snapshotIsNew){
-        await loadSelectedMainSharedConfig(runId);
+        if(selectedMainSharedConfig){
+          await loadSelectedMainSharedConfig(runId);
+        }else{
+          // A newly installed Robot is valid before it has a Shared Main
+          // Config.  In that case the server returns a generic Main Config
+          // composed from the selected Primary run; render that Config rather
+          // than leaving the previous Robot's snapshot in the DOM.
+          mainLoadedConfig = deepClone(data.config);
+          mainWorkingConfig = deepClone(data.config);
+          applyMainConfig(data.config, {updateBaseline:true});
+        }
+        if(mainRunNote) mainRunNote.value = "";
       }else{
         if(!mainBaselineConfigSignature && selectedMainSharedConfig){
           await loadSelectedMainSharedConfig(runId);
@@ -4161,6 +4252,7 @@ input[type="checkbox"]{
           refreshSourceSummary();
         }
         if(!preserveWorkingConfig && selectedSharedConfig) await loadSelectedSharedConfig();
+        if(!preserveWorkingConfig && primaryRunNote) primaryRunNote.value = "";
         selectedSettingRunStage = {primaryDone:false, mainDone:false, mainCsvExists:false};
         updateStageUi();
         return;
@@ -4291,6 +4383,7 @@ input[type="checkbox"]{
           source,
           overwrite,
           config: cfg,
+          note: cfg.note || "",
           iteration_diagnostics: false
         })
       });
@@ -4447,6 +4540,7 @@ input[type="checkbox"]{
           run_id: runId,
           main_id: mainId,
           config: cfg,
+          note: cfg.note || "",
         })
       });
       const data = await res.json();
@@ -4627,16 +4721,22 @@ input[type="checkbox"]{
     const primaries=dataManagementModel.primaries||[];
     if(!primaries.length){dataManagementTree.textContent="No Primary/Main results.";return;}
     dataManagementTree.innerHTML="";
+    const resultContent=(label,note)=>{
+      const content=document.createElement("span");content.className="data-tree-content";
+      const title=document.createElement("span");title.textContent=label;content.append(title);
+      if(note){const noteEl=document.createElement("span");noteEl.className="data-tree-note";noteEl.textContent=note;content.append(noteEl)}
+      return content;
+    };
     for(const primary of primaries){
       const group=document.createElement("div");group.className="data-tree-primary";
       const primaryRow=document.createElement("label");primaryRow.className="data-tree-row primary";
       const primaryCheck=document.createElement("input");primaryCheck.type="checkbox";primaryCheck.value=primary.run_id;primaryCheck.dataset.kind="primary";
-      primaryRow.append(primaryCheck,document.createTextNode(`Primary ${primary.run_id}`));
+      primaryRow.append(primaryCheck,resultContent(`Primary ${primary.run_id}`,primary.note));
       const meta=document.createElement("span");meta.className="data-tree-meta";meta.textContent=`${(primary.mains||[]).length} Main result(s)`;primaryRow.append(meta);group.append(primaryRow);
       for(const main of (primary.mains||[])){
         const row=document.createElement("label");row.className="data-tree-row main";
         const check=document.createElement("input");check.type="checkbox";check.value=main.main_id;check.dataset.kind="main";check.dataset.primary=primary.run_id;
-        row.append(check,document.createTextNode(`Main ${main.main_id}`));
+        row.append(check,resultContent(`Main ${main.main_id}`,main.note));
         const layout=document.createElement("span");layout.className="data-tree-meta";layout.textContent=main.layout==="legacy"?"legacy layout":"";row.append(layout);group.append(row);
       }
       dataManagementTree.append(group);
@@ -5115,9 +5215,12 @@ input[type="checkbox"]{
   function localFrameTime(localFrame){
     const bin=timelineBin()||rvData?.a||rvData?.b;
     if(!bin)return Number(localFrame)||0;
-    const index=Math.max(0,Math.min(Number(bin.header.frame_count)-1,Math.round(Number(localFrame)||0)));
+    const index=Math.round(Number(localFrame)||0);
     const stored=bin.arrays?.time_s;
-    return Number(stored?.[index] ?? index/Math.max(1e-12,Number(bin.header.fps)||1));
+    if(index>=0&&index<Number(bin.header.frame_count)&&stored?.[index]!=null){
+      return Number(stored[index]);
+    }
+    return index/Math.max(1e-12,Number(bin.header.fps)||1);
   }
 
   function nearestMevaFrame(localFrame){
@@ -5343,6 +5446,159 @@ input[type="checkbox"]{
     ctx.fill();ctx.stroke();
   }
 
+  function convexHull2D(points){
+    if(points.length<=2)return points;
+    const sorted=[...points].sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+    const lower=[];
+    for(const point of sorted){
+      while(lower.length>=2&&cross(lower.at(-2),lower.at(-1),point)<=0)lower.pop();
+      lower.push(point);
+    }
+    const upper=[];
+    for(const point of [...sorted].reverse()){
+      while(upper.length>=2&&cross(upper.at(-2),upper.at(-1),point)<=0)upper.pop();
+      upper.push(point);
+    }
+    lower.pop();upper.pop();
+    return lower.concat(upper);
+  }
+
+  function drawRobotFootSupport(ctx,bin,frameIndex,projectWorld,color,sideFilter=null){
+    const positions=bin.arrays.foot_support_point_pos;
+    const metadata=bin.header.foot_support_points;
+    if(!positions||!Array.isArray(metadata)||metadata.length<2)return false;
+    const pointCount=metadata.length;
+    let drew=false;
+    for(const side of ["left","right"]){
+      if(sideFilter && !sideFilter.has(side))continue;
+      const indices=[];
+      metadata.forEach((point,index)=>{
+        if(String(point.side||"").toLowerCase()===side)indices.push(index);
+      });
+      if(indices.length<2)continue;
+      const projected=indices.map(index=>{
+        const offset=(frameIndex*pointCount+index)*3;
+        return projectWorld([
+          positions[offset],positions[offset+1],positions[offset+2]
+        ]);
+      });
+      const hull=convexHull2D(projected);
+      if(hull.length<2)continue;
+      ctx.fillStyle=colorWithAlpha(color,.14);
+      ctx.strokeStyle=color;
+      ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(...hull[0]);
+      for(const point of hull.slice(1))ctx.lineTo(...point);
+      if(hull.length>=3){ctx.closePath();ctx.fill()}
+      ctx.stroke();
+      drew=true;
+    }
+    return drew;
+  }
+
+  function drawManifestRobotParts(ctx,bin,frameIndex,projectWorld,projectVector,idx,count,color){
+    const skeleton=bin.header.robot_skeleton;
+    const positions=bin.arrays.link_pos;
+    const quaternions=bin.arrays.link_quat;
+    if(!skeleton||!Array.isArray(skeleton.parts)||!positions||!quaternions)return false;
+
+    function bodyPose(name){
+      const bodyIndex=idx.get(String(name));
+      if(bodyIndex==null)return null;
+      const pb=(frameIndex*count+bodyIndex)*3;
+      const qb=(frameIndex*count+bodyIndex)*4;
+      return {
+        origin:[positions[pb],positions[pb+1],positions[pb+2]],
+        quat:[quaternions[qb],quaternions[qb+1],quaternions[qb+2],quaternions[qb+3]]
+      };
+    }
+    function localWorld(pose,local=[0,0,0]){
+      const rotated=quatRotateWxyz(Number(local[0]),Number(local[1]),Number(local[2]),pose.quat);
+      return [pose.origin[0]+rotated[0],pose.origin[1]+rotated[1],pose.origin[2]+rotated[2]];
+    }
+    function polygon(points,alpha=.14){
+      if(points.length<3)return;
+      ctx.fillStyle=colorWithAlpha(color,alpha);ctx.strokeStyle=color;ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(...points[0]);
+      for(const point of points.slice(1))ctx.lineTo(...point);
+      ctx.closePath();ctx.fill();ctx.stroke();
+    }
+
+    const supportSides=new Set();
+    for(const part of skeleton.parts){
+      if(part.pattern==="support"){
+        supportSides.add(String(part.side||"").toLowerCase());
+        continue;
+      }
+      if(part.pattern==="surface"){
+        const points=[];
+        for(const anchor of part.anchors||[]){
+          const pose=bodyPose(anchor.body);if(!pose)continue;
+          points.push(projectWorld(localWorld(pose,anchor.local_position||[0,0,0])));
+        }
+        polygon(points,.12);
+        continue;
+      }
+      if(part.pattern==="segment"){
+        const points=[];
+        for(const anchor of part.anchors||[]){
+          const anchorPose=bodyPose(anchor.body);if(!anchorPose)continue;
+          points.push(projectWorld(localWorld(anchorPose,anchor.local_position||[0,0,0])));
+        }
+        if(points.length>=2){
+          ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap="round";
+          ctx.beginPath();ctx.moveTo(...points[0]);
+          for(const point of points.slice(1))ctx.lineTo(...point);
+          ctx.stroke();
+        }
+        continue;
+      }
+      const pose=bodyPose(part.body);if(!pose)continue;
+      if(part.pattern==="semantic_axis"){
+        const start=projectWorld(localWorld(pose,part.local_start||[0,0,0]));
+        const direction=part.direction_local||[0,0,0];
+        const length=Number(part.length_m)||0;
+        const end=projectWorld(localWorld(pose,[
+          Number(direction[0])*length,
+          Number(direction[1])*length,
+          Number(direction[2])*length
+        ]));
+        ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap="round";
+        ctx.beginPath();ctx.moveTo(...start);ctx.lineTo(...end);ctx.stroke();
+        continue;
+      }
+      if(part.pattern==="triangle"){
+        polygon((part.local_points||[]).map(point=>projectWorld(localWorld(pose,point))),.15);
+        continue;
+      }
+      if(part.pattern==="circle"){
+        const centerWorld=localWorld(pose,part.local_center||[0,0,0]);
+        const center=projectWorld(centerWorld);
+        const radius=Number(part.radius_m)||.05;
+        const basisLengths=[[1,0,0],[0,1,0],[0,0,1]].map(axis=>{
+          const projected=projectVector(quatRotateWxyz(...axis,pose.quat));
+          return Math.hypot(projected[0],projected[1])*radius;
+        }).sort((a,b)=>b-a);
+        const screenRadius=Math.max(3,(basisLengths[0]+basisLengths[1])*.5);
+        if(part.connect_to_body){
+          const origin=projectWorld(pose.origin);
+          ctx.strokeStyle=color;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(...origin);ctx.lineTo(...center);ctx.stroke();
+        }
+        ctx.fillStyle=colorWithAlpha(color,.12);ctx.strokeStyle=color;ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(center[0],center[1],screenRadius,0,Math.PI*2);ctx.fill();ctx.stroke();
+        const direction=projectVector(quatRotateWxyz(...part.direction_local,pose.quat));
+        const length=Math.hypot(direction[0],direction[1])||1;
+        ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(...center);
+        ctx.lineTo(center[0]+direction[0]/length*screenRadius,center[1]+direction[1]/length*screenRadius);ctx.stroke();
+      }
+    }
+    if(supportSides.size){
+      drawRobotFootSupport(ctx,bin,frameIndex,projectWorld,color,supportSides);
+    }
+    return true;
+  }
+
   function drawG1Hand(ctx,origin,q,projectVector,isLeft,color){
     // G1 wrist local +X is longitudinal.  The terminal semantic mapping used
     // by Primary maps MEVA Hand local +X (radial/thumb side) to G1 local +Z
@@ -5454,23 +5710,36 @@ input[type="checkbox"]{
       }
       if(rvG1Visual?.value==="skeleton" && bin.arrays.body_parent_index){
         const parents=bin.arrays.body_parent_index;
+        const hiddenEdges=new Set(bin.header.robot_skeleton?.hide_parent_edges||[]);
         ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap="round";
-        for(let j=0;j<count;j++){const pj=parents[j];if(pj<0||pj>=count)continue;const a=P(pj),b=P(j);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}
+        for(let j=0;j<count;j++){const pj=parents[j];if(pj<0||pj>=count||hiddenEdges.has(names[j]))continue;const a=P(pj),b=P(j);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}
       }else{
         ctx.fillStyle=color;
         for(let j=0;j<count;j++){const p=P(j);ctx.beginPath();ctx.arc(p[0],p[1],3.2,0,Math.PI*2);ctx.fill()}
       }
 
+      const drewManifestParts=drawManifestRobotParts(
+        ctx,bin,frameIndex,projectWorld,projectVector,idx,count,color
+      );
+      const drewFootSupport=drewManifestParts ? true : drawRobotFootSupport(
+        ctx,bin,frameIndex,projectWorld,color
+      );
       if(quat){
-        for(const [name,isLeft] of [["left_ankle_roll_link",true],["right_ankle_roll_link",false]]){
-          const j=idx.get(name); if(j==null) continue;
-          const qb=(frameIndex*count+j)*4;
-          drawG1Foot(ctx,P(j),[quat[qb],quat[qb+1],quat[qb+2],quat[qb+3]],projectVector,color);
+        // Existing BINs do not contain manifest-derived support points. Keep
+        // only their historical G1 cue as a backward-compatible fallback.
+        if(!drewFootSupport){
+          for(const name of ["left_ankle_roll_link","right_ankle_roll_link"]){
+            const j=idx.get(name); if(j==null) continue;
+            const qb=(frameIndex*count+j)*4;
+            drawG1Foot(ctx,P(j),[quat[qb],quat[qb+1],quat[qb+2],quat[qb+3]],projectVector,color);
+          }
         }
-        for(const [name,isLeft] of [["left_wrist_yaw_link",true],["right_wrist_yaw_link",false]]){
-          const j=idx.get(name); if(j==null) continue;
-          const qb=(frameIndex*count+j)*4;
-          drawG1Hand(ctx,P(j),[quat[qb],quat[qb+1],quat[qb+2],quat[qb+3]],projectVector,isLeft,color);
+        if(!drewManifestParts){
+          for(const [name,isLeft] of [["left_wrist_yaw_link",true],["right_wrist_yaw_link",false]]){
+            const j=idx.get(name); if(j==null) continue;
+            const qb=(frameIndex*count+j)*4;
+            drawG1Hand(ctx,P(j),[quat[qb],quat[qb+1],quat[qb+2],quat[qb+3]],projectVector,isLeft,color);
+          }
         }
       }
       return;
@@ -5796,7 +6065,7 @@ input[type="checkbox"]{
         const positionMappings=bin.header.position_mappings||[];
         if(orientationMappings.length||positionMappings.length){
           const rg=document.createElement("optgroup");rg.label="Primary Residuals";
-          orientationMappings.forEach((mapping,index)=>{const o=document.createElement("option");o.value=`ores:${index}`;o.textContent=`Orientation · ${mapping.source_segment} → ${mapping.target_link}`;rg.appendChild(o)});
+          orientationMappings.forEach((mapping,index)=>{const o=document.createElement("option");o.value=`ores:${index}`;const mode=String(mapping.orientation_mode||"full").toLowerCase()==="axis"?"Axis":"Full";o.textContent=`Orientation: ${mode} · ${mapping.source_segment} → ${mapping.target_link}`;rg.appendChild(o)});
           positionMappings.forEach((mapping,index)=>{const o=document.createElement("option");o.value=`pres:${index}`;o.textContent=`Position · ${mapping.source_segment} → ${mapping.target_link}`;rg.appendChild(o)});
           select.appendChild(rg);
         }
@@ -5822,6 +6091,13 @@ input[type="checkbox"]{
           const cg=document.createElement("optgroup");cg.label="Main Contact Diagnostics";
           for(const [value,label] of [["support_state","Support state"],["left","Left correction"],["right","Right correction"]]){const o=document.createElement("option");o.value=`contact:${value}`;o.textContent=label;cg.appendChild(o)}
           select.appendChild(cg);
+        }
+        if(bin.arrays.pelvis_to_foot_result_direction){
+          const pg=document.createElement("optgroup");pg.label="Main Pelvis → Foot";
+          for(const [side,label] of [["left","Left Pelvis → Foot"],["right","Right Pelvis → Foot"]]){
+            const o=document.createElement("option");o.value=`p2f:${side}`;o.textContent=label;pg.appendChild(o);
+          }
+          select.appendChild(pg);
         }
       }
     }else{
@@ -5861,6 +6137,7 @@ input[type="checkbox"]{
     if(v.startsWith("footz:")) return {kind:"footz",name:v.slice(6)};
     if(v.startsWith("gcp:")) return {kind:"gcp",name:v.slice(4)};
     if(v.startsWith("contact:")) return {kind:"contact",name:v.slice(8)};
+    if(v.startsWith("p2f:")) return {kind:"p2f",name:v.slice(4)};
     if(v.startsWith("segment:")) return {kind:"segment",name:v.slice(8)};
     return {kind:"none",name:""};
   }
@@ -5923,12 +6200,19 @@ input[type="checkbox"]{
     const node=a.kind!=="none"?a:b;
     let options=[];
     if(node.kind==="heatmap")options=[[`heatmap_${node.name}`,({joint_limit:"Joint limit",joint_velocity:"Joint velocity",joint_acceleration:"Joint acceleration",orientation_residual:"Orientation residual",position_residual:"Position residual",self_collision:"Self-collision"})[node.name]||"Heat map"]];
-    else if(node.kind==="ores")options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_angle","Residual magnitude"]];
+    else if(node.kind==="ores"){
+      const selectedBin=a.kind==="ores"?aBin:bBin,mapping=selectedBin?.header?.orientation_mappings?.[Number(node.name)]||{};
+      const axisMode=String(mapping.orientation_mode||"full").toLowerCase()==="axis";
+      if(axisMode&&selectedBin?.arrays?.orientation_axis_error_rad)options=[["axis_error_deg","Axis Error [deg]"],["target_direction_x","Target Direction X"],["target_direction_y","Target Direction Y"],["target_direction_z","Target Direction Z"],["result_direction_x","Result Direction X"],["result_direction_y","Result Direction Y"],["result_direction_z","Result Direction Z"]];
+      else if(axisMode)options=[["residual_x","Legacy quaternion residual X (reference)"],["residual_y","Legacy quaternion residual Y (reference)"],["residual_z","Legacy quaternion residual Z (reference)"],["residual_angle","Legacy quaternion residual magnitude (reference)"]];
+      else options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_angle","Residual magnitude"]];
+    }
     else if(node.kind==="pres")options=[["residual_x","Residual X"],["residual_y","Residual Y"],["residual_z","Residual Z"],["residual_norm","Residual magnitude"],["target_x","Target X"],["target_y","Target Y"],["target_z","Target Z"],["result_x","Result X"],["result_y","Result Y"],["result_z","Result Z"]];
     else if(node.kind==="ik")options=[["value",({iterations:"Iterations",converged:"Convergence",final_delta:"Final joint delta"})[node.name]||"Value"]];
     else if(node.kind==="footz")options=[["target","Target Z"],["result","Result Z"],["residual","Residual Z"]];
     else if(node.kind==="gcp")options=[["raw","Raw GCP"],["smoothed","Smoothed GCP"],["corrected","Corrected GCP"],["used","Used GCP"]];
     else if(node.kind==="contact")options=node.name==="support_state"?[["value","Support state"]]:[["strength","Correction strength"],["delta_z","Correction delta Z"]];
+    else if(node.kind==="p2f")options=[["vertical_angle","Vertical angle [deg]"],["direction_x","Direction X"],["direction_y","Direction Y"],["direction_z","Direction Z"],["tracking_error","Primary target alignment error [deg]"]];
     else if(node.kind==="joint")options=[["joint_angle","Joint Angle"],["joint_velocity","Joint Velocity"],["joint_acceleration","Joint Acceleration"]];
     else if(node.kind==="geom")options=[["x","X"],["y","Y"],["z","Z"]];
     else if(node.kind==="link"||node.kind==="segment")options=[["x","X"],["y","Y"],["z","Z"],["pitch","Pitch"],["yaw","Yaw"],["roll","Roll"]];
@@ -5944,12 +6228,12 @@ input[type="checkbox"]{
   function getRange(baseBin,startInput,endInput,movingToggle=null,movingInput=null){
     const dataStart=Number(baseBin.header.source_frame_start),dataEnd=Number(baseBin.header.source_frame_stop)-1;
     if(movingToggle?.checked){
-      const half=Math.max(0,Math.round(Number(movingInput?.value)||0)),width=2*half;
-      let start=currentSourceFrame()-half,end=currentSourceFrame()+half;
-      if(start<dataStart){end+=dataStart-start;start=dataStart}
-      if(end>dataEnd){start-=end-dataEnd;end=dataEnd}
-      start=Math.max(dataStart,start);end=Math.min(dataEnd,Math.max(start,Math.min(dataEnd,start+width)));
-      return [Math.round(start),Math.round(end)];
+      const windowFrames=Math.max(1,Math.round(Number(movingInput?.value)||1));
+      const half=Math.floor(windowFrames/2);
+      const current=Math.round(currentSourceFrame());
+      // Keep the current frame geometrically centered even near the first or
+      // last data frame. The portion outside the available data is blank.
+      return [current-half,current+half];
     }
     const sf=currentSourceFrame();
     const autoStart=Math.max(baseBin.header.source_frame_start,sf-100);
@@ -6128,10 +6412,18 @@ input[type="checkbox"]{
     if(!Number.isInteger(mappingIndex)||mappingIndex<0)return [];
     let array=null,componentCount=1,component=0,unit="rad",label=metric;
     if(node.kind==="ores"){
-      if(metric==="residual_angle")array=bin.arrays.orientation_residual_angle_rad;
-      else{array=bin.arrays.orientation_residual_rotvec_rad;componentCount=3;component={residual_x:0,residual_y:1,residual_z:2}[metric]??0}
       const mapping=bin.header.orientation_mappings?.[mappingIndex]||{};
-      label=`Orientation ${mapping.source_segment||mappingIndex} → ${mapping.target_link||""} · ${metric.replace("residual_","").toUpperCase()}`;
+      const axisMode=String(mapping.orientation_mode||"full").toLowerCase()==="axis";
+      if(axisMode&&metric==="axis_error_deg"){
+        array=bin.arrays.orientation_axis_error_rad;unit="deg";
+      }else if(axisMode&&metric.startsWith("target_direction_")){
+        array=bin.arrays.orientation_target_direction;componentCount=3;component={x:0,y:1,z:2}[metric.at(-1)]??0;unit="1";
+      }else if(axisMode&&metric.startsWith("result_direction_")){
+        array=bin.arrays.orientation_result_direction;componentCount=3;component={x:0,y:1,z:2}[metric.at(-1)]??0;unit="1";
+      }else if(metric==="residual_angle")array=bin.arrays.orientation_residual_angle_rad;
+      else{array=bin.arrays.orientation_residual_rotvec_rad;componentCount=3;component={residual_x:0,residual_y:1,residual_z:2}[metric]??0}
+      const metricLabel=metric==="axis_error_deg"?"Axis Error":metric.replaceAll("_"," ").toUpperCase();
+      label=`Orientation: ${axisMode?"Axis":"Full"} · ${mapping.source_segment||mappingIndex} → ${mapping.target_link||""} · ${metricLabel}`;
     }else{
       unit="m";
       const [quantity,axis]=metric.split("_");
@@ -6147,13 +6439,15 @@ input[type="checkbox"]{
     for(let frameIndex=0;frameIndex<frameCount;frameIndex++){
       const frame=frames[frameIndex];if(frame<start||frame>end)continue;
       const offset=(frameIndex*mappingCount+mappingIndex)*componentCount+component;
-      series.push([frame,Number(array[offset])]);
+      let value=Number(array[offset]);
+      if(node.kind==="ores"&&metric==="axis_error_deg")value=value*180/Math.PI;
+      series.push([frame,value]);
     }
     return [{series,label:`${labelPrefix} · ${label}`,color:"#c2413b",dash:[],unit}];
   }
 
   function embeddedViewerDiagnosticTraces(bin,node,metric,start,end,labelPrefix){
-    if(!bin||!["ik","footz","gcp","contact"].includes(node.kind))return [];
+    if(!bin||!["ik","footz","gcp","contact","p2f"].includes(node.kind))return [];
     const frames=sourceFrames(bin),frameCount=frames.length,traces=[];
     const seriesFrom=(array,getValue)=>frames.map((frame,index)=>[
       frame,getValue(array,index)
@@ -6174,6 +6468,31 @@ input[type="checkbox"]{
     }else if(node.kind==="gcp"){
       const array=bin.arrays[`gcp_${node.name}_${metric}`];if(!array)return [];
       traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · ${node.name} ${metric} GCP`,color:node.name==="left"?"#2f5f8f":"#91abc5",dash:[],unit:"probability"});
+    }else if(node.kind==="p2f"){
+      const sideIndex=node.name==="left"?0:1,component={direction_x:0,direction_y:1,direction_z:2}[metric];
+      if(metric==="tracking_error"){
+        const error=bin.arrays.pelvis_to_foot_residual_angle_rad;if(!error)return [];
+        traces.push({series:seriesFrom(error,(a,i)=>Number(a[i*2+sideIndex])*180/Math.PI),label:`${labelPrefix} · Robot Main ${node.name} · Primary target alignment error`,color:"#c2413b",dash:[],unit:"deg"});
+      }else{
+        const result=bin.arrays.pelvis_to_foot_result_direction;
+        const meva=bin.arrays.pelvis_to_foot_meva_direction;
+        if(!result)return [];
+        const value=(a,i,c)=>Number(a[(i*2+sideIndex)*3+c]);
+        if(metric==="vertical_angle"){
+          const angle=(a,i)=>Math.acos(Math.max(-1,Math.min(1,-value(a,i,2))))*180/Math.PI;
+          traces.push({series:seriesFrom(result,angle),label:`${labelPrefix} · Robot Main ${node.name} vertical angle`,color:"#d97706",dash:[],unit:"deg"});
+          if(meva){
+            traces.push({series:seriesFrom(meva,angle),label:`${labelPrefix} · MEVA ${node.name} vertical angle`,color:"#76a982",dash:[],unit:"deg"});
+          }else if(rvData?.diagnostics){
+            const title=node.name==="left"?"Left":"Right";
+            const legacy=diagnosticColumnSeries(`MEVA_${title}_Pelvis_to_Foot_vertical_angle_deg`,start,end);
+            if(legacy.length)traces.push({series:legacy,label:`${labelPrefix} · MEVA ${node.name} vertical angle`,color:"#76a982",dash:[],unit:"deg"});
+          }
+        }else if(component!=null){
+          traces.push({series:seriesFrom(result,(a,i)=>value(a,i,component)),label:`${labelPrefix} · Robot Main ${node.name} ${metric.replace("direction_","Direction ").toUpperCase()}`,color:"#d97706",dash:[],unit:"1"});
+          if(meva)traces.push({series:seriesFrom(meva,(a,i)=>value(a,i,component)),label:`${labelPrefix} · MEVA ${node.name} ${metric.replace("direction_","Direction ").toUpperCase()}`,color:"#76a982",dash:[],unit:"1"});
+        }
+      }
     }else if(node.name==="support_state"){
       const array=bin.arrays.support_state;if(!array)return [];
       traces.push({series:seriesFrom(array,(a,i)=>Number(a[i])),label:`${labelPrefix} · Support state`,color:"#7c3aed",dash:[],unit:"state"});
@@ -6300,39 +6619,66 @@ input[type="checkbox"]{
     const bin=selection.bin,framesAll=sourceFrames(bin),frameIndexes=[];
     framesAll.forEach((frame,index)=>{if(frame>=start&&frame<=end)frameIndexes.push(index)});
     const frames=frameIndexes.map(index=>framesAll[index]);
-    let rows=[],raw=null,severity=null,unit="1",kind=selection.kind;
+    let rows=[],raw=null,severity=null,unit="1",kind=selection.kind,values=null;
     if(kind==="joint_limit"){
       rows=bin.header.joint_names||[];raw=bin.arrays.joint_limit_margin_rad;
       severity=bin.arrays.joint_limit_severity;unit="rad";
     }else if(kind==="orientation_residual"){
-      rows=(bin.header.orientation_mappings||[]).map(m=>`${m.source_segment} → ${m.target_link}`);
-      raw=bin.arrays.orientation_residual_angle_rad;unit="rad";
+      const mappings=bin.header.orientation_mappings||[],full=bin.arrays.orientation_residual_angle_rad,axis=bin.arrays.orientation_axis_error_rad;
+      rows=mappings.map(m=>{const axisMode=String(m.orientation_mode||"full").toLowerCase()==="axis";return `${m.source_segment} → ${m.target_link} · ${axisMode?(axis?"Axis Error":"Axis Error unavailable (legacy BIN)"):"Full Quaternion Error"}`;});
+      values=mappings.map((mapping,rowIndex)=>frameIndexes.map(frameIndex=>{
+        const axisMode=String(mapping.orientation_mode||"full").toLowerCase()==="axis";
+        const value=axisMode?Number(axis?.[frameIndex*mappings.length+rowIndex]):Number(full?.[frameIndex*mappings.length+rowIndex]);
+        return Number.isFinite(value)?value*180/Math.PI:NaN;
+      }));
+      unit="deg";
     }else if(kind==="position_residual"){
       rows=(bin.header.position_mappings||[]).map(m=>`${m.source_segment} → ${m.target_link}`);
       raw=bin.arrays.position_residual_norm_m;unit="m";
     }
-    if(!raw||!rows.length)return null;
+    if((!raw&&!values)||!rows.length)return null;
     const rowCount=rows.length;
-    const values=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(raw[frameIndex*rowCount+rowIndex])));
+    if(!values)values=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(raw[frameIndex*rowCount+rowIndex])));
     let displayRange=NaN;
+    let severities;
     if(!severity){
       displayRange=Math.max(0,...values.flat().filter(Number.isFinite));
-      severity=new Uint8Array(framesAll.length*rowCount);
-      if(displayRange>0)for(let frameIndex=0;frameIndex<framesAll.length;frameIndex++)for(let rowIndex=0;rowIndex<rowCount;rowIndex++)severity[frameIndex*rowCount+rowIndex]=Math.round(Math.min(1,Math.abs(Number(raw[frameIndex*rowCount+rowIndex]))/displayRange)*255);
-    }
-    const severities=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(severity[frameIndex*rowCount+rowIndex])));
+      severities=values.map(row=>row.map(value=>Number.isFinite(value)&&displayRange>0?Math.round(Math.min(1,Math.abs(value)/displayRange)*255):0));
+    }else severities=rows.map((_,rowIndex)=>frameIndexes.map(frameIndex=>Number(severity[frameIndex*rowCount+rowIndex])));
     return {kind,stage:selection.stage,frames,rows,values,severities,unit,displayRange,frameStatus:frameIndexes.map(index=>Number(bin.arrays.frame_status?.[index]??0))};
+  }
+
+  function padHeatmapWindow(state,start,end){
+    if(!state?.frames?.length||end<start)return state;
+    const requested=Array.from({length:end-start+1},(_,index)=>start+index);
+    const sourceIndex=new Map(state.frames.map((frame,index)=>[Number(frame),index]));
+    const available=requested.map(frame=>sourceIndex.has(frame));
+    if(available.every(Boolean)&&requested.length===state.frames.length){
+      state.availableFrames=available;return state;
+    }
+    state.values=(state.values||[]).map(row=>requested.map(frame=>{
+      const index=sourceIndex.get(frame);return index==null?NaN:row[index];
+    }));
+    state.severities=(state.severities||[]).map(row=>requested.map(frame=>{
+      const index=sourceIndex.get(frame);return index==null?0:row[index];
+    }));
+    state.frameStatus=requested.map(frame=>{
+      const index=sourceIndex.get(frame);return index==null?0:Number(state.frameStatus?.[index]??0);
+    });
+    state.frames=requested;state.availableFrames=available;
+    return state;
   }
 
   function heatmapTooltipText(state,rowIndex,frameIndex){
     const frame=state.frames[frameIndex],label=state.rows[rowIndex],value=Number(state.values[rowIndex]?.[frameIndex]);
     const time=localFrameTime(frame);
     const frameLabel=`${stageLabel(state.stage||"primary")} Frame`;
+    if(state.availableFrames?.[frameIndex]===false)return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nNo data`;
     const status=Number(state.frameStatus?.[frameIndex]??0);
     if(status>=2)return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\n${status===2?"Solver error":"Not computed"}\nFallback pose is hidden from graph values.`;
     if(state.kind==="self_collision")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nPair: ${label}\nDistance: ${Number.isFinite(value)?(value*1000).toFixed(3):"—"} mm`;
     if(state.kind==="joint_limit")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nJoint: ${label}\nSigned limit margin: ${Number.isFinite(value)?value.toFixed(5):"—"} rad`;
-    if(state.kind==="orientation_residual"||state.kind==="position_residual")return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nMapping: ${label}\nResidual magnitude: ${Number.isFinite(value)?value.toFixed(6):"—"} ${state.unit}\nDisplay range max: ${Number.isFinite(state.displayRange)?state.displayRange.toFixed(6):"—"} ${state.unit}`;
+    if(state.kind==="orientation_residual"||state.kind==="position_residual"){const quantity=state.kind==="orientation_residual"?(label.includes("Axis Error")?"Axis Error":"Full Quaternion Error"):"Residual magnitude";return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nMapping: ${label}\n${quantity}: ${Number.isFinite(value)?value.toFixed(6):"—"} ${state.unit}\nDisplay range max: ${Number.isFinite(state.displayRange)?state.displayRange.toFixed(6):"—"} ${state.unit}`;}
     const limit=Number(state.limits?.[rowIndex]),ratio=Number.isFinite(value)&&Number.isFinite(limit)&&limit>0?Math.abs(value)/limit:NaN;
     const quantity=state.kind==="joint_velocity"?"Velocity":"Acceleration";
     return `${frameLabel}: ${frame}\nTime: ${time.toFixed(6)} s\nJoint: ${label}\n${quantity}: ${Number.isFinite(value)?value.toFixed(3):"—"} ${state.unit}\nLimit: ${Number.isFinite(limit)?limit.toFixed(3):"—"} ${state.unit}\nRatio: ${Number.isFinite(ratio)?ratio.toFixed(2)+"×":"—"}`;
@@ -6349,7 +6695,7 @@ input[type="checkbox"]{
     };
     canvas.addEventListener("mousemove",event=>{const item=hit(event);if(!item){tooltip.style.display="none";return}tooltip.textContent=heatmapTooltipText(item.state,item.rowIndex,item.frameIndex);tooltip.style.left=`${Math.min(canvas.clientWidth-230,item.x+12)}px`;tooltip.style.top=`${Math.min(canvas.clientHeight-82,item.y+12)}px`;tooltip.style.display="block"});
     canvas.addEventListener("mouseleave",()=>{tooltip.style.display="none"});
-    canvas.addEventListener("click",event=>{const item=hit(event);if(!item)return;rvSlider.value=item.state.frames[item.frameIndex];drawViewer()});
+    canvas.addEventListener("click",event=>{const item=hit(event);if(!item||item.state.availableFrames?.[item.frameIndex]===false)return;rvSlider.value=item.state.frames[item.frameIndex];drawViewer()});
   }
 
   function drawHeatmap(canvas,selection,start,end){
@@ -6359,8 +6705,13 @@ input[type="checkbox"]{
       if(selection.kind==="self_collision")state=buildSelfCollisionHeatmap(selection,start,end);
       else if(["joint_limit","orientation_residual","position_residual"].includes(selection.kind))state=buildMotionDiagnosticHeatmap(selection,start,end);
       else state=buildJointHeatmap(selection,start,end);
+      state=padHeatmapWindow(state,start,end);
       if(state)state.cacheKey=cacheKey;
     }
+    // A previous Heatmap draw stores an explicit pixel size on the canvas.
+    // Reset it before measuring so a wider two-graph layout uses the full
+    // current plot area instead of recursively preserving the old width.
+    canvas.style.width="100%";canvas.style.height="100%";
     const rect=canvas.getBoundingClientRect(),cssWidth=Math.max(240,rect.width||600),cssHeight=Math.max(120,rect.height||220),dpr=devicePixelRatio||1;
     if(!state||!state.frames.length||!state.rows.length){
       const {ctx,w,h}=resizeCanvas(canvas);ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.fillStyle="#566b7f";ctx.font="12px Segoe UI";ctx.fillText("Heat map data is not available. Rerun this result if needed.",20,30);rvHeatmapState.delete(canvas);return;
@@ -6373,7 +6724,7 @@ input[type="checkbox"]{
     if(!source){
       source=document.createElement("canvas");source.width=columns;source.height=rows;const sourceCtx=source.getContext("2d"),image=sourceCtx.createImageData(columns,rows);
       for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){
-        const severity=Math.max(0,Math.min(255,Math.round(Number(state.severities[row]?.[column])||0))),hex=FRAME_STATUS_RAINBOW_LUT[severity],offset=(row*columns+column)*4;
+        const severity=Math.max(0,Math.min(255,Math.round(Number(state.severities[row]?.[column])||0))),hex=state.availableFrames?.[column]===false?"#ffffff":FRAME_STATUS_RAINBOW_LUT[severity],offset=(row*columns+column)*4;
         image.data[offset]=parseInt(hex.slice(1,3),16);image.data[offset+1]=parseInt(hex.slice(3,5),16);image.data[offset+2]=parseInt(hex.slice(5,7),16);image.data[offset+3]=255;
       }
       sourceCtx.putImageData(image,0,0);state.sourceCanvas=source;
@@ -6393,6 +6744,10 @@ input[type="checkbox"]{
     const [start,end]=getRange(heatmap?.bin||baseBin,startInput,endInput,movingToggle,movingInput);
     if(heatmap){yAxisSelect.disabled=true;drawHeatmap(canvas,heatmap,start,end);return}
     yAxisSelect.disabled=false;rvHeatmapState.delete(canvas);const tip=canvas.parentElement.querySelector(".rv-heatmap-tooltip");if(tip)tip.style.display="none";
+    // Heatmap rendering uses an explicit CSS pixel size. Clear that stale
+    // inline size before returning to a line graph, otherwise Graph 1 keeps
+    // its former single-panel dimensions after the layout gains Graph 2.
+    canvas.style.width="100%";canvas.style.height="100%";
     const {ctx,w,h,dpr}=resizeCanvas(canvas);
     ctx.clearRect(0,0,w,h);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
     const metric=metricSelect.value;
@@ -6427,8 +6782,9 @@ input[type="checkbox"]{
       ctx.beginPath();ctx.moveTo(axisX,yy);ctx.lineTo(w-plotRight,yy);ctx.stroke();ctx.fillStyle="#566b7f";
       ctx.fillText(yv.toFixed(allDegrees?1:3),8,yy+3);
     }
-    if(yAxisSelect?.value==="auto"&&ymin<=0&&ymax>=0){
+    if(ymin<=0&&ymax>=0){
       const zeroY=Y(0);ctx.strokeStyle="#91a4b7";ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(axisX,zeroY);ctx.lineTo(w-plotRight,zeroY);ctx.stroke();
+      ctx.fillStyle="#566b7f";ctx.font=`${Math.round(12*dpr)}px Segoe UI`;ctx.fillText("0",8,Math.max(12,Math.min(h-bottomPad,zeroY+3)));
     }
     function line(series,color,dash=[]){
       if(!series.length)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash(dash);ctx.beginPath();let drawing=false;
@@ -6764,7 +7120,7 @@ input[type="checkbox"]{
     document.getElementById("rvPlotPanel4").style.display=mode==="none"?"flex":"none";
     rvMainGrid.classList.remove("mode-both","mode-a","mode-b","mode-none","mode-pkl","mode-meva");
     rvMainGrid.classList.add(`mode-${mode}`);
-    requestAnimationFrame(drawViewer);
+    requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
   }
   rvCompare?.addEventListener("change",applyCompareLayout);
 

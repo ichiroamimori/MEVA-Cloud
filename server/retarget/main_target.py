@@ -13,14 +13,18 @@ import numpy as np
 from main_calibration import (
     _free_joint_qpos_addr,
     _hinge_joints,
-    _mapped_link,
     _qpos_from_primary_frame,
     preprocess_gcp,
 )
 from primary_target import load_primary_target
+try:
+    from server.retarget.robot_runtime_definition import BodyPointDefinition
+except ModuleNotFoundError:  # Direct execution from server/retarget.
+    from robot_runtime_definition import BodyPointDefinition
+from mapping_tasks import quat_rotate_vec
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,7 @@ def build_main_target(
     primary_target_path: Path,
     model: mujoco.MjModel,
     cfg: dict,
+    pelvis_reference: BodyPointDefinition,
     contact_geometry: dict,
     mapping_offset_path: Path,
     fallback_common_scale: float,
@@ -82,7 +87,7 @@ def build_main_target(
     scale = _saved_common_scale(primary, fallback_common_scale)
     free_qadr = _free_joint_qpos_addr(model)
     hinges = _hinge_joints(model)
-    pelvis_link = _mapped_link(cfg, "Pelvis", "pelvis")
+    pelvis_link = pelvis_reference.body_name
     pelvis_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, pelvis_link)
     if pelvis_id < 0:
         raise KeyError(f"Pelvis body not found: {pelvis_link}")
@@ -122,6 +127,15 @@ def build_main_target(
     pelvis_to_foot_direction = {
         side: np.empty((n, 3), dtype=np.float64) for side in ("left", "right")
     }
+    meva_pelvis = np.asarray(source["pelvis_xyz_m"], dtype=np.float64)
+    meva_pelvis_to_foot_direction: dict[str, np.ndarray] = {}
+    for side in ("left", "right"):
+        meva_foot = np.asarray(source[f"{side}_foot_xyz_m"], dtype=np.float64)
+        direction = meva_foot - meva_pelvis
+        norm = np.linalg.norm(direction, axis=1, keepdims=True)
+        if np.any(~np.isfinite(norm)) or np.any(norm <= 1e-12):
+            raise ValueError(f"MEVA {side} Pelvis-to-Foot direction is degenerate")
+        meva_pelvis_to_foot_direction[side] = direction / norm
     relative_z = {
         side: np.empty((n, 4), dtype=np.float64) for side in ("left", "right")
     }
@@ -141,9 +155,10 @@ def build_main_target(
         mujoco.mj_forward(model, data)
         pelvis_quat[i] = data.xquat[pelvis_id]
         link_target_quat[i] = data.xquat[link_ids]
+        pelvis_position = pelvis_reference.world_position(model, data)
         for side in ("left", "right"):
             foot_z = float(data.xpos[foot_ids[side], 2])
-            direction = data.xpos[foot_ids[side]] - data.xpos[pelvis_id]
+            direction = data.xpos[foot_ids[side]] - pelvis_position
             direction_norm = float(np.linalg.norm(direction))
             if not np.isfinite(direction_norm) or direction_norm <= 1e-12:
                 raise ValueError(f"Primary {side} Pelvis-to-Foot direction is degenerate")
@@ -162,14 +177,19 @@ def build_main_target(
         raise ValueError("Primary Mapping target contains a zero quaternion")
     link_target_quat /= link_norm
 
-    pelvis_xyz = np.zeros((n, 3), dtype=np.float64)
-    pelvis_xyz[:, 2] = (
+    pelvis_reference_xyz = np.zeros((n, 3), dtype=np.float64)
+    pelvis_reference_xyz[:, 2] = (
         robot_foot_to_ground_offset_m
         + scale * (
             np.asarray(source["pelvis_z_m"], dtype=np.float64)
             - meva_foot_to_ground_offset_m
         )
     )
+    pelvis_xyz = np.asarray([
+        pelvis_reference_xyz[index]
+        - quat_rotate_vec(pelvis_quat[index], pelvis_reference.local_position)
+        for index in range(n)
+    ], dtype=np.float64)
     base_z: dict[str, np.ndarray] = {}
     min_index: dict[str, np.ndarray] = {}
     selected_raw: dict[str, np.ndarray] = {}
@@ -214,6 +234,11 @@ def build_main_target(
             primary.get("source_frame_indices", np.arange(n)), dtype=np.int64
         ),
         pelvis_target_xyz=pelvis_xyz,
+        pelvis_reference_target_xyz=pelvis_reference_xyz,
+        pelvis_reference_body=np.asarray(pelvis_reference.body_name),
+        pelvis_reference_local_position=np.asarray(
+            pelvis_reference.local_position, dtype=np.float64
+        ),
         pelvis_target_quat=pelvis_quat,
         quaternion_order=np.asarray("wxyz"),
         link_names=np.asarray(link_names),
@@ -222,6 +247,12 @@ def build_main_target(
         link_target_quat=link_target_quat,
         left_pelvis_to_foot_direction=pelvis_to_foot_direction["left"],
         right_pelvis_to_foot_direction=pelvis_to_foot_direction["right"],
+        left_meva_pelvis_to_foot_direction=(
+            meva_pelvis_to_foot_direction["left"]
+        ),
+        right_meva_pelvis_to_foot_direction=(
+            meva_pelvis_to_foot_direction["right"]
+        ),
         left_gcp_corrected=corrected["left"],
         right_gcp_corrected=corrected["right"],
         left_gcp_raw=selected_raw["left"],
@@ -268,6 +299,11 @@ def load_main_target(
         "left_support_local_position": (4, 3),
         "right_support_local_position": (4, 3),
         "left_support_body": (), "right_support_body": (),
+        "pelvis_reference_target_xyz": (n, 3),
+        "pelvis_reference_body": (),
+        "pelvis_reference_local_position": (3,),
+        "left_meva_pelvis_to_foot_direction": (n, 3),
+        "right_meva_pelvis_to_foot_direction": (n, 3),
     }
     if "link_names" not in target or target["link_names"].ndim != 1:
         raise ValueError("Invalid main target field link_names")
@@ -285,6 +321,14 @@ def load_main_target(
     for key, shape in optional_shapes.items():
         if key in target and target[key].shape != shape:
             raise ValueError(f"Invalid main target field {key}: expected {shape}")
+    reference_keys = {
+        "pelvis_reference_target_xyz",
+        "pelvis_reference_body",
+        "pelvis_reference_local_position",
+    }
+    present_reference_keys = reference_keys.intersection(target)
+    if present_reference_keys and present_reference_keys != reference_keys:
+        raise ValueError("Main target Pelvis Reference fields are incomplete")
     if expected_frames is not None and n != expected_frames:
         raise ValueError("Main target frame count does not match Primary")
     fps = float(np.asarray(target["target_fps"]).item())
@@ -294,6 +338,10 @@ def load_main_target(
         raise ValueError("Main target quaternion order must be wxyz")
     if not np.all(np.isfinite(target["pelvis_target_xyz"])):
         raise ValueError("Main Pelvis target contains NaN/Inf")
+    if "pelvis_reference_target_xyz" in target and not np.all(np.isfinite(
+        target["pelvis_reference_target_xyz"]
+    )):
+        raise ValueError("Main Pelvis Reference target contains NaN/Inf")
     if not np.allclose(np.linalg.norm(target["pelvis_target_quat"], axis=1), 1.0, atol=1e-7):
         raise ValueError("Main Pelvis target quaternion is not normalized")
     if not np.allclose(
@@ -307,6 +355,13 @@ def load_main_target(
             atol=1e-7,
         ):
             raise ValueError(f"Main {side} Pelvis-to-Foot direction is not normalized")
+        meva_key = f"{side}_meva_pelvis_to_foot_direction"
+        if meva_key in target and not np.allclose(
+            np.linalg.norm(target[meva_key], axis=1), 1.0, atol=1e-7
+        ):
+            raise ValueError(
+                f"MEVA {side} Pelvis-to-Foot direction is not normalized"
+            )
     for side in ("left", "right"):
         gcp = target[f"{side}_gcp_corrected"]
         indices = target[f"{side}_min_geom_index"]

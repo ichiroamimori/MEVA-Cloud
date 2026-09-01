@@ -18,11 +18,32 @@ from check_offsets import (
     source_long_axis_canonical,
 )
 from meva_canonical_geometry import CANONICAL_GEOMETRY_VERSION
+from mapping_tasks import axis_angle_rad, quat_rotate_vec
 from motion_io import save_gmr_pickle, save_motion_npz, trajectory_derivatives
 from viewer_data import MAGIC, write_viewer_bin
 
 
 class CanonicalOffsetTests(unittest.TestCase):
+    def test_axis_error_ignores_twist_and_detects_axis_tilt(self) -> None:
+        axis = np.asarray([1.0, 0.0, 0.0])
+        identity = np.asarray([1.0, 0.0, 0.0, 0.0])
+        twist_x_90 = np.asarray([
+            np.cos(np.pi / 4.0), np.sin(np.pi / 4.0), 0.0, 0.0,
+        ])
+        tilt_z_90 = np.asarray([
+            np.cos(np.pi / 4.0), 0.0, 0.0, np.sin(np.pi / 4.0),
+        ])
+        target = quat_rotate_vec(identity, axis)
+        self.assertAlmostEqual(
+            axis_angle_rad(target, quat_rotate_vec(twist_x_90, axis)), 0.0,
+            places=7,
+        )
+        self.assertAlmostEqual(
+            axis_angle_rad(target, quat_rotate_vec(tilt_z_90, axis)),
+            np.pi / 2.0,
+            places=7,
+        )
+
     def test_supported_reference_bvhs_match_canonical_directions(self) -> None:
         root = Path(__file__).resolve().parents[2]
         paths = list((
@@ -235,16 +256,26 @@ class MotionArtifactTests(unittest.TestCase):
             for name in (
                 "ik_iterations", "ik_converged", "ik_final_joint_delta_rad",
                 "orientation_residual_rotvec_rad", "orientation_residual_angle_rad",
+                "orientation_target_direction", "orientation_result_direction",
+                "orientation_axis_error_rad",
                 "joint_velocity_rad_s", "joint_acceleration_rad_s2",
                 "joint_limit_severity", "self_collision_signed_distance_m",
-                "link_pos", "link_quat", "geom_pos",
+                "link_pos", "link_quat", "geom_pos", "foot_support_point_pos",
             ):
                 self.assertIn(name, blocks)
+            self.assertEqual(blocks["foot_support_point_pos"]["shape"], [3, 8, 3])
+            self.assertEqual(len(header["foot_support_points"]), 8)
             self.assertEqual(header["array_offset_basis"], "payload_start")
             self.assertEqual(header["endianness"], "little")
             self.assertEqual(header["frames"], 3)
             self.assertEqual(
                 blocks["orientation_residual_rotvec_rad"]["shape"], [3, 14, 3]
+            )
+            self.assertEqual(
+                blocks["orientation_target_direction"]["shape"], [3, 14, 3]
+            )
+            self.assertEqual(
+                blocks["orientation_axis_error_rad"]["shape"], [3, 14]
             )
             self.assertEqual(
                 blocks["position_residual_xyz_m"]["shape"], [3, 1, 3]
@@ -269,6 +300,31 @@ class MotionArtifactTests(unittest.TestCase):
                 viewer_array("orientation_residual_angle_rad"),
                 np.linalg.norm(orientation_xyz, axis=2),
                 rtol=1e-6, atol=1e-7,
+            )
+            target_direction = viewer_array("orientation_target_direction")
+            result_direction = viewer_array("orientation_result_direction")
+            axis_error = viewer_array("orientation_axis_error_rad")
+            axis_mask = np.asarray([
+                str(mapping.get("orientation_mode", "full")) == "axis"
+                for mapping in header["orientation_mappings"]
+            ])
+            self.assertTrue(np.all(np.isfinite(axis_error[:, axis_mask])))
+            self.assertTrue(np.all(np.isnan(axis_error[:, ~axis_mask])))
+            np.testing.assert_allclose(
+                np.linalg.norm(target_direction[:, axis_mask], axis=2), 1.0,
+                rtol=1e-6, atol=1e-6,
+            )
+            np.testing.assert_allclose(
+                np.linalg.norm(result_direction[:, axis_mask], axis=2), 1.0,
+                rtol=1e-6, atol=1e-6,
+            )
+            expected_axis_error = np.arccos(np.clip(np.sum(
+                target_direction[:, axis_mask] * result_direction[:, axis_mask],
+                axis=2,
+            ), -1.0, 1.0))
+            np.testing.assert_allclose(
+                axis_error[:, axis_mask], expected_axis_error,
+                rtol=1e-5, atol=2e-4,
             )
             position_xyz = viewer_array("position_residual_xyz_m")
             np.testing.assert_allclose(
@@ -384,6 +440,7 @@ class MotionArtifactTests(unittest.TestCase):
                 "gcp_left_raw", "gcp_right_raw", "gcp_left_smoothed",
                 "gcp_right_smoothed", "gcp_left_used", "gcp_right_used",
                 "support_state", "foot_support_min_point_index",
+                "pelvis_to_foot_meva_direction",
             ):
                 self.assertIn(name, main_blocks)
             self.assertEqual(len(main_header["foot_support_points"]), 8)

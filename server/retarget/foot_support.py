@@ -51,7 +51,9 @@ class FootSupportDefinition:
     sides: dict[str, FootSupportSide]
 
 
-def _manifest_contacts(config: dict[str, Any]) -> dict[str, Any]:
+def _manifest_contacts(
+    config: dict[str, Any], *, required: bool = True,
+) -> dict[str, Any] | None:
     robot = config.get("robot", {})
     contacts = robot.get("foot_contacts") if isinstance(robot, dict) else None
     if isinstance(contacts, dict):
@@ -66,6 +68,8 @@ def _manifest_contacts(config: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Robot Foot contact metadata is unavailable: {exc}") from exc
     contacts = variant_retargeting_metadata(record).get("foot_contacts")
     if not isinstance(contacts, dict):
+        if not required:
+            return None
         raise ValueError(
             f"Robot Variant {record.variant_id} has no Foot contact metadata"
         )
@@ -75,8 +79,12 @@ def _manifest_contacts(config: dict[str, Any]) -> dict[str, Any]:
 def load_foot_support_definition(
     model: mujoco.MjModel,
     config: dict[str, Any],
-) -> FootSupportDefinition:
-    contacts = _manifest_contacts(config)
+    *,
+    required: bool = True,
+) -> FootSupportDefinition | None:
+    contacts = _manifest_contacts(config, required=required)
+    if contacts is None:
+        return None
     try:
         offset = float(contacts["robot_foot_to_ground_offset_m"])
     except (KeyError, TypeError, ValueError) as exc:

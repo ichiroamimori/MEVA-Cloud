@@ -24,10 +24,15 @@ from mapping_tasks import (
     RelativeDirectionTask,
     normalize_vec,
     quat_rotate_vec,
-    read_meva,
     required_quaternion_columns,
 )
 from primary_target import load_primary_target
+try:
+    from server.retarget.robot_runtime_definition import (
+        load_robot_runtime_definition_for_config,
+    )
+except ModuleNotFoundError:  # Direct execution from server/retarget.
+    from robot_runtime_definition import load_robot_runtime_definition_for_config
 
 
 MEVA_HEADER_ROW_1BASED = 8
@@ -52,6 +57,7 @@ class PrimaryPreparation:
     primary_target_path: Path
     step: int
     mapping_offsets: dict
+    offset_details: dict
     offset_path: Path
     joint_limit_zone_percent: float
     joint_limit_base_cost: float
@@ -136,7 +142,9 @@ def prepare_primary(
     offset_asset = load_json(offset_path)
     offset_details = offset_asset.get("details", {})
 
-    model = mujoco.MjModel.from_xml_path(str(xml_path))
+    runtime_definition = load_robot_runtime_definition_for_config(repo_root, cfg)
+    model = runtime_definition.model
+    root_body = runtime_definition.root_body
     conf = mink.Configuration(model)
     key = cfg["robot"].get("initial_keyframe")
     try:
@@ -187,12 +195,12 @@ def prepare_primary(
     if missing:
         raise KeyError("Missing MEVA columns:\n  " + "\n  ".join(missing))
 
-    pelvis0 = conf.get_transform_frame_to_world("pelvis", "body").translation().copy()
+    root0 = conf.get_transform_frame_to_world(root_body, "body").translation().copy()
     position_cost_by_link = {}
     for mapping in cfg["mappings"]:
         link = mapping["target_link"]
         position_cost = float(mapping["position_weight"])
-        if link == "pelvis":
+        if link == root_body:
             position_cost = float(cfg["root"]["position_cost"])
         position_cost_by_link[link] = position_cost
     mapping_tasks = MappingTaskSet(
@@ -205,7 +213,7 @@ def prepare_primary(
 
     spatial_direction_tasks = {}
     if pelvis_foot_enabled:
-        pelvis_link = mapped_link_for_source(cfg, "Pelvis")
+        pelvis_link = root_body
         left_foot_link = mapped_link_for_source(cfg, "LeftFoot")
         right_foot_link = mapped_link_for_source(cfg, "RightFoot")
         if left_direction_cost > 0.0:
@@ -233,7 +241,7 @@ def prepare_primary(
                 row=row,
                 configuration=configuration,
                 source_frame=source_frame,
-                position_targets_by_link={"pelvis": pelvis0},
+                position_targets_by_link={root_body: root0},
             )
             active = list(prepared_mapping.tasks)
 
@@ -312,6 +320,7 @@ def prepare_primary(
         primary_target_path=primary_target_path,
         step=step,
         mapping_offsets=mapping_offsets,
+        offset_details=offset_details,
         offset_path=offset_path,
         joint_limit_zone_percent=zone_percent,
         joint_limit_base_cost=base_cost,

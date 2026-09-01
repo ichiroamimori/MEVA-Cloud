@@ -4,15 +4,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from copy import deepcopy
 
 import mujoco
 import numpy as np
 
 try:
+    from .foot_support import (
+        load_foot_support_definition, support_point_metadata,
+        support_point_world_positions,
+    )
     from .robot_model_info import collision_pair_descriptors, joint_descriptors
     from .validation_data import joint_limit_severity, self_collision_severity
     from .viewer_data import write_viewer_bin
 except ImportError:
+    from foot_support import (
+        load_foot_support_definition, support_point_metadata,
+        support_point_world_positions,
+    )
     from robot_model_info import collision_pair_descriptors, joint_descriptors
     from validation_data import joint_limit_severity, self_collision_severity
     from viewer_data import write_viewer_bin
@@ -94,6 +103,9 @@ def build_motion_viewer_data(
     geom_ids = np.arange(model.ngeom, dtype=np.int32)
     geom_names = [_name(model, mujoco.mjtObj.mjOBJ_GEOM, int(i), "geom") for i in geom_ids]
     pairs = collision_pair_descriptors(model, xml_path)
+    support_definition = load_foot_support_definition(
+        model, config, required=False
+    )
     n = len(motion["frame"])
 
     link_pos = np.empty((n, len(body_ids), 3), dtype=np.float32)
@@ -104,6 +116,10 @@ def build_motion_viewer_data(
     joint_severity = np.empty_like(joint_actual, dtype=np.uint8)
     collision_distance = np.empty((n, len(pairs)), dtype=np.float32)
     collision_severity = np.empty((n, len(pairs)), dtype=np.uint8)
+    foot_support_position = (
+        np.empty((n, 8, 3), dtype=np.float32)
+        if support_definition is not None else None
+    )
 
     joint_cfg = dict(config.get("joint_limit_avoidance", {}))
     default_zone = float(joint_cfg.get("default", {}).get("limit_zone_percent", 10.0))
@@ -127,6 +143,13 @@ def build_motion_viewer_data(
         link_pos[frame_index] = data.xpos[body_ids]
         link_quat[frame_index] = data.xquat[body_ids]
         geom_pos[frame_index] = data.geom_xpos[geom_ids]
+        if support_definition is not None and foot_support_position is not None:
+            foot_support_position[frame_index] = np.concatenate([
+                support_point_world_positions(
+                    data, support_definition.sides[side]
+                )
+                for side in ("left", "right")
+            ], axis=0)
         for joint_index, info in enumerate(joint_metadata):
             value = float(joint_actual[frame_index, joint_index])
             margin = min(value - info["lower_limit_rad"], info["upper_limit_rad"] - value)
@@ -180,6 +203,8 @@ def build_motion_viewer_data(
             for body_id in body_ids
         ], dtype=np.int32),
     }
+    if foot_support_position is not None:
+        arrays["foot_support_point_pos"] = foot_support_position
     metadata = {
         "schema_version": SCHEMA_VERSION,
         "kind": "retarget", "stage": stage, "fps": float(motion["fps"]),
@@ -194,6 +219,50 @@ def build_motion_viewer_data(
         "joint_acceleration_limits_rad_s2": acceleration_limits.tolist(),
         "severity_lut_anchors": [[0,"blue"],[64,"cyan"],[128,"green"],[191,"yellow"],[223,"orange"],[255,"red"]],
     }
+    skeleton = config.get("robot", {}).get("ui", {}).get("skeleton")
+    if isinstance(skeleton, dict) and isinstance(skeleton.get("parts"), list):
+        skeleton = deepcopy(skeleton)
+        terminal_semantics = (
+            config.get("robot", {}).get("retargeting", {}).get("terminal_semantics", {})
+        )
+        for part in skeleton["parts"]:
+            if not isinstance(part, dict) or part.get("pattern") != "semantic_axis":
+                continue
+            semantic = terminal_semantics.get(str(part.get("body") or ""), {})
+            primary = semantic.get("primary") if isinstance(semantic, dict) else None
+            if not isinstance(primary, list) or len(primary) != 3:
+                raise ValueError(
+                    "semantic_axis requires terminal_semantics.primary: "
+                    f"stage={stage}, body={part.get('body')}, model={xml_path}"
+                )
+            part["direction_local"] = [float(value) for value in primary]
+        referenced_bodies = set(skeleton.get("hide_parent_edges", []))
+        for part in skeleton["parts"]:
+            if not isinstance(part, dict):
+                continue
+            if part.get("body"):
+                referenced_bodies.add(str(part["body"]))
+            for anchor in part.get("anchors", []):
+                if isinstance(anchor, dict) and anchor.get("body"):
+                    referenced_bodies.add(str(anchor["body"]))
+        missing_bodies = sorted(referenced_bodies.difference(link_names))
+        if missing_bodies:
+            raise ValueError(
+                "Robot skeleton definition references bodies missing from the compiled "
+                f"model: stage={stage}, bodies={missing_bodies}, model={xml_path}"
+            )
+        # The manifest is the source of truth; each BIN keeps the exact drawing
+        # definition used by this Run so historical artifacts remain reproducible.
+        metadata["robot_skeleton"] = skeleton
+    if support_definition is not None:
+        metadata["foot_support_points"] = support_point_metadata(
+            support_definition
+        )
+        metadata["foot_support_point_names"] = [
+            name
+            for side in ("left", "right")
+            for name in support_definition.sides[side].display_names
+        ]
     return MotionViewerData(
         model=model, link_names=link_names, geom_names=geom_names,
         joint_names=joint_names,
@@ -215,7 +284,8 @@ def write_motion_viewer(
         "time_s": "s", "root_pos": "m", "joint_angle_rad": "rad",
         "joint_velocity_rad_s": "rad/s", "joint_acceleration_rad_s2": "rad/s^2",
         "ik_final_joint_delta_rad": "rad", "orientation_residual_rotvec_rad": "rad",
-        "orientation_residual_angle_rad": "rad", "position_target_xyz_m": "m",
+        "orientation_residual_angle_rad": "rad", "orientation_axis_error_rad": "rad",
+        "position_target_xyz_m": "m",
         "position_result_xyz_m": "m", "position_residual_xyz_m": "m",
         "position_residual_norm_m": "m", "joint_limit_actual_rad": "rad",
         "joint_limit_margin_rad": "rad", "self_collision_signed_distance_m": "m",
@@ -225,6 +295,7 @@ def write_motion_viewer(
         "foot_support_result_z_m": "m", "foot_support_residual_z_m": "m",
         "foot_contact_delta_z_m": "m",
         "pelvis_to_foot_residual_angle_rad": "rad",
+        "pelvis_to_foot_meva_direction": "1",
     }
     combined_metadata["array_metadata"] = {
         name: {

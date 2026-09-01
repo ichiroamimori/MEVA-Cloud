@@ -62,9 +62,56 @@
             ["left_arm", "right_arm"],
             ["left_leg", "right_leg"]
           ]
+        },
+        "skeleton": {
+          "hide_parent_edges": [
+            "left_shoulder_pitch_link", "right_shoulder_pitch_link",
+            "left_hip_pitch_link", "right_hip_pitch_link"
+          ],
+          "parts": [
+            {
+              "role": "torso",
+              "pattern": "surface",
+              "anchors": [
+                {"body": "torso_link", "local_position": [0.004, 0.0, 0.27]},
+                {"body": "left_shoulder_pitch_link"},
+                {"body": "torso_link"},
+                {"body": "right_shoulder_pitch_link"}
+              ]
+            },
+            {
+              "role": "pelvis",
+              "pattern": "surface",
+              "anchors": [
+                {"body": "pelvis"},
+                {"body": "left_hip_pitch_link"},
+                {"body": "right_hip_pitch_link"}
+              ]
+            },
+            {
+              "role": "left_hand",
+              "pattern": "triangle",
+              "body": "left_wrist_yaw_link",
+              "local_points": [[0.0, 0.0, 0.0], [0.095, 0.0, 0.045], [0.095, 0.0, -0.045]]
+            },
+            {
+              "role": "right_hand",
+              "pattern": "triangle",
+              "body": "right_wrist_yaw_link",
+              "local_points": [[0.0, 0.0, 0.0], [0.095, 0.0, 0.045], [0.095, 0.0, -0.045]]
+            },
+            {"role": "left_foot", "pattern": "support", "side": "left"},
+            {"role": "right_foot", "pattern": "support", "side": "right"}
+          ]
         }
       },
       "retargeting": {
+        "landmarks": {
+          "pelvis_reference": {
+            "body": "pelvis",
+            "local_position": [0.0, 0.0, 0.0]
+          }
+        },
         "target_geometry": {
           "pelvis": {"type": "body_to_body", "distal_body": "torso_link"},
           "torso_link": {"type": "local_vector", "vector": [0.0, 0.0, 1.0]},
@@ -94,13 +141,13 @@
           },
           "left_ankle_roll_link": {
             "primary": [1.0, 0.0, 0.0],
-            "secondary": [0.0, 0.0, 1.0],
-            "secondary_name": "sole_up_normal"
+            "secondary": [0.0, 0.0, -1.0],
+            "secondary_name": "sole_outward_normal"
           },
           "right_ankle_roll_link": {
             "primary": [1.0, 0.0, 0.0],
-            "secondary": [0.0, 0.0, 1.0],
-            "secondary_name": "sole_up_normal"
+            "secondary": [0.0, 0.0, -1.0],
+            "secondary_name": "sole_outward_normal"
           }
         },
         "foot_contacts": {

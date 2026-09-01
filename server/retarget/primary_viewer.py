@@ -8,11 +8,17 @@ import mujoco
 import numpy as np
 
 try:
-    from .mapping_tasks import VIRTUAL_SOURCE_SEGMENTS, normq, qmul, quat_slerp
+    from .mapping_tasks import (
+        VIRTUAL_SOURCE_SEGMENTS, axis_angle_rad, normq, normalize_vec, qmul,
+        quat_rotate_vec, quat_slerp,
+    )
     from .motion_io import quaternion_error_rotvec
     from .motion_viewer import build_motion_viewer_data, write_motion_viewer
 except ImportError:
-    from mapping_tasks import VIRTUAL_SOURCE_SEGMENTS, normq, qmul, quat_slerp
+    from mapping_tasks import (
+        VIRTUAL_SOURCE_SEGMENTS, axis_angle_rad, normq, normalize_vec, qmul,
+        quat_rotate_vec, quat_slerp,
+    )
     from motion_io import quaternion_error_rotvec
     from motion_viewer import build_motion_viewer_data, write_motion_viewer
 
@@ -34,7 +40,8 @@ def _source_quaternion(target: dict[str, Any], frame: int, segment: str) -> np.n
 def write_primary_viewer(
     *, path: Path, repo_root: Path, config: dict[str, Any],
     motion: dict[str, Any], target: dict[str, Any], result: Any,
-    mapping_offsets: dict[str, Any], post_diagnostics: Any | None,
+    mapping_offsets: dict[str, Any], offset_details: dict[str, Any],
+    post_diagnostics: Any | None,
     frame_status: np.ndarray | None = None,
     frame_errors: list[dict[str, Any]] | None = None,
 ) -> Path:
@@ -61,6 +68,38 @@ def write_primary_viewer(
     orientation_rotvec = quaternion_error_rotvec(
         orientation_result.astype(np.float64), orientation_target.astype(np.float64)
     ).astype(np.float32)
+    orientation_target_direction = np.full(
+        (n, len(mappings), 3), np.nan, dtype=np.float32
+    )
+    orientation_result_direction = np.full_like(
+        orientation_target_direction, np.nan
+    )
+    orientation_axis_error = np.full(
+        (n, len(mappings)), np.nan, dtype=np.float32
+    )
+    for mapping_index, mapping in enumerate(mappings):
+        if str(mapping.get("orientation_mode", "full")) != "axis":
+            continue
+        link = str(mapping["target_link"])
+        axis = offset_details.get(link, {}).get("robot_long_axis_link_local")
+        if axis is None:
+            raise KeyError(
+                "Axis mode requires robot_long_axis_link_local in the mapping "
+                f"offset asset for Primary Viewer diagnostics: {link}"
+            )
+        axis = normalize_vec(axis)
+        for frame_index in range(n):
+            target_direction = normalize_vec(quat_rotate_vec(
+                orientation_target[frame_index, mapping_index], axis
+            ))
+            result_direction = normalize_vec(quat_rotate_vec(
+                orientation_result[frame_index, mapping_index], axis
+            ))
+            orientation_target_direction[frame_index, mapping_index] = target_direction
+            orientation_result_direction[frame_index, mapping_index] = result_direction
+            orientation_axis_error[frame_index, mapping_index] = axis_angle_rad(
+                target_direction, result_direction
+            )
 
     position_indices = [
         index for index, item in enumerate(mappings)
@@ -96,6 +135,9 @@ def write_primary_viewer(
         "orientation_residual_angle_rad": np.linalg.norm(
             orientation_rotvec, axis=2
         ).astype(np.float32),
+        "orientation_target_direction": orientation_target_direction,
+        "orientation_result_direction": orientation_result_direction,
+        "orientation_axis_error_rad": orientation_axis_error,
         "position_target_xyz_m": position_target,
         "position_result_xyz_m": position_result,
         "position_residual_xyz_m": position_residual,
@@ -136,6 +178,7 @@ def write_primary_viewer(
             key: [float(x) for x in value] for key, value in mapping_offsets.items()
         },
         "world_alignment_wxyz": [float(x) for x in world],
+        "orientation_axis_definition": "robot_long_axis_link_local",
         "run_status": "partial" if errors else "complete",
         "failed_frame_count": int(np.count_nonzero(frame_status >= 2)),
         "frame_status_codes": {

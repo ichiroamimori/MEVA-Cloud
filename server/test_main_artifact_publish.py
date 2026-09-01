@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from server.api.retarget_api import (
+from server.api.retarget_artifact_api import (
     _main_artifact_frame_counts,
     _publish_main_failure_artifacts,
     _publish_main_artifact_set,

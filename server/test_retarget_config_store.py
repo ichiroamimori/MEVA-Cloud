@@ -16,14 +16,13 @@ from server.retarget_config_store import (
     runtime_config,
     save_user_config,
 )
-from server.api.retarget_api import (
-    RunRequest,
+from server.api.retarget_config_api import (
     SharedConfigSaveRequest,
-    _prepare_run,
     get_shared_config,
     get_shared_configs,
     save_shared_config,
 )
+from server.api.retarget_run_api import RunRequest, _prepare_run
 from fastapi import HTTPException
 
 
@@ -144,6 +143,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
         runtime = deepcopy(BASE_CONFIG)
         runtime.update({
             "capsule_id": "2608250001",
+            "note": "This belongs to one run only.",
             "source": {"file": "workspace/users/local_user/capsules/2608250001/meva/a.csv"},
             "frame_range": {"start": 10, "stop": 20, "step": 1},
             "sampling": {"rate_fps": 60.0},
@@ -158,7 +158,10 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertEqual(saved["name"], "Factory Picking")
         self.assertIn("mappings", saved)
         self.assertNotIn("mjcf", saved["robot"])
-        for field in ("capsule_id", "source", "frame_range", "sampling", "offsets", "config_id"):
+        for field in (
+            "capsule_id", "source", "frame_range", "sampling", "offsets",
+            "config_id", "note",
+        ):
             self.assertNotIn(field, saved)
         self.assertEqual(saved["output"], {"root_rot_order": "xyzw"})
 
@@ -249,16 +252,44 @@ class RetargetConfigStoreTests(unittest.TestCase):
         request = RunRequest(
             capsule_id="2608250001",
             config=loaded["config"],
+            note="Primary review note",
         )
         run_id, _, _, request_path, _ = _prepare_run(request)
         snapshot = json.loads(request_path.read_text(encoding="utf-8"))
         self.assertEqual(snapshot["name"], "Primary Standard")
         self.assertEqual(snapshot["capsule_id"], "2608250001")
+        self.assertEqual(snapshot["note"], "Primary review note")
         self.assertIn("2608250001", snapshot["source"]["file"])
         self.assertEqual(snapshot["mappings"], BASE_CONFIG["mappings"])
         self.assertEqual(snapshot["output"]["run_id"], run_id)
         self.assertNotIn("pkl_name", snapshot["output"])
         self.assertFalse(snapshot["output"]["save_diagnostics_csv"])
+
+    def test_primary_request_refreshes_robot_metadata_from_manifest(self) -> None:
+        config = deepcopy(BASE_CONFIG)
+        config["robot"]["ui"] = {
+            "skeleton": {"parts": [{"role": "stale", "pattern": "segment"}]}
+        }
+        request = RunRequest(
+            capsule_id="2608250001",
+            robot_variant="k1_22dof",
+            config=config,
+        )
+
+        _, _, _, request_path, _ = _prepare_run(request)
+        snapshot = json.loads(request_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(snapshot["robot"]["variant"], "k1_22dof")
+        parts = snapshot["robot"]["ui"]["skeleton"]["parts"]
+        hand_parts = {
+            part["body"]: part
+            for part in parts
+            if part.get("pattern") == "semantic_axis"
+        }
+        self.assertEqual(
+            set(hand_parts), {"left_hand_link", "right_hand_link"}
+        )
+        self.assertEqual(snapshot["mappings"], BASE_CONFIG["mappings"])
 
     def test_main_configs_are_stage_separated_loadable_and_saveable(self) -> None:
         primary_records = get_shared_configs(stage="primary")["configs"]
@@ -346,10 +377,19 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn('applyConfig(data.config)', html)
         self.assertIn('stage: "main"', html)
         self.assertIn('loadSelectedMainSharedConfig(runId)', html)
+        self.assertIn(
+            'data.config?.robot || null',
+            html,
+        )
         self.assertIn('id="targetRobotSelect"', html)
         self.assertIn('fetch("/api/retarget/robots"', html)
         self.assertIn('saveConfigStage === "main"', html)
         self.assertIn('Main Result Config is a Run snapshot', html)
+        self.assertIn('id="primaryRunNote"', html)
+        self.assertIn('id="mainRunNote"', html)
+        self.assertIn('maxlength="2000"', html)
+        self.assertIn('cfg.note = String(primaryRunNote?.value || "").trim()', html)
+        self.assertIn('cfg.note = String(mainRunNote?.value || "").trim()', html)
         self.assertIn('Primary Standard', html)
         self.assertIn('Main Standard', html)
         self.assertNotIn('Xenoma Standard', html)

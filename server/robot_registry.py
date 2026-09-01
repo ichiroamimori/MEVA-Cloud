@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import math
 import re
-import xml.etree.ElementTree as ET
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +19,7 @@ class RobotRegistryError(ValueError):
 
 @dataclass(frozen=True)
 class RobotVariant:
+    repository_root_path: Path
     manufacturer_id: str
     manufacturer_name: str
     robot_id: str
@@ -52,6 +52,7 @@ class RobotVariant:
             "manufacturer": self.manufacturer_id,
             "model": self.robot_id,
             "variant": self.variant_id,
+            "dof": int(self.variant["dof"]),
             "model_format": str(model["format"]),
             "model_file": _repository_relative(self.model_path, repository_root),
             # Compatibility key used by the existing MuJoCo Retargeting code.
@@ -71,12 +72,16 @@ class RobotVariant:
         if isinstance(initial_pose, dict) and initial_pose.get("type") == "keyframe":
             value["initial_keyframe"] = str(initial_pose["name"])
         retargeting = variant_retargeting_metadata(self)
+        # Keep the Robot-specific orientation/terminal definitions available to
+        # the generic Mapping UI and offset builder.  They describe capabilities;
+        # they are not a whitelist of links that may receive a Full task.
+        value["retargeting"] = deepcopy(retargeting)
         if "foot_contacts" in retargeting:
             value["foot_contacts"] = deepcopy(retargeting["foot_contacts"])
         target_geometry = retargeting.get("target_geometry")
         if isinstance(target_geometry, dict):
-            # The Mapping editor may show every body in the model, but only
-            # links with an orientation-geometry rule are valid IK targets.
+            # Legacy compatibility.  New clients use per-body orientation
+            # capabilities returned by robot_model_metadata().
             value["mapping_target_links"] = list(target_geometry)
         return value
 
@@ -146,6 +151,128 @@ def _required_bool(value: Any, label: str) -> bool:
     if not isinstance(value, bool):
         raise RobotRegistryError(f"{label} must be boolean")
     return value
+
+
+def _finite_vector3(value: Any, label: str) -> list[float]:
+    if not (
+        isinstance(value, list)
+        and len(value) == 3
+        and all(
+            not isinstance(component, bool)
+            and isinstance(component, (int, float))
+            and math.isfinite(float(component))
+            for component in value
+        )
+    ):
+        raise RobotRegistryError(f"{label} must be a finite 3-vector")
+    return [float(component) for component in value]
+
+
+def _validate_skeleton_ui(ui: dict[str, Any], *, identity: str) -> None:
+    """Validate the small, fixed vocabulary used by Viewer stick figures."""
+    skeleton = ui.get("skeleton")
+    if skeleton is None:
+        return
+    if not isinstance(skeleton, dict):
+        raise RobotRegistryError(f"ui.skeleton must be an object: {identity}")
+    hidden = skeleton.get("hide_parent_edges", [])
+    if not isinstance(hidden, list) or not all(isinstance(name, str) and name for name in hidden):
+        raise RobotRegistryError(f"ui.skeleton.hide_parent_edges must be body names: {identity}")
+    parts = skeleton.get("parts")
+    if not isinstance(parts, list) or not parts:
+        raise RobotRegistryError(f"ui.skeleton.parts must be a non-empty array: {identity}")
+    roles: set[str] = set()
+    for index, part in enumerate(parts):
+        label = f"ui.skeleton.parts[{index}]"
+        if not isinstance(part, dict):
+            raise RobotRegistryError(f"{label} must be an object: {identity}")
+        role = _required_id(part.get("role"), f"{label}.role")
+        if role in roles:
+            raise RobotRegistryError(f"Duplicate skeleton role {role!r}: {identity}")
+        roles.add(role)
+        pattern = str(part.get("pattern") or "")
+        if pattern in {"surface", "segment"}:
+            anchors = part.get("anchors")
+            minimum = 3 if pattern == "surface" else 2
+            if not isinstance(anchors, list) or len(anchors) < minimum:
+                raise RobotRegistryError(
+                    f"{label}.anchors needs at least {minimum} points: {identity}"
+                )
+            for anchor_index, anchor in enumerate(anchors):
+                if not isinstance(anchor, dict) or not str(anchor.get("body") or ""):
+                    raise RobotRegistryError(f"Invalid {label}.anchors[{anchor_index}]: {identity}")
+                if "local_position" in anchor:
+                    _finite_vector3(anchor["local_position"], f"{label}.anchors[{anchor_index}].local_position")
+        elif pattern == "circle":
+            if not str(part.get("body") or ""):
+                raise RobotRegistryError(f"{label}.body is required: {identity}")
+            _finite_vector3(part.get("local_center", [0, 0, 0]), f"{label}.local_center")
+            _orientation_vector(part.get("direction_local"), identity=identity, field=f"{label}.direction_local")
+            radius = part.get("radius_m")
+            if isinstance(radius, bool) or not isinstance(radius, (int, float)) or not math.isfinite(float(radius)) or float(radius) <= 0:
+                raise RobotRegistryError(f"{label}.radius_m must be positive: {identity}")
+        elif pattern == "triangle":
+            if not str(part.get("body") or ""):
+                raise RobotRegistryError(f"{label}.body is required: {identity}")
+            points = part.get("local_points")
+            if not isinstance(points, list) or len(points) != 3:
+                raise RobotRegistryError(f"{label}.local_points must contain 3 points: {identity}")
+            for point_index, point in enumerate(points):
+                _finite_vector3(point, f"{label}.local_points[{point_index}]")
+        elif pattern == "semantic_axis":
+            if not str(part.get("body") or ""):
+                raise RobotRegistryError(f"{label}.body is required: {identity}")
+            length = part.get("length_m")
+            if (
+                isinstance(length, bool)
+                or not isinstance(length, (int, float))
+                or not math.isfinite(float(length))
+                or float(length) <= 0
+            ):
+                raise RobotRegistryError(
+                    f"{label}.length_m must be positive: {identity}"
+                )
+        elif pattern == "support":
+            if part.get("side") not in {"left", "right"}:
+                raise RobotRegistryError(f"{label}.side must be left or right: {identity}")
+        else:
+            raise RobotRegistryError(f"Unknown skeleton pattern {pattern!r}: {identity}")
+
+
+def _validate_skeleton_semantics(
+    ui: dict[str, Any], retargeting: dict[str, Any], *, identity: str
+) -> None:
+    """Keep semantic surface cues tied to complete Robot semantic frames."""
+    skeleton = ui.get("skeleton")
+    if not isinstance(skeleton, dict):
+        return
+    semantics = retargeting.get("terminal_semantics", {})
+    if not isinstance(semantics, dict):
+        semantics = {}
+    for index, part in enumerate(skeleton.get("parts", [])):
+        if not isinstance(part, dict):
+            continue
+        pattern = part.get("pattern")
+        if pattern not in {"triangle", "semantic_axis"}:
+            continue
+        body = str(part.get("body") or "")
+        semantic = semantics.get(body)
+        if not isinstance(semantic, dict) or semantic.get("primary") is None:
+            raise RobotRegistryError(
+                f"{pattern} skeleton parts require terminal semantics with a Primary "
+                f"axis: {identity}, part={index}, body={body}"
+            )
+        has_secondary = semantic.get("secondary") is not None
+        if pattern == "triangle" and not has_secondary:
+            raise RobotRegistryError(
+                "Triangle skeleton parts require terminal semantics with a Secondary "
+                f"axis: {identity}, part={index}, body={body}"
+            )
+        if pattern == "semantic_axis" and has_secondary:
+            raise RobotRegistryError(
+                "semantic_axis is only for terminal semantics without a Secondary "
+                f"axis: {identity}, part={index}, body={body}"
+            )
 
 
 def _child_path(directory: Path, relative: str, label: str) -> Path:
@@ -280,6 +407,18 @@ def _validate_manifest(
             raise RobotRegistryError(
                 f"Variant ui must be an object: {manufacturer_id}/{robot_id}/{variant_id}"
             )
+        _validate_skeleton_ui(
+            ui or {}, identity=f"{manufacturer_id}/{robot_id}/{variant_id}"
+        )
+        retargeting = variant.get("retargeting", {})
+        if retargeting is not None and not isinstance(retargeting, dict):
+            raise RobotRegistryError(
+                f"Variant retargeting must be an object: {manufacturer_id}/{robot_id}/{variant_id}"
+            )
+        _validate_skeleton_semantics(
+            ui or {}, retargeting or {},
+            identity=f"{manufacturer_id}/{robot_id}/{variant_id}",
+        )
         variant["model"] = model
         variant["source"] = source
         variant["initial_pose"] = initial_pose
@@ -339,6 +478,7 @@ def load_registry(root: Path | None = None) -> list[RobotVariant]:
                 )
             variant_ids[variant_id] = owner
             records.append(RobotVariant(
+                repository_root_path=repository,
                 manufacturer_id=manufacturer_id,
                 manufacturer_name=manufacturer_name,
                 robot_id=robot_id,
@@ -420,6 +560,108 @@ def variant_retargeting_metadata(record: RobotVariant) -> dict[str, Any]:
     return deepcopy(value)
 
 
+def _orientation_vector(
+    value: Any, *, identity: str, field: str
+) -> tuple[float, float, float]:
+    if not (
+        isinstance(value, list)
+        and len(value) == 3
+        and all(
+            not isinstance(component, bool)
+            and isinstance(component, (int, float))
+            and math.isfinite(float(component))
+            for component in value
+        )
+    ):
+        raise RobotRegistryError(f"Invalid {field} vector: {identity}")
+    vector = tuple(float(component) for component in value)
+    if math.sqrt(sum(component * component for component in vector)) <= 1e-12:
+        raise RobotRegistryError(f"Zero-length {field} vector: {identity}")
+    return vector
+
+
+def _orientation_capabilities(
+    metadata: dict[str, Any], bodies: set[str], *, identity: str
+) -> dict[str, dict[str, bool]]:
+    """Validate manifest orientation metadata and return per-body capabilities."""
+    capabilities = {
+        body: {"full_orientation_supported": True, "axis_alignment_supported": False}
+        for body in bodies
+    }
+    target_geometry = metadata.get("target_geometry", {})
+    if target_geometry is None:
+        target_geometry = {}
+    if not isinstance(target_geometry, dict):
+        raise RobotRegistryError(f"retargeting.target_geometry must be an object: {identity}")
+    for body, raw_rule in target_geometry.items():
+        body_name = str(body)
+        if body_name not in bodies:
+            raise RobotRegistryError(
+                f"Orientation target body not found in model: {identity}, body={body_name}"
+            )
+        if not isinstance(raw_rule, dict):
+            raise RobotRegistryError(
+                f"Invalid orientation geometry rule: {identity}, body={body_name}"
+            )
+        rule_type = str(raw_rule.get("type") or "")
+        if rule_type == "local_vector":
+            _orientation_vector(
+                raw_rule.get("vector"), identity=identity,
+                field=f"target_geometry.{body_name}.vector",
+            )
+        elif rule_type == "body_to_body":
+            distal = str(raw_rule.get("distal_body") or "")
+            if distal not in bodies or distal == body_name:
+                raise RobotRegistryError(
+                    f"Invalid distal body: {identity}, body={body_name}, distal={distal}"
+                )
+        else:
+            raise RobotRegistryError(
+                f"Unknown orientation geometry type {rule_type!r}: {identity}, body={body_name}"
+            )
+        capabilities[body_name]["axis_alignment_supported"] = True
+
+    terminal_semantics = metadata.get("terminal_semantics", {})
+    if terminal_semantics is None:
+        terminal_semantics = {}
+    if not isinstance(terminal_semantics, dict):
+        raise RobotRegistryError(f"retargeting.terminal_semantics must be an object: {identity}")
+    for body, raw_semantic in terminal_semantics.items():
+        body_name = str(body)
+        if body_name not in bodies:
+            raise RobotRegistryError(
+                f"Terminal semantic body not found in model: {identity}, body={body_name}"
+            )
+        if not isinstance(raw_semantic, dict):
+            raise RobotRegistryError(
+                f"Invalid terminal semantic: {identity}, body={body_name}"
+            )
+        primary = _orientation_vector(
+            raw_semantic.get("primary"), identity=identity,
+            field=f"terminal_semantics.{body_name}.primary",
+        )
+        capabilities[body_name]["axis_alignment_supported"] = True
+        if "secondary" in raw_semantic:
+            secondary = _orientation_vector(
+                raw_semantic.get("secondary"), identity=identity,
+                field=f"terminal_semantics.{body_name}.secondary",
+            )
+            cross = (
+                primary[1] * secondary[2] - primary[2] * secondary[1],
+                primary[2] * secondary[0] - primary[0] * secondary[2],
+                primary[0] * secondary[1] - primary[1] * secondary[0],
+            )
+            if math.sqrt(sum(component * component for component in cross)) <= 1e-12:
+                raise RobotRegistryError(
+                    f"Parallel terminal semantic axes: {identity}, body={body_name}"
+                )
+            if not str(raw_semantic.get("secondary_name") or ""):
+                raise RobotRegistryError(
+                    f"Terminal secondary_name is missing: {identity}, body={body_name}"
+                )
+    return capabilities
+
+
 def validate_retarget_config(
     record: RobotVariant, config: dict[str, Any]
 ) -> dict[str, Any]:
@@ -438,62 +680,21 @@ def validate_retarget_config(
             f"Config Robot identity mismatch: expected {'/'.join(expected)}, "
             f"found {'/'.join(actual)}"
         )
-    if str(record.variant["model"]["format"]) != "mjcf":
-        raise RobotRegistryError(
-            f"Retargeting Runtime Model must be MJCF: {identity}, "
-            f"model={record.model_path}"
-        )
     try:
-        xml = ET.parse(record.model_path).getroot()
-    except (OSError, ET.ParseError) as exc:
-        raise RobotRegistryError(
-            f"Could not parse Runtime Model: {identity}, path={record.model_path}"
-        ) from exc
+        from server.retarget.robot_runtime_definition import (
+            RobotRuntimeDefinitionError,
+            load_robot_runtime_definition,
+        )
+        runtime = load_robot_runtime_definition(
+            record.repository_root_path,
+            record.runtime_robot(record.repository_root_path),
+        )
+        runtime.validate_config(config)
+    except RobotRuntimeDefinitionError as exc:
+        raise RobotRegistryError(str(exc)) from exc
 
-    bodies = {
-        str(node.get("name")) for node in xml.findall(".//body") if node.get("name")
-    }
-    joints = {
-        str(node.get("name")) for node in xml.findall(".//joint") if node.get("name")
-    }
-    actuator_joints = {
-        str(node.get("joint"))
-        for node in xml.findall(".//actuator/*")
-        if node.get("joint")
-    }
-    root_body = str(record.variant.get("root_body") or "")
-    if root_body not in bodies:
-        raise RobotRegistryError(
-            f"Root body not found in model: {identity}, body={root_body}, "
-            f"path={record.model_path}"
-        )
-    initial_pose = record.variant.get("initial_pose", {})
-    if isinstance(initial_pose, dict) and initial_pose.get("type") == "keyframe":
-        keyframe_name = str(initial_pose.get("name") or "")
-        keyframes = {
-            str(node.get("name")) for node in xml.findall(".//keyframe/key")
-            if node.get("name")
-        }
-        if keyframe_name not in keyframes:
-            raise RobotRegistryError(
-                f"Initial keyframe not found in model: {identity}, "
-                f"keyframe={keyframe_name}, path={record.model_path}"
-            )
-    output_joint_order = record.variant.get("output_joint_order")
-    if isinstance(output_joint_order, list):
-        missing_output_joints = sorted(set(output_joint_order) - joints)
-        if missing_output_joints:
-            raise RobotRegistryError(
-                f"Output Joint not found in model: {identity}, "
-                f"joints={', '.join(missing_output_joints)}, path={record.model_path}"
-            )
-    if actuator_joints and len(actuator_joints) != int(record.variant["dof"]):
-        raise RobotRegistryError(
-            f"Variant DOF mismatch: manufacturer={record.manufacturer_id}, "
-            f"robot={record.robot_id}, variant={record.variant_id}, "
-            f"manifest={record.variant['dof']}, model_actuators={len(actuator_joints)}, "
-            f"path={record.model_path}"
-        )
+    bodies = set(runtime.body_names)
+    joints = set(runtime.joint_names)
 
     mappings = config.get("mappings")
     if not isinstance(mappings, list):
@@ -528,8 +729,33 @@ def validate_retarget_config(
         )
 
     metadata = variant_retargeting_metadata(record)
-    foot_contacts = metadata.get("foot_contacts", {})
-    if isinstance(foot_contacts, dict):
+    terminal_sources = {"LeftHand", "RightHand", "LeftFoot", "RightFoot"}
+    for item in mappings:
+        if not isinstance(item, dict):
+            raise RobotRegistryError(f"Invalid Config mapping: {identity}")
+        target_link = str(item.get("target_link") or "")
+        source_segment = str(item.get("source_segment") or "")
+        orientation_mode = str(item.get("orientation_mode") or "full")
+        if orientation_mode not in {"full", "axis"}:
+            raise RobotRegistryError(
+                f"Unknown orientation_mode {orientation_mode!r}: {identity}, body={target_link}"
+            )
+        orientation = runtime.orientation(target_link)
+        if orientation_mode == "axis" and not orientation.axis_alignment_supported:
+            raise RobotRegistryError(
+                f"Ignore Axis Rotation requires a Primary axis: {identity}, body={target_link}"
+            )
+        if orientation_mode == "full" and source_segment in terminal_sources:
+            if orientation.secondary_axis is None:
+                raise RobotRegistryError(
+                    f"Terminal Full Quaternion mapping requires Primary and Secondary axes: "
+                    f"{identity}, source={source_segment}, body={target_link}"
+                )
+
+    foot_contacts = metadata.get("foot_contacts")
+    if foot_contacts is not None:
+        if not isinstance(foot_contacts, dict):
+            raise RobotRegistryError(f"retargeting.foot_contacts must be an object: {identity}")
         offset = foot_contacts.get("robot_foot_to_ground_offset_m")
         if (
             isinstance(offset, bool)

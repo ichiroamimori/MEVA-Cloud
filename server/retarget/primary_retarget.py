@@ -357,6 +357,7 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
         target=target,
         result=result,
         mapping_offsets=preparation.mapping_offsets,
+        offset_details=preparation.offset_details,
         post_diagnostics=diagnostics,
     )
     if debug_artifacts:
@@ -495,7 +496,8 @@ def _write_primary_failure_outputs(
         path=run / f"{run_id}_primary_viewer.bin",
         repo_root=repo_root_from(config_path), config=snapshot,
         motion=motion, target=partial_target, result=partial_result,
-        mapping_offsets=preparation.mapping_offsets, post_diagnostics=None,
+        mapping_offsets=preparation.mapping_offsets,
+        offset_details=preparation.offset_details, post_diagnostics=None,
         frame_status=frame_status, frame_errors=frame_errors,
     )
     (run / f"{run_id}_error.log").write_text(

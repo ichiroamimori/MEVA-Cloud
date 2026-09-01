@@ -41,7 +41,7 @@ except ImportError:
 # Non-terminal segments:
 #   Source geometry comes from versioned MEVA canonical directions.
 #
-# Terminal segments (Hand / Foot):
+# Semantic-frame segments (Head / Hand / Foot):
 #   BVH End Site is NOT used to define orientation.
 #   Instead, explicit semantic local frames are used.
 #
@@ -53,7 +53,7 @@ except ImportError:
 # must therefore NOT trigger geometric offset recalibration.
 # ============================================================
 
-ALGORITHM_VERSION = "geometry-v3.0-meva-canonical"
+ALGORITHM_VERSION = "geometry-v4.0-orientation-capabilities"
 
 SQRT_HALF = float(np.sqrt(0.5))
 
@@ -107,16 +107,26 @@ BVH_DISTAL_JOINT = {
 #   secondary
 #       anatomically meaningful second axis
 #
+# Head:
+#   primary = crown / head-up direction
+#   secondary = face-forward direction
+#
 # Hand:
 #   secondary = palm normal
 #
 # Foot:
-#   secondary = upward sole normal
+#   secondary = outward sole normal (toward the ground in neutral stance)
 #
 # All vectors below are LOCAL coordinates.
 # ============================================================
 
 MEVA_TERMINAL_SEMANTICS = {
+    "Head": {
+        "primary": [0.0, 1.0, 0.0],
+        "secondary": [1.0, 0.0, 0.0],
+        "secondary_name": "face_forward",
+    },
+
     "LeftHand": {
         "primary": [0.0, -1.0, 0.0],
         "secondary": [0.0, 0.0, 1.0],
@@ -131,14 +141,14 @@ MEVA_TERMINAL_SEMANTICS = {
 
     "LeftFoot": {
         "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, 1.0, 0.0],
-        "secondary_name": "sole_up_normal",
+        "secondary": [0.0, -1.0, 0.0],
+        "secondary_name": "sole_outward_normal",
     },
 
     "RightFoot": {
         "primary": [1.0, 0.0, 0.0],
-        "secondary": [0.0, 1.0, 0.0],
-        "secondary_name": "sole_up_normal",
+        "secondary": [0.0, -1.0, 0.0],
+        "secondary_name": "sole_outward_normal",
     },
 }
 
@@ -734,6 +744,57 @@ def robot_long_axis_local(
     )
 
 
+def robot_primary_axis_local(
+    model,
+    target_link,
+    target_geometry,
+    terminal_semantics,
+):
+    """Return a manifest-defined Primary axis without inferring anatomy."""
+    semantic = terminal_semantics.get(target_link)
+    if isinstance(semantic, dict) and semantic.get("primary") is not None:
+        return normalize(semantic["primary"]), "terminal_semantics"
+    if target_link in target_geometry:
+        return (
+            robot_long_axis_local(model, target_link, target_geometry),
+            "target_geometry",
+        )
+    raise KeyError(
+        f"No Primary axis for target link: {target_link}. "
+        "Add retargeting.target_geometry or terminal_semantics.primary "
+        "to the Variant manifest before using Ignore Axis Rotation."
+    )
+
+
+def build_primary_axis_offset(
+    model,
+    source_segment,
+    target_link,
+    robot_axis_local,
+    *,
+    source_mode,
+):
+    src_axis_local = (
+        normalize(MEVA_TERMINAL_SEMANTICS[source_segment]["primary"])
+        if source_segment in MEVA_TERMINAL_SEMANTICS
+        else source_long_axis_canonical(source_segment)
+    )
+    src_axis_world0 = quat_rotate(Q_BVH_TO_MEVA_WXYZ, src_axis_local)
+    ref_world = preferred_world_reference(src_axis_world0)
+    src_ref_local = quat_rotate(quat_inv(Q_BVH_TO_MEVA_WXYZ), ref_world)
+    F_meva = frame_from_primary(src_axis_local, src_ref_local)
+    _, _, q_robot0 = body_world_pose_qpos0(model, target_link)
+    robot_ref_local = quat_rotate(quat_inv(q_robot0), ref_world)
+    F_robot = frame_from_primary(robot_axis_local, robot_ref_local)
+    q_offset = mat_to_quat(F_meva @ F_robot.T)
+    return q_offset, {
+        "source_geometry_mode": source_mode,
+        "source_primary_axis_local": [float(x) for x in src_axis_local],
+        "robot_long_axis_link_local": [float(x) for x in robot_axis_local],
+        "uses_bvh_end_site": False,
+    }
+
+
 # ============================================================
 # Terminal mapping
 # ============================================================
@@ -744,7 +805,7 @@ def build_terminal_semantic_offset(
     terminal_semantics,
 ):
     """
-    Build Hand / Foot full-orientation offset
+    Build Head / Hand / Foot full-orientation offset
     from explicit semantic frames.
 
     BVH End Site is NOT used.
@@ -779,6 +840,18 @@ def build_terminal_semantic_offset(
             target_link
         ]
     )
+
+    # Read legacy manifests without changing their physical frame.  New
+    # manifests use the consistent outward-normal convention.
+    if (
+        source_segment in {"LeftFoot", "RightFoot"}
+        and robot.get("secondary_name") == "sole_up_normal"
+    ):
+        src = {
+            **src,
+            "secondary": [0.0, 1.0, 0.0],
+            "secondary_name": "sole_up_normal",
+        }
 
     if (
         src["secondary_name"]
@@ -896,6 +969,8 @@ def build_mapping_offset(
     target_link,
     target_geometry,
     terminal_semantics,
+    orientation_mode="full",
+    robot_orientation=None,
     bvh_offsets=None,
     bvh_endsites=None,
 ):
@@ -908,16 +983,30 @@ def build_mapping_offset(
             *
         q_mapping_offset
 
-    Terminal Hand / Foot:
-        semantic-frame method
-
-    Other segments:
-        MEVA canonical geometry method
+    Axis mode uses only the manifest-defined Primary axis.  Full mode uses a
+    complete semantic frame for Head/Hand/Foot, an existing geometry rule
+    when available, and otherwise the target Body's local XYZ frame.
     """
 
-    # --------------------------------------------------------
-    # Terminal segments
-    # --------------------------------------------------------
+    mode = str(orientation_mode or "full").lower()
+    if mode not in {"full", "axis"}:
+        raise ValueError(f"Unknown orientation_mode: {orientation_mode!r}")
+
+    if mode == "axis":
+        if robot_orientation is not None and robot_orientation.primary_axis is not None:
+            robot_axis_local = normalize(robot_orientation.primary_axis)
+            axis_source = str(robot_orientation.primary_source or "runtime_definition")
+        else:
+            robot_axis_local, axis_source = robot_primary_axis_local(
+                model, target_link, target_geometry, terminal_semantics
+            )
+        return build_primary_axis_offset(
+            model,
+            source_segment,
+            target_link,
+            robot_axis_local,
+            source_mode=f"primary_axis:{axis_source}",
+        )
 
     if (
         source_segment
@@ -933,9 +1022,42 @@ def build_mapping_offset(
             )
         )
 
-    # --------------------------------------------------------
-    # Non-terminal segments
-    # --------------------------------------------------------
+    # A non-terminal Full mapping can also provide an explicit Robot semantic
+    # frame.  This is needed for rigid root/trunk Bodies whose local XYZ frame
+    # is not the MEVA segment frame.  Keep the established MEVA canonical
+    # primary and zero-twist reference, but map them to both manifest-defined
+    # Robot axes instead of silently treating the Robot Body frame as identity.
+    if (
+        robot_orientation is not None
+        and robot_orientation.primary_axis is not None
+        and robot_orientation.secondary_axis is not None
+    ):
+        src_axis_local = source_long_axis_canonical(source_segment)
+        src_axis_world0 = quat_rotate(Q_BVH_TO_MEVA_WXYZ, src_axis_local)
+        ref_world = preferred_world_reference(src_axis_world0)
+        src_secondary_local = quat_rotate(
+            quat_inv(Q_BVH_TO_MEVA_WXYZ), ref_world
+        )
+        robot_axis_local = normalize(robot_orientation.primary_axis)
+        robot_secondary_local = normalize(robot_orientation.secondary_axis)
+        F_meva = frame_from_primary(src_axis_local, src_secondary_local)
+        F_robot = frame_from_primary(robot_axis_local, robot_secondary_local)
+        q_offset = mat_to_quat(F_meva @ F_robot.T)
+        return q_offset, {
+            "source_geometry_mode": "semantic_frame:runtime_definition",
+            "source_primary_axis_local": [float(x) for x in src_axis_local],
+            "robot_long_axis_link_local": [float(x) for x in robot_axis_local],
+            "source_secondary_axis_local": [
+                float(x) for x in src_secondary_local
+            ],
+            "robot_secondary_axis_link_local": [
+                float(x) for x in robot_secondary_local
+            ],
+            "secondary_axis_semantics": str(
+                robot_orientation.secondary_name or "explicit_secondary"
+            ),
+            "uses_bvh_end_site": False,
+        }
 
     src_axis_local = (
         source_long_axis_canonical(source_segment)
@@ -970,15 +1092,20 @@ def build_mapping_offset(
         src_ref_local,
     )
 
-    # Robot long axis in target-link local coordinates.
+    # A geometry rule preserves the established G1 offset.  Without one, Full
+    # Quaternion mapping still has a deterministic meaning: MEVA's canonical
+    # segment frame is mapped to the MuJoCo Body's local XYZ frame.
+    if target_link not in target_geometry:
+        F_robot = np.eye(3, dtype=np.float64)
+        q_offset = mat_to_quat(F_meva @ F_robot.T)
+        return q_offset, {
+            "source_geometry_mode": "body_local_frame",
+            "source_long_axis_canonical_local": [float(x) for x in src_axis_local],
+            "robot_body_frame_link_local": "xyz",
+            "uses_bvh_end_site": False,
+        }
 
-    robot_axis_local = (
-        robot_long_axis_local(
-            model,
-            target_link,
-            target_geometry,
-        )
-    )
+    robot_axis_local = robot_long_axis_local(model, target_link, target_geometry)
 
     # Same world reference represented
     # in robot-link local coordinates at qpos0.
@@ -1055,6 +1182,9 @@ def _mapping_signature(
 
             "target_link":
                 m["target_link"],
+
+            "orientation_mode":
+                str(m.get("orientation_mode") or "full"),
         }
 
         for m
@@ -1181,7 +1311,8 @@ def compute_offsets(
     application_root = Path(__file__).resolve().parents[2]
     if str(application_root) not in sys.path:
         sys.path.insert(0, str(application_root))
-    from server.robot_registry import resolve_variant, variant_retargeting_metadata
+    from server.robot_registry import resolve_variant
+    from server.retarget.robot_runtime_definition import load_robot_runtime_definition
 
     robot_identity = cfg.get("robot", {})
     variant_record = resolve_variant(
@@ -1190,14 +1321,18 @@ def compute_offsets(
         robot_id=str(robot_identity.get("model") or "") or None,
         root=application_root,
     )
-    robot_retargeting = variant_retargeting_metadata(variant_record)
-    target_geometry = robot_retargeting.get("target_geometry")
-    terminal_semantics = robot_retargeting.get("terminal_semantics")
+    runtime_definition = load_robot_runtime_definition(
+        application_root, variant_record.runtime_robot(application_root)
+    )
+    runtime_definition.validate_config(cfg)
+    robot_retargeting = runtime_definition.retargeting
+    target_geometry = robot_retargeting.get("target_geometry") or {}
+    terminal_semantics = robot_retargeting.get("terminal_semantics") or {}
     if not isinstance(target_geometry, dict) or not isinstance(terminal_semantics, dict):
         raise ValueError(
-            "Variant manifest requires retargeting.target_geometry and "
-            f"retargeting.terminal_semantics: {variant_record.manufacturer_id}/"
-            f"{variant_record.robot_id}/{variant_record.variant_id}"
+            "Variant manifest orientation metadata must be objects: "
+            f"{variant_record.manufacturer_id}/{variant_record.robot_id}/"
+            f"{variant_record.variant_id}"
         )
 
     mjcf_path = (
@@ -1276,13 +1411,7 @@ def compute_offsets(
     # Generate
     # --------------------------------------------------------
 
-    model = (
-        mujoco.MjModel.from_xml_path(
-            str(
-                mjcf_path
-            )
-        )
-    )
+    model = runtime_definition.model
 
     offsets = {}
     details = {}
@@ -1308,6 +1437,8 @@ def compute_offsets(
             dst,
             target_geometry,
             terminal_semantics,
+            orientation_mode=str(m.get("orientation_mode") or "full"),
+            robot_orientation=runtime_definition.orientation(dst),
         )
 
         offsets[

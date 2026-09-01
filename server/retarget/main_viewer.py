@@ -10,17 +10,14 @@ try:
     from .foot_support import load_foot_support_definition, support_point_metadata
     from .motion_io import quaternion_error_rotvec
     from .motion_viewer import build_motion_viewer_data, write_motion_viewer
+    from .mapping_tasks import quat_rotate_vec
+    from .robot_runtime_definition import load_robot_runtime_definition_for_config
 except ImportError:
     from foot_support import load_foot_support_definition, support_point_metadata
     from motion_io import quaternion_error_rotvec
     from motion_viewer import build_motion_viewer_data, write_motion_viewer
-
-
-def _mapped_link(config: dict[str, Any], source: str, fallback: str) -> str:
-    for mapping in config.get("mappings", []):
-        if str(mapping.get("source_segment")) == source:
-            return str(mapping["target_link"])
-    return fallback
+    from mapping_tasks import quat_rotate_vec
+    from robot_runtime_definition import load_robot_runtime_definition_for_config
 
 
 def write_main_viewer(
@@ -47,37 +44,40 @@ def write_main_viewer(
         orientation_result.astype(np.float64), orientation_target.astype(np.float64)
     ).astype(np.float32)
 
-    pelvis_link = _mapped_link(config, "Pelvis", "pelvis")
-    pelvis_result = data.arrays["link_pos"][:, data.link_index[pelvis_link]][:, None, :].copy()
-    pelvis_target = np.asarray(target["pelvis_target_xyz"], dtype=np.float32)[:, None, :]
+    runtime_definition = load_robot_runtime_definition_for_config(repo_root, config)
+    pelvis_reference = runtime_definition.pelvis_reference
+    pelvis_link = pelvis_reference.body_name
+    pelvis_index = data.link_index[pelvis_link]
+    pelvis_result_xyz = data.arrays["link_pos"][:, pelvis_index].astype(
+        np.float64, copy=True
+    )
+    pelvis_local = np.asarray(pelvis_reference.local_position, dtype=np.float64)
+    if np.any(pelvis_local):
+        pelvis_result_xyz += np.asarray([
+            quat_rotate_vec(quaternion, pelvis_local)
+            for quaternion in data.arrays["link_quat"][:, pelvis_index]
+        ])
+    pelvis_result = pelvis_result_xyz.astype(np.float32)[:, None, :]
+    pelvis_target = np.asarray(
+        target.get("pelvis_reference_target_xyz", target["pelvis_target_xyz"]),
+        dtype=np.float32,
+    )[:, None, :]
     position_residual = (pelvis_target - pelvis_result).astype(np.float32)
 
     support_definition = load_foot_support_definition(data.model, config)
+    if support_definition is None:  # required=True above; type narrowing guard.
+        raise ValueError("Main Viewer requires Robot Foot support metadata")
     foot_support_names: list[str] = []
-    support_positions: list[np.ndarray] = []
-
-    def rotate_wxyz(quaternion: np.ndarray, points: np.ndarray) -> np.ndarray:
-        vector = quaternion[:, None, 1:]
-        scalar = quaternion[:, None, :1]
-        base = np.broadcast_to(points[None, :, :], (len(quaternion), len(points), 3))
-        first = np.cross(vector, base)
-        return base + 2.0 * (scalar * first + np.cross(vector, first))
 
     for side in ("left", "right"):
         definition = support_definition.sides[side]
         saved_names = [str(value) for value in target[f"{side}_geom_names"]]
         if definition.display_names != saved_names:
             raise ValueError(f"Main Viewer {side} Foot Support Point order mismatch")
-        link_index = data.link_index[definition.body_name]
-        support_positions.append(
-            data.arrays["link_pos"][:, link_index, None, :]
-            + rotate_wxyz(
-                data.arrays["link_quat"][:, link_index],
-                definition.local_positions,
-            )
-        )
         foot_support_names.extend(saved_names)
-    foot_support_position = np.concatenate(support_positions, axis=1).astype(np.float32)
+    foot_support_position = np.asarray(
+        data.arrays["foot_support_point_pos"], dtype=np.float32
+    )
     foot_support_target = np.column_stack((
         np.asarray(target["left_geom_target_z"], dtype=np.float32),
         np.asarray(target["right_geom_target_z"], dtype=np.float32),
@@ -85,7 +85,6 @@ def write_main_viewer(
     foot_support_result = foot_support_position[:, :, 2]
     foot_support_residual = (foot_support_target - foot_support_result).astype(np.float32)
 
-    pelvis_index = data.link_index[pelvis_link]
     direction_target = np.stack((
         target["left_pelvis_to_foot_direction"],
         target["right_pelvis_to_foot_direction"],
@@ -93,12 +92,21 @@ def write_main_viewer(
     direction_result = np.empty_like(direction_target)
     for side_index, side in enumerate(("left", "right")):
         foot_index = data.link_index[support_definition.sides[side].body_name]
-        value = data.arrays["link_pos"][:, foot_index] - data.arrays["link_pos"][:, pelvis_index]
+        value = data.arrays["link_pos"][:, foot_index] - pelvis_result_xyz
         norm = np.linalg.norm(value, axis=1, keepdims=True)
         direction_result[:, side_index] = value / np.maximum(norm, 1e-12)
     direction_cosine = np.clip(
         np.sum(direction_target * direction_result, axis=2), -1.0, 1.0
     )
+    meva_direction = None
+    if all(
+        f"{side}_meva_pelvis_to_foot_direction" in target
+        for side in ("left", "right")
+    ):
+        meva_direction = np.stack((
+            target["left_meva_pelvis_to_foot_direction"],
+            target["right_meva_pelvis_to_foot_direction"],
+        ), axis=1).astype(np.float32)
 
     arrays = {
         "orientation_target_quat": orientation_target,
@@ -144,6 +152,24 @@ def write_main_viewer(
         "pelvis_to_foot_residual_angle_rad": np.arccos(direction_cosine).astype(np.float32),
     }
     rows = list(main_rows or [])
+    if meva_direction is None and len(rows) == len(motion["frame"]):
+        meva_direction = np.empty_like(direction_result)
+        for side_index, (side, title) in enumerate((
+            ("left", "Left"), ("right", "Right")
+        )):
+            pelvis = np.asarray([
+                [row[f"MEVA_Pelvis_{axis}"] for axis in "xyz"]
+                for row in rows
+            ], dtype=np.float32)
+            foot = np.asarray([
+                [row[f"MEVA_{title}Foot_{axis}"] for axis in "xyz"]
+                for row in rows
+            ], dtype=np.float32)
+            vector = foot - pelvis
+            norm = np.linalg.norm(vector, axis=1, keepdims=True)
+            meva_direction[:, side_index] = vector / np.maximum(norm, 1e-12)
+    if meva_direction is not None:
+        arrays["pelvis_to_foot_meva_direction"] = meva_direction
     if len(rows) == len(motion["frame"]):
         arrays.update({
             "gcp_left_used": np.asarray(
@@ -185,6 +211,7 @@ def write_main_viewer(
         } for item in mappings],
         "position_mappings": [{
             "source_segment": "Pelvis", "target_link": pelvis_link,
+            "reference_local_position": list(pelvis_reference.local_position),
             "position_axes": ["x", "y", "z"],
         }],
         "foot_support_points": support_point_metadata(support_definition),

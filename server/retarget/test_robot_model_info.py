@@ -47,8 +47,7 @@ class RobotModelInfoTests(unittest.TestCase):
             self.assertEqual(len(set(assigned)), bodies)
 
             mapping_targets = set(metadata["mapping_target_links"])
-            if variant_id == "g1_29dof":
-                self.assertTrue(mapping_targets)
+            self.assertEqual(len(mapping_targets), bodies)
             self.assertEqual(
                 mapping_targets,
                 {
@@ -72,7 +71,7 @@ class RobotModelInfoTests(unittest.TestCase):
         self.assertNotIn("waist_yaw_joint", names)
         self.assertFalse(next(j for j in metadata["joints"] if j["type_name"] == "free")["controllable"])
 
-    def test_g1_intermediate_wrist_link_is_not_a_mapping_target(self) -> None:
+    def test_full_mapping_and_axis_capability_are_separate(self) -> None:
         from server.robot_registry import resolve_variant
 
         record = resolve_variant("g1_29dof", root=self.root)
@@ -81,7 +80,10 @@ class RobotModelInfoTests(unittest.TestCase):
         )
         by_name = {body["name"]: body for body in metadata["bodies"]}
         self.assertTrue(by_name["left_elbow_link"]["mapping_target"])
-        self.assertFalse(by_name["left_wrist_roll_link"]["mapping_target"])
+        self.assertTrue(by_name["left_wrist_roll_link"]["mapping_target"])
+        self.assertTrue(by_name["left_wrist_roll_link"]["full_orientation_supported"])
+        self.assertFalse(by_name["left_wrist_roll_link"]["axis_alignment_supported"])
+        self.assertTrue(by_name["left_elbow_link"]["axis_alignment_supported"])
 
     def test_missing_ui_groups_fall_back_to_root_subtree_without_symmetry_control(self) -> None:
         model = mujoco.MjModel.from_xml_path(

@@ -307,24 +307,36 @@ def collision_pair_descriptors(
 
 
 def robot_model_metadata(repo_root: Path, config: dict[str, Any]) -> dict[str, Any]:
-    xml_path = (repo_root / str(config["robot"]["mjcf"])).resolve()
-    model = mujoco.MjModel.from_xml_path(str(xml_path))
+    from server.retarget.robot_runtime_definition import (
+        load_robot_runtime_definition_for_config,
+    )
+
+    runtime = load_robot_runtime_definition_for_config(
+        repo_root, config, validate_config=False
+    )
+    xml_path = runtime.model_path
+    model = runtime.model
     joints = joint_descriptors(model)
     bodies = body_descriptors(model, joints)
-    raw_mapping_targets = config["robot"].get("mapping_target_links", [])
-    if not isinstance(raw_mapping_targets, list):
-        raise ValueError("Robot mapping_target_links must be an array")
-    mapping_target_links = [str(name) for name in raw_mapping_targets]
-    body_names = {str(body["name"]) for body in bodies}
-    unknown_mapping_targets = sorted(set(mapping_target_links) - body_names)
-    if unknown_mapping_targets:
-        raise ValueError(
-            "Robot mapping_target_links reference unknown bodies: "
-            f"{unknown_mapping_targets}"
-        )
-    mapping_target_set = set(mapping_target_links)
+    # Every MuJoCo body can receive a FrameTask.  target_geometry and
+    # terminal_semantics only determine whether its Primary axis is defined.
+    mapping_target_links = sorted(runtime.body_names)
     for body in bodies:
-        body["mapping_target"] = str(body["name"]) in mapping_target_set
+        body_name = str(body["name"])
+        orientation = runtime.orientation(body_name)
+        body["mapping_target"] = True
+        body["full_orientation_supported"] = True
+        body["axis_alignment_supported"] = orientation.axis_alignment_supported
+        body["axis_definition_source"] = orientation.primary_source
+        body["primary_axis"] = (
+            list(orientation.primary_axis)
+            if orientation.primary_axis is not None else None
+        )
+        body["secondary_axis"] = (
+            list(orientation.secondary_axis)
+            if orientation.secondary_axis is not None else None
+        )
+        body["secondary_axis_name"] = orientation.secondary_name
     presentation = ui_metadata(model, bodies, joints, config["robot"].get("ui", {}))
     return {
         "joints": joints,

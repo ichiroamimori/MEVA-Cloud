@@ -180,7 +180,6 @@ def build_retarget_viewer_bytes(
         repo_root / "workspace" / "users" / user_id / "capsules"
         / capsule_id / "retarget" / robot_variant / run_id
     )
-    primary_run_dir = run_dir
     file_id = run_id
     if stage == "main" and main_id != "legacy":
         preferred = run_dir / main_id

@@ -177,10 +177,17 @@ def load_motion(path: Path) -> dict[str, Any]:
         if key in data and np.asarray(data[key]).shape == ():
             data[key] = np.asarray(data[key]).item()
     data["fps"] = float(data["fps"])
-    data["source_frame_indices"] = np.asarray(data["source_frame_nearest"], dtype=np.int32)
+    frame_count = int(np.asarray(data.get("root_pos", [])).shape[0])
+    source_nearest = data.get("source_frame_nearest")
+    data["source_frame_indices"] = np.asarray(
+        source_nearest if source_nearest is not None else np.arange(frame_count),
+        dtype=np.int32,
+    )
+    root_rot_order = str(data.get("root_rot_order") or "xyzw")
+    data["root_rot_order"] = root_rot_order
     data["metadata"] = {
-        "root_rot_order": str(data["root_rot_order"]),
-        "canonical_motion_npz": True,
+        "root_rot_order": root_rot_order,
+        "canonical_motion_npz": "schema_version" in data,
         "primary_postprocess": {
             "completed": True,
             "root_pos_shift_applied": True,

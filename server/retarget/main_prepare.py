@@ -34,7 +34,6 @@ from main_calibration import (
     CalibrationSettings,
     _free_joint_qpos_addr,
     _hinge_joints,
-    _mapped_link,
     _qpos_from_primary_frame,
     analyze_main_calibration,
     preprocess_gcp,
@@ -43,12 +42,37 @@ from check_offsets import compute_offsets
 from support_state import SupportState
 from main_target import load_main_target
 from motion_io import load_motion
+try:
+    from server.retarget.robot_runtime_definition import (
+        BodyPointDefinition,
+        load_robot_runtime_definition_for_config,
+    )
+except ModuleNotFoundError:  # Direct execution from server/retarget.
+    from robot_runtime_definition import (
+        BodyPointDefinition,
+        load_robot_runtime_definition_for_config,
+    )
+
+
+def _runtime_definition(cfg: dict):
+    repository_root = Path(__file__).resolve().parents[2]
+    return load_robot_runtime_definition_for_config(repository_root, cfg)
+
+
+def _body_point_from_configuration(
+    configuration, point: BodyPointDefinition
+) -> np.ndarray:
+    transform = configuration.get_transform_frame_to_world(point.body_name, "body")
+    return (
+        np.asarray(transform.translation(), dtype=np.float64)
+        + transform.rotation().as_matrix()
+        @ np.asarray(point.local_position, dtype=np.float64)
+    )
 from foot_support import (
     FootSupportSide,
     load_foot_support_definition,
     support_point_jacobian,
     support_point_world_position,
-    support_point_world_positions,
 )
 
 
@@ -60,6 +84,7 @@ class MainPreparation:
     calibration_summary: dict
     primary_motion: dict
     initial_motion: dict
+    pelvis_reference: BodyPointDefinition
     pelvis_targets_z: np.ndarray
     pelvis_initial_shifts_z: np.ndarray
     sole_targets_xyz: dict[str, np.ndarray]
@@ -83,6 +108,7 @@ class MainIKPreparation:
     """Solver inputs whose only motion sources are Primary motion and Main target NPZ."""
     model: Any
     initial_configuration: Any
+    pelvis_reference: BodyPointDefinition
     solver_frame_specs: list[IKFrameSpec]
     solver_settings: SolverSettings
     diagnostic_keys: list[str]
@@ -580,10 +606,12 @@ def prepare_main(
     )
     offset_details = dict(mapping_offset_asset.get("details", {}))
 
-    model = mujoco.MjModel.from_xml_path(str(robot_xml))
+    runtime_definition = _runtime_definition(cfg)
+    model = runtime_definition.model
     free_qadr = _free_joint_qpos_addr(model)
     hinges = _hinge_joints(model)
-    pelvis_link = _mapped_link(cfg, "Pelvis", "pelvis")
+    pelvis_reference = runtime_definition.pelvis_reference
+    pelvis_link = pelvis_reference.body_name
     weights = _sole_weights(sole_position_weights)
     lm_damping = float(cfg["solver"]["task_lm_damping"])
 
@@ -613,6 +641,19 @@ def prepare_main(
         )
         for mapping in cfg.get("mappings", [])
     }
+    pelvis_mapping_is_full = any(
+        str(mapping["target_link"]) == pelvis_link
+        and str(mapping.get("orientation_mode", "full")) == "full"
+        for mapping in cfg.get("mappings", [])
+    )
+    if (
+        np.any(np.asarray(pelvis_reference.local_position, dtype=float))
+        and not pelvis_mapping_is_full
+    ):
+        raise ValueError(
+            "A non-origin Pelvis Reference requires a Full orientation Mapping "
+            f"on its body ({pelvis_link})"
+        )
     mapping_tasks = MappingTaskSet(
         model=model,
         cfg=cfg,
@@ -635,6 +676,7 @@ def prepare_main(
 
     initial_qpos = np.empty((len(rows), model.nq), dtype=float)
     pelvis_target_xyz = np.empty((len(rows), 3), dtype=float)
+    pelvis_reference_target_xyz = np.empty((len(rows), 3), dtype=float)
     fk_configuration = mink.Configuration(model)
     for i in range(len(rows)):
         q_primary = _qpos_from_primary_frame(
@@ -644,8 +686,16 @@ def prepare_main(
         pelvis_transform = fk_configuration.get_transform_frame_to_world(
             pelvis_link, "body"
         )
-        pelvis_target_xyz[i] = pelvis_transform.translation()
-        pelvis_target_xyz[i, 2] = pelvis_targets[i]
+        pelvis_reference_target = _body_point_from_configuration(
+            fk_configuration, pelvis_reference
+        )
+        pelvis_reference_target[2] = pelvis_targets[i]
+        pelvis_reference_target_xyz[i] = pelvis_reference_target
+        pelvis_target_xyz[i] = (
+            pelvis_reference_target
+            - pelvis_transform.rotation().as_matrix()
+            @ np.asarray(pelvis_reference.local_position, dtype=np.float64)
+        )
         q_initial = q_primary.copy()
         q_initial[free_qadr + 2] += shifts[i]
         initial_qpos[i] = q_initial
@@ -702,8 +752,8 @@ def prepare_main(
                     key="pelvis_position_m",
                     metadata={"source_frame": source_frame, "target": "pelvis_position"},
                     measure=lambda current, frame_index=frame_index: float(np.max(np.abs(
-                        current.get_transform_frame_to_world(pelvis_link, "body").translation()
-                        - pelvis_target_xyz[frame_index]
+                        _body_point_from_configuration(current, pelvis_reference)
+                        - pelvis_reference_target_xyz[frame_index]
                     ))),
                 )
             )
@@ -752,6 +802,7 @@ def prepare_main(
         calibration_summary=summary,
         primary_motion=primary,
         initial_motion=initial_motion,
+        pelvis_reference=pelvis_reference,
         pelvis_targets_z=pelvis_targets,
         pelvis_initial_shifts_z=shifts,
         sole_targets_xyz=sole_targets,
@@ -789,10 +840,28 @@ def prepare_main_ik_from_target(
     target = load_main_target(
         main_target_npz, expected_frames=n, expected_fps=primary_fps
     )
-    model = mujoco.MjModel.from_xml_path(str(robot_xml))
+    runtime_definition = _runtime_definition(cfg)
+    model = runtime_definition.model
     free_qadr = _free_joint_qpos_addr(model)
     hinges = _hinge_joints(model)
-    pelvis_link = _mapped_link(cfg, "Pelvis", "pelvis")
+    pelvis_reference = runtime_definition.pelvis_reference
+    pelvis_link = pelvis_reference.body_name
+    if "pelvis_reference_body" in target:
+        saved_body = str(np.asarray(target["pelvis_reference_body"]).item())
+        saved_local = np.asarray(
+            target["pelvis_reference_local_position"], dtype=float
+        )
+        if saved_body != pelvis_link or not np.allclose(
+            saved_local, pelvis_reference.local_position, atol=1e-12
+        ):
+            raise ValueError(
+                "Main target Pelvis Reference does not match Robot manifest"
+            )
+    elif np.any(np.asarray(pelvis_reference.local_position, dtype=float)):
+        raise ValueError(
+            "Legacy Main target cannot represent a non-origin Pelvis Reference; "
+            "rebuild main_target.npz"
+        )
     lm_damping = float(cfg["solver"]["task_lm_damping"])
     weights = _sole_weights(sole_position_weights)
 
@@ -830,8 +899,32 @@ def prepare_main_ik_from_target(
                 axis=np.asarray(target["link_axis_local"][link_index], dtype=float),
                 cost=orientation_cost,
             )
-    if pelvis_link not in mapping_tasks or modes[link_names.index(pelvis_link)] != "full":
-        raise ValueError("Main Pelvis Mapping must be a full orientation task")
+    pelvis_mapping_is_full = (
+        pelvis_link in mapping_tasks
+        and modes[link_names.index(pelvis_link)] == "full"
+    )
+    if (
+        np.any(np.asarray(pelvis_reference.local_position, dtype=float))
+        and not pelvis_mapping_is_full
+    ):
+        raise ValueError(
+            "A non-origin Pelvis Reference requires a Full orientation Mapping "
+            f"on its body ({pelvis_link})"
+        )
+    pelvis_position_task = None
+    if not pelvis_mapping_is_full:
+        # The Robot Pelvis Reference is fixed Variant metadata.  Main position
+        # control must therefore work even when the Config maps another MEVA
+        # segment (for example K1 Thoracic2) to the same Body, or does not map
+        # that Body at all.
+        pelvis_position_task = mink.FrameTask(
+            pelvis_link,
+            "body",
+            position_cost=float(cfg["root"]["position_cost"]),
+            orientation_cost=0.0,
+            gain=1.0,
+            lm_damping=lm_damping,
+        )
 
     support_definition = load_foot_support_definition(model, cfg)
     spatial_cfg = dict(cfg.get("spatial_constraints", {}).get(
@@ -848,6 +941,9 @@ def prepare_main_ik_from_target(
                     cost=cost,
                     gain=1.0,
                     lm_damping=lm_damping,
+                    from_local_position=np.asarray(
+                        pelvis_reference.local_position, dtype=float
+                    ),
                 )
 
     support_tasks: dict[str, list[FootSupportPointZTask]] = {
@@ -936,6 +1032,19 @@ def prepare_main_ik_from_target(
                     measure=measure_orientation,
                 ))
 
+            if pelvis_position_task is not None:
+                pelvis_position_task.set_target(
+                    mink.SE3.from_rotation_and_translation(
+                        configuration.get_transform_frame_to_world(
+                            pelvis_link, "body"
+                        ).rotation(),
+                        np.asarray(
+                            target["pelvis_target_xyz"][frame_index], dtype=float
+                        ),
+                    )
+                )
+                tasks.append(pelvis_position_task)
+
             for side, task in spatial_tasks.items():
                 task.set_target(target[f"{side}_pelvis_to_foot_direction"][frame_index])
                 tasks.append(task)
@@ -944,8 +1053,11 @@ def prepare_main_ik_from_target(
                 key="pelvis_position_m",
                 metadata={"source_frame": source_frame, "target": "main_target_npz"},
                 measure=lambda current, frame_index=frame_index: float(np.max(np.abs(
-                    current.get_transform_frame_to_world(pelvis_link, "body").translation()
-                    - target["pelvis_target_xyz"][frame_index]
+                    _body_point_from_configuration(current, pelvis_reference)
+                    - target.get(
+                        "pelvis_reference_target_xyz",
+                        target["pelvis_target_xyz"],
+                    )[frame_index]
                 ))),
             )] + diagnostics
             for side in ("left", "right"):
@@ -987,6 +1099,7 @@ def prepare_main_ik_from_target(
     return MainIKPreparation(
         model=model,
         initial_configuration=mink.Configuration(model, q=initial_qpos[0]),
+        pelvis_reference=pelvis_reference,
         solver_frame_specs=frame_specs,
         solver_settings=settings,
         diagnostic_keys=diagnostic_keys,
@@ -1012,11 +1125,11 @@ def apply_main_ik_result(
         data.qpos[:] = q
         mujoco.mj_forward(preparation.model, data)
         row = preparation.rows[frame_index]
-        pelvis_link = str(preparation.calibration_summary["pelvis_link"])
-        pelvis_id = mujoco.mj_name2id(
-            preparation.model, mujoco.mjtObj.mjOBJ_BODY, pelvis_link
+        pelvis_actual_z = float(
+            preparation.pelvis_reference.world_position(
+                preparation.model, data
+            )[2]
         )
-        pelvis_actual_z = float(data.xpos[pelvis_id, 2])
         row["G1_Pelvis_z_after_IK"] = pelvis_actual_z
         row["Pelvis_z_target_error_after_IK"] = (
             pelvis_actual_z - float(preparation.pelvis_targets_z[frame_index])

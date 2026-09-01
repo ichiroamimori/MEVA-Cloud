@@ -62,9 +62,118 @@
             ["left_arm", "right_arm"],
             ["left_leg", "right_leg"]
           ]
+        },
+        "skeleton": {
+          "hide_parent_edges": [
+            "Head_1", "Left_Arm_1", "Right_Arm_1",
+            "Left_Hip_Pitch", "Right_Hip_Pitch"
+          ],
+          "parts": [
+            {
+              "role": "torso",
+              "pattern": "surface",
+              "anchors": [
+                {"body": "Head_1"},
+                {"body": "Left_Arm_1"},
+                {"body": "Trunk"},
+                {"body": "Right_Arm_1"}
+              ]
+            },
+            {
+              "role": "pelvis",
+              "pattern": "surface",
+              "anchors": [
+                {"body": "Trunk"},
+                {"body": "Left_Hip_Pitch"},
+                {"body": "Right_Hip_Pitch"}
+              ]
+            },
+            {
+              "role": "head",
+              "pattern": "circle",
+              "body": "Head_2",
+              "local_center": [0.003, 0.0, 0.076],
+              "radius_m": 0.08,
+              "direction_local": [1.0, 0.0, 0.0]
+            },
+            {
+              "role": "left_hand",
+              "pattern": "semantic_axis",
+              "body": "left_hand_link",
+              "length_m": 0.2
+            },
+            {
+              "role": "right_hand",
+              "pattern": "semantic_axis",
+              "body": "right_hand_link",
+              "length_m": 0.2
+            },
+            {"role": "left_foot", "pattern": "support", "side": "left"},
+            {"role": "right_foot", "pattern": "support", "side": "right"}
+          ]
         }
       },
       "retargeting": {
+        "landmarks": {
+          "pelvis_reference": {
+            "body": "Trunk",
+            "local_position": [0.0, 0.0, 0.0]
+          }
+        },
+        "target_geometry": {
+          "Left_Arm_3": {
+            "type": "body_to_body",
+            "distal_body": "left_hand_link"
+          },
+          "Right_Arm_3": {
+            "type": "body_to_body",
+            "distal_body": "right_hand_link"
+          },
+          "Left_Hip_Yaw": {
+            "type": "body_to_body",
+            "distal_body": "Left_Shank"
+          },
+          "Right_Hip_Yaw": {
+            "type": "body_to_body",
+            "distal_body": "Right_Shank"
+          },
+          "Left_Shank": {
+            "type": "body_to_body",
+            "distal_body": "Left_Ankle_Cross"
+          },
+          "Right_Shank": {
+            "type": "body_to_body",
+            "distal_body": "Right_Ankle_Cross"
+          }
+        },
+        "terminal_semantics": {
+          "Trunk": {
+            "primary": [0.0, 0.0, 1.0],
+            "secondary": [1.0, 0.0, 0.0],
+            "secondary_name": "face_forward"
+          },
+          "Head_2": {
+            "primary": [0.0, 0.0, 1.0],
+            "secondary": [1.0, 0.0, 0.0],
+            "secondary_name": "face_forward"
+          },
+          "left_hand_link": {
+            "primary": [0.0, 1.0, 0.0]
+          },
+          "right_hand_link": {
+            "primary": [0.0, -1.0, 0.0]
+          },
+          "left_foot_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, 0.0, -1.0],
+            "secondary_name": "sole_outward_normal"
+          },
+          "right_foot_link": {
+            "primary": [1.0, 0.0, 0.0],
+            "secondary": [0.0, 0.0, -1.0],
+            "secondary_name": "sole_outward_normal"
+          }
+        },
         "foot_contacts": {
           "robot_foot_to_ground_offset_m": 0.038,
           "left": {

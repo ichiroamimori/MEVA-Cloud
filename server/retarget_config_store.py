@@ -182,7 +182,9 @@ def normalized_shared_config(
             "output_joint_order",
         ):
             robot.pop(key, None)
-    for key in ("capsule_id", "source", "frame_range", "sampling", "offsets"):
+    for key in (
+        "capsule_id", "source", "frame_range", "sampling", "offsets", "note"
+    ):
         shared.pop(key, None)
     for key in (
         "primary_run_id", "main_id", "primary_post_csv", "main_input_csv",

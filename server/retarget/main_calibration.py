@@ -23,7 +23,6 @@ import mujoco
 import numpy as np
 
 try:
-    from .mapping_tasks import required_quaternion_columns
     from .meva_schema import (
         MEVA_GCP_COLUMN_INDICES,
         MEVA_HEADER_ROW_1BASED,
@@ -36,7 +35,6 @@ try:
         support_point_world_positions,
     )
 except ImportError:
-    from mapping_tasks import required_quaternion_columns
     from meva_schema import (
         MEVA_GCP_COLUMN_INDICES,
         MEVA_HEADER_ROW_1BASED,
@@ -374,12 +372,31 @@ def analyze_main_calibration(
             }
             meva_rows.append([values[field] for field in meva_fields])
 
-    model = mujoco.MjModel.from_xml_path(str(robot_xml))
+    if config and isinstance(config.get("robot"), dict):
+        try:
+            from server.retarget.robot_runtime_definition import (
+                load_robot_runtime_definition_for_config,
+            )
+        except ModuleNotFoundError:  # Direct execution from server/retarget.
+            from robot_runtime_definition import load_robot_runtime_definition_for_config
+        repository_root = Path(__file__).resolve().parents[2]
+        runtime_definition = load_robot_runtime_definition_for_config(
+            repository_root, config
+        )
+        model = runtime_definition.model
+        pelvis_link = runtime_definition.pelvis_reference.body_name
+        pelvis_local_position = np.asarray(
+            runtime_definition.pelvis_reference.local_position, dtype=np.float64
+        )
+    else:
+        # Legacy direct callers do not have a registered Robot identity.
+        model = mujoco.MjModel.from_xml_path(str(robot_xml))
+        pelvis_link = _mapped_link(config, "Pelvis", "pelvis")
+        pelvis_local_position = np.zeros(3, dtype=np.float64)
     data = mujoco.MjData(model)
     free_qadr = _free_joint_qpos_addr(model)
     hinges = _hinge_joints(model)
 
-    pelvis_link = _mapped_link(config, "Pelvis", "pelvis")
     support = load_foot_support_definition(model, config or {})
     left_support = support.sides["left"]
     right_support = support.sides["right"]
@@ -430,7 +447,13 @@ def analyze_main_calibration(
         left_contact_xyz.append(left_points.copy())
         right_contact_xyz.append(right_points.copy())
 
-        g1_pelvis = np.asarray(data.xpos[pelvis_bid], dtype=np.float64).copy()
+        pelvis_rotation = np.asarray(
+            data.xmat[pelvis_bid], dtype=np.float64
+        ).reshape(3, 3)
+        g1_pelvis = (
+            np.asarray(data.xpos[pelvis_bid], dtype=np.float64)
+            + pelvis_rotation @ pelvis_local_position
+        )
         g1_left = np.asarray(data.xpos[left_bid], dtype=np.float64).copy()
         g1_right = np.asarray(data.xpos[right_bid], dtype=np.float64).copy()
         g1_pelvis_z = float(g1_pelvis[2])
@@ -595,6 +618,8 @@ def analyze_main_calibration(
         "right_ground_sample_count": 0,
         "ground_sample_count_total": 0,
         "pelvis_link": pelvis_link,
+        "pelvis_reference_body": pelvis_link,
+        "pelvis_reference_local_position": pelvis_local_position.tolist(),
         "left_foot_link": left_foot_link,
         "right_foot_link": right_foot_link,
     }

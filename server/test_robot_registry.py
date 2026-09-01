@@ -46,6 +46,15 @@ class RobotRegistryTests(unittest.TestCase):
         self.assertTrue(runtime["robot"]["floating_base"])
         self.assertEqual(runtime["robot"]["output_joint_order"], "model_hinge_order")
         self.assertEqual(len(runtime["robot"]["ui"]["groups"]), 5)
+        skeleton = runtime["robot"]["ui"]["skeleton"]
+        self.assertEqual(
+            [part["pattern"] for part in skeleton["parts"]],
+            ["surface", "surface", "triangle", "triangle", "support", "support"],
+        )
+        self.assertEqual(
+            runtime["robot"]["retargeting"]["landmarks"]["pelvis_reference"],
+            {"body": "pelvis", "local_position": [0.0, 0.0, 0.0]},
+        )
         self.assertEqual(
             runtime["robot"]["ui"]["symmetry"]["group_pairs"],
             [["left_arm", "right_arm"], ["left_leg", "right_leg"]],
@@ -69,6 +78,65 @@ class RobotRegistryTests(unittest.TestCase):
         self.assertEqual(len(contacts["left"]["support_points"]), 4)
         self.assertEqual(len(contacts["right"]["support_points"]), 4)
         self.assertEqual(len(runtime["robot"]["ui"]["groups"]), 5)
+        skeleton = runtime["robot"]["ui"]["skeleton"]
+        self.assertEqual(skeleton["parts"][2]["role"], "head")
+        self.assertEqual(
+            [part["pattern"] for part in skeleton["parts"]],
+            [
+                "surface", "surface", "circle", "semantic_axis", "semantic_axis",
+                "support", "support",
+            ],
+        )
+        self.assertNotIn("left_hand_link", skeleton["hide_parent_edges"])
+        self.assertNotIn("right_hand_link", skeleton["hide_parent_edges"])
+        self.assertFalse(any(part["pattern"] == "triangle" for part in skeleton["parts"]))
+        self.assertEqual(
+            skeleton["parts"][3],
+            {
+                "role": "left_hand", "pattern": "semantic_axis",
+                "body": "left_hand_link", "length_m": 0.2,
+            },
+        )
+        self.assertEqual(
+            runtime["robot"]["retargeting"]["landmarks"]["pelvis_reference"],
+            {"body": "Trunk", "local_position": [0.0, 0.0, 0.0]},
+        )
+        semantics = runtime["robot"]["retargeting"]["terminal_semantics"]
+        self.assertEqual(semantics["left_foot_link"]["secondary"], [0.0, 0.0, -1.0])
+
+        g1 = apply_variant_to_runtime_config(
+            {"robot": {}}, resolve_variant("g1_29dof", root=self.root), root=self.root
+        )
+        self.assertTrue(any(
+            part["pattern"] == "triangle"
+            for part in g1["robot"]["ui"]["skeleton"]["parts"]
+        ))
+
+    def test_k1_full_body_mapping_does_not_require_target_geometry(self) -> None:
+        record = resolve_variant("k1_22dof", root=self.root)
+        config = {
+            "robot": {"manufacturer": "booster", "model": "k1", "variant": "k1_22dof"},
+            "mappings": [{
+                "source_segment": "LeftUpperArm",
+                "target_link": "Left_Arm_1",
+                "orientation_mode": "full",
+            }],
+        }
+        summary = validate_retarget_config(record, config)
+        self.assertEqual(summary["mapping_count"], 1)
+
+    def test_k1_axis_mapping_requires_manifest_primary_axis(self) -> None:
+        record = resolve_variant("k1_22dof", root=self.root)
+        config = {
+            "robot": {"manufacturer": "booster", "model": "k1", "variant": "k1_22dof"},
+            "mappings": [{
+                "source_segment": "LeftUpperArm",
+                "target_link": "Left_Arm_1",
+                "orientation_mode": "axis",
+            }],
+        }
+        with self.assertRaisesRegex(RobotRegistryError, "requires a Primary axis"):
+            validate_retarget_config(record, config)
 
     def test_standard_configs_match_registered_model(self) -> None:
         record = resolve_variant("g1_29dof", root=self.root)

@@ -55,6 +55,15 @@ def normalize_vec(v):
     return v / n
 
 
+def _skew(v):
+    x, y, z = np.asarray(v, dtype=float).reshape(3)
+    return np.asarray([
+        [0.0, -z, y],
+        [z, 0.0, -x],
+        [-y, x, 0.0],
+    ])
+
+
 def quat_rotate_vec(q, v):
     q = normq(q)
     v = np.asarray(v, dtype=float)
@@ -63,11 +72,15 @@ def quat_rotate_vec(q, v):
     return v + q[0] * t + np.cross(qv, t)
 
 
-def axis_angle_deg(a, b):
+def axis_angle_rad(a, b):
     a = normalize_vec(a)
     b = normalize_vec(b)
     dot = float(np.clip(np.dot(a, b), -1.0, 1.0))
-    return float(np.degrees(np.arccos(dot)))
+    return float(np.arccos(dot))
+
+
+def axis_angle_deg(a, b):
+    return float(np.degrees(axis_angle_rad(a, b)))
 
 
 def quat_slerp(a, b, t: float):
@@ -135,11 +148,20 @@ class PreparedMappingTasks:
 
 
 class RelativeDirectionTask(mink.Task):
-    """Keep the world direction between two Robot body frames."""
+    """Keep the world direction between two Body-fixed Robot points."""
 
     k = 3
 
-    def __init__(self, from_frame, to_frame, cost, gain=1.0, lm_damping=0.0):
+    def __init__(
+        self,
+        from_frame,
+        to_frame,
+        cost,
+        gain=1.0,
+        lm_damping=0.0,
+        from_local_position=None,
+        to_local_position=None,
+    ):
         cost = float(cost)
         if not np.isfinite(cost) or cost < 0.0:
             raise ValueError("RelativeDirectionTask cost must be non-negative")
@@ -150,6 +172,23 @@ class RelativeDirectionTask(mink.Task):
         )
         self.from_frame = from_frame
         self.to_frame = to_frame
+        self.from_local_position = np.asarray(
+            [0.0, 0.0, 0.0]
+            if from_local_position is None else from_local_position,
+            dtype=float,
+        )
+        self.to_local_position = np.asarray(
+            [0.0, 0.0, 0.0]
+            if to_local_position is None else to_local_position,
+            dtype=float,
+        )
+        if (
+            self.from_local_position.shape != (3,)
+            or self.to_local_position.shape != (3,)
+            or not np.all(np.isfinite(self.from_local_position))
+            or not np.all(np.isfinite(self.to_local_position))
+        ):
+            raise ValueError("RelativeDirectionTask local positions must be finite XYZ")
         self.target_direction = None
 
     def set_target(self, direction_world):
@@ -160,7 +199,13 @@ class RelativeDirectionTask(mink.Task):
             raise RuntimeError("RelativeDirectionTask target is not set")
         tf_from = configuration.get_transform_frame_to_world(self.from_frame, "body")
         tf_to = configuration.get_transform_frame_to_world(self.to_frame, "body")
-        relative = tf_to.translation() - tf_from.translation()
+        rot_from = tf_from.rotation().as_matrix()
+        rot_to = tf_to.rotation().as_matrix()
+        offset_from_world = rot_from @ self.from_local_position
+        offset_to_world = rot_to @ self.to_local_position
+        point_from = tf_from.translation() + offset_from_world
+        point_to = tf_to.translation() + offset_to_world
+        relative = point_to - point_from
         distance = float(np.linalg.norm(relative))
         if not np.isfinite(distance) or distance < 1e-9:
             raise ValueError(
@@ -170,9 +215,17 @@ class RelativeDirectionTask(mink.Task):
         direction = relative / distance
         jac_from_local = configuration.get_frame_jacobian(self.from_frame, "body")
         jac_to_local = configuration.get_frame_jacobian(self.to_frame, "body")
-        rot_from = tf_from.rotation().as_matrix()
-        rot_to = tf_to.rotation().as_matrix()
-        jac_relative = rot_to @ jac_to_local[:3] - rot_from @ jac_from_local[:3]
+        jac_from_linear = rot_from @ jac_from_local[:3]
+        jac_to_linear = rot_to @ jac_to_local[:3]
+        jac_from_angular = rot_from @ jac_from_local[3:]
+        jac_to_angular = rot_to @ jac_to_local[3:]
+        jac_from_point = (
+            jac_from_linear - _skew(offset_from_world) @ jac_from_angular
+        )
+        jac_to_point = (
+            jac_to_linear - _skew(offset_to_world) @ jac_to_angular
+        )
+        jac_relative = jac_to_point - jac_from_point
         projector = np.eye(3) - np.outer(direction, direction)
         return direction - self.target_direction, (projector @ jac_relative) / distance
 
