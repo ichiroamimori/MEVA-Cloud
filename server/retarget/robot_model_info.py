@@ -268,6 +268,30 @@ def _xml_excluded_body_pairs(xml_path: Path, model: mujoco.MjModel) -> set[tuple
     return excluded
 
 
+def bodies_are_directly_adjacent(
+    model: mujoco.MjModel, body_a: int, body_b: int
+) -> bool:
+    """Return whether two distinct bodies form a direct kinematic parent-child pair."""
+    body_a = int(body_a)
+    body_b = int(body_b)
+    return (
+        body_a != body_b
+        and (
+            int(model.body_parentid[body_a]) == body_b
+            or int(model.body_parentid[body_b]) == body_a
+        )
+    )
+
+
+def geoms_are_directly_adjacent(
+    model: mujoco.MjModel, geom_a: int, geom_b: int
+) -> bool:
+    """Return whether two geoms belong to directly connected bodies."""
+    return bodies_are_directly_adjacent(
+        model, int(model.geom_bodyid[int(geom_a)]), int(model.geom_bodyid[int(geom_b)])
+    )
+
+
 def collision_pair_descriptors(
     model: mujoco.MjModel, xml_path: Path
 ) -> list[dict[str, Any]]:
@@ -285,7 +309,7 @@ def collision_pair_descriptors(
             if body_b == 0 or int(model.body_weldid[body_a]) == int(model.body_weldid[body_b]):
                 continue
             # MuJoCo's default parent filter and explicit MJCF excludes.
-            if int(model.body_parentid[body_a]) == body_b or int(model.body_parentid[body_b]) == body_a:
+            if bodies_are_directly_adjacent(model, body_a, body_b):
                 continue
             if tuple(sorted((body_a, body_b))) in excluded:
                 continue

@@ -168,8 +168,11 @@
     "selected_pairs": [],
     "damping": {
       "limit_zone_m": 0.005,
+      "penetration_scale_m": 0.005,
+      "penetration_gain": 4.0,
       "base_cost": 0.01,
-      "max_cost": 0.2
+      "max_cost": 0.2,
+      "gain": 0.2
     }
   },
   "interframe_joint_acceleration_limit": {

@@ -194,11 +194,14 @@ def write_main_viewer(
         })
     if frame_status is None:
         frame_status = np.zeros(len(motion["frame"]), dtype=np.uint8)
+        blocked = data.arrays.get("collision_backtracking_blocked")
+        if blocked is not None:
+            frame_status[np.asarray(blocked, dtype=bool)] = 4
     frame_status = np.asarray(frame_status, dtype=np.uint8)
     if frame_status.shape != (len(motion["frame"]),):
         raise ValueError("Main Viewer frame_status length mismatch")
     arrays["frame_status"] = frame_status
-    arrays["frame_valid"] = (frame_status < 2).astype(np.uint8)
+    arrays["frame_valid"] = np.isin(frame_status, (0, 1)).astype(np.uint8)
     errors = list(frame_errors or [])
     metadata = {
         "main_id": str(config.get("main_id", "")),
@@ -231,6 +234,7 @@ def write_main_viewer(
         "frame_status_codes": {
             "0": "valid", "1": "not converged",
             "2": "solver error", "3": "not computed",
+            "4": "collision blocked",
         },
         "frame_errors": errors,
     }

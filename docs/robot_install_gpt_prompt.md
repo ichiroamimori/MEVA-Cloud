@@ -101,6 +101,8 @@ Body原点の親子線だけでは、胴体の接続位置や端末meshの長さ
 
 collision対象geom、contype/conaffinity、同一Body、親子Body、固定接続、常時近接、floor、explicit excludeを調査する。Pair候補数、除外条件、home pose衝突を提示し承認後にConfigへ反映する。
 
+直接の親子Bodyに属するGEOM Pairは候補から自動除外する。2-hop以上の非隣接Pairは自動除外せず、Viewerと実モーションで人が検証してConfigで選択する。
+
 ## 10. Manifest作成
 
 必要情報が揃ったら未決定事項を `✓ / △ / ✗` で示す。ManifestにはRobot固有の固定情報だけを保存し、Capsule、frame range、sampling、Run ID、IK weight等を入れない。作成前に全体案を提示して承認を得る。

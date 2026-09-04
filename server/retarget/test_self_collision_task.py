@@ -12,7 +12,7 @@ from ik_solver import (
     SelfCollisionDampingTask,
     SolverSettings,
     _activate_broadphase_collision_pairs,
-    _integrate_with_collision_backtracking,
+    collision_penalty_and_derivative,
     solve_ik_sequence,
 )
 
@@ -56,7 +56,7 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
             np.empty(6, dtype=float),
         ))
 
-    def _numeric_residual_jacobian(
+    def _numeric_penalty_jacobian(
         self, configuration: mink.Configuration, zone_m: float
     ) -> np.ndarray:
         epsilon = 1e-7
@@ -70,17 +70,23 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
             mujoco.mj_integratePos(self.model, q_minus, -direction, epsilon)
             plus = self._distance(mink.Configuration(self.model, q=q_plus))
             minus = self._distance(mink.Configuration(self.model, q=q_minus))
-            residual_plus = max(zone_m - plus, 0.0)
-            residual_minus = max(zone_m - minus, 0.0)
-            values.append((residual_plus - residual_minus) / (2.0 * epsilon))
+            residual_plus, _ = collision_penalty_and_derivative(
+                plus, zone_m=zone_m
+            )
+            residual_minus, _ = collision_penalty_and_derivative(
+                minus, zone_m=zone_m
+            )
+            values.append(
+                zone_m * (residual_plus - residual_minus) / (2.0 * epsilon)
+            )
         return np.asarray(values)
 
-    def test_residual_is_non_negative_and_zero_outside_zone(self) -> None:
+    def test_penalty_is_continuous_and_zero_outside_zone(self) -> None:
         zone = 0.005
         task = SelfCollisionDampingTask(self.model, self.geom_pair, zone, 0.01, 5.0)
 
         penetrating = self._configuration(0.0)  # signed distance = -0.01 m
-        self.assertAlmostEqual(float(task.compute_error(penetrating)[0]), 0.015)
+        self.assertAlmostEqual(float(task.compute_error(penetrating)[0]), 0.095)
 
         outside = self._configuration(0.02)  # signed distance = +0.01 m
         self.assertEqual(float(task.compute_error(outside)[0]), 0.0)
@@ -96,8 +102,16 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
                 )
                 task.compute_error(configuration)
                 analytic = task.compute_jacobian(configuration)[0]
-                numeric = self._numeric_residual_jacobian(configuration, zone)
+                numeric = self._numeric_penalty_jacobian(configuration, zone)
                 np.testing.assert_allclose(analytic, numeric, atol=1e-6, rtol=1e-5)
+
+    def test_penalty_function_has_expected_standard_values(self) -> None:
+        values, derivatives = collision_penalty_and_derivative(
+            np.asarray([0.005, 0.0025, 0.0, -0.001, -0.002, -0.005])
+        )
+        np.testing.assert_allclose(values, [0.0, 0.5, 1.0, 1.36, 2.04, 6.0])
+        self.assertEqual(derivatives[0], 0.0)
+        self.assertTrue(np.all(derivatives[1:] < 0.0))
 
     def test_one_solver_step_reduces_penetration_violation(self) -> None:
         configuration = self._configuration(0.0)
@@ -116,41 +130,6 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
         )
         configuration.integrate_inplace(velocity, 0.02)
         self.assertGreater(self._distance(configuration), before)
-
-    def test_backtracking_prevents_a_safe_pose_from_crossing_contact(self) -> None:
-        configuration = self._configuration(0.018)  # +8 mm signed distance
-        task = SelfCollisionDampingTask(
-            self.model, self.geom_pair, 0.005, 0.01, 5.0
-        )
-        velocity = np.asarray([0.0, -2.0])  # Full step would penetrate deeply.
-        scale = _integrate_with_collision_backtracking(
-            configuration,
-            velocity,
-            task,
-            dt_s=0.02,
-            factor=0.8,
-            minimum_step_scale=0.01,
-        )
-        self.assertGreater(scale, 0.0)
-        self.assertLess(scale, 1.0)
-        self.assertGreaterEqual(self._distance(configuration), -1e-9)
-
-    def test_backtracking_rejects_a_step_that_deepens_penetration(self) -> None:
-        configuration = self._configuration(0.0)  # -10 mm signed distance
-        task = SelfCollisionDampingTask(
-            self.model, self.geom_pair, 0.005, 0.01, 5.0
-        )
-        before = self._distance(configuration)
-        scale = _integrate_with_collision_backtracking(
-            configuration,
-            np.asarray([0.0, -1.0]),
-            task,
-            dt_s=0.02,
-            factor=0.8,
-            minimum_step_scale=0.05,
-        )
-        self.assertEqual(scale, 0.0)
-        self.assertAlmostEqual(self._distance(configuration), before)
 
     def test_auto_broadphase_activates_near_pair_and_keeps_it_active(self) -> None:
         configuration = self._configuration(0.02)  # +10 mm signed distance.
@@ -188,11 +167,9 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
             self_collision_avoidance={
                 "enabled": True, "mode": "auto", "selected_pairs": [pair_key],
                 "damping": {
-                    "limit_zone_m": 0.005, "base_cost": 0.01, "max_cost": 5.0,
-                },
-                "backtracking": {
-                    "initial_gain": 0.2, "factor": 0.8,
-                    "minimum_gain": 0.05, "minimum_step_scale": 0.01,
+                    "limit_zone_m": 0.005, "penetration_scale_m": 0.004,
+                    "penetration_gain": 6.0, "base_cost": 0.01,
+                    "max_cost": 5.0, "gain": 0.3,
                 },
             },
             temporal_regularization_enabled=False,
@@ -209,6 +186,46 @@ class SelfCollisionDampingTaskTest(unittest.TestCase):
             diagnostic_keys=[],
         )
         self.assertEqual(result.qpos.shape, (1, self.model.nq))
+
+    def test_sequence_solver_uses_soft_collision_without_blocking(self) -> None:
+        configuration = self._configuration(0.02)
+        pair_key = f"{self.geom_pair[0][0]}:{self.geom_pair[0][1]}"
+        settings = SolverSettings(
+            solver_name="daqp", dt_s=0.02, global_damping=1e-8,
+            max_iterations=20, convergence_joint_delta_deg=1000.0,
+            convergence_consecutive_iterations=1, output_frame_dt_s=0.01,
+            enforce_hard_xml_limits=False, joint_limit_avoidance={},
+            velocity_limit_enabled=False, velocity_limit_default_rad_s=1.0,
+            velocity_limit_by_joint={}, acceleration_limit_enabled=False,
+            acceleration_limit_by_joint={}, acceleration_weight_at_2x_limit=0.1,
+            self_collision_avoidance={
+                "enabled": True, "mode": "manual", "selected_pairs": [pair_key],
+                "damping": {
+                    "limit_zone_m": 0.005, "base_cost": 0.01, "max_cost": 5.0,
+                },
+                "backtracking": {
+                    "initial_gain": 0.2, "factor": 0.5,
+                    "minimum_gain": 0.05, "minimum_step_scale": 0.01,
+                },
+            },
+            temporal_regularization_enabled=False,
+            temporal_regularization_cost=0.0,
+        )
+        result = solve_ik_sequence(
+            model=self.model,
+            initial_configuration=configuration,
+            frame_specs=[IKFrameSpec(
+                source_frame=7,
+                prepare=lambda _configuration: PreparedIKFrame(tasks=[]),
+            )],
+            solver_settings=settings,
+            diagnostic_keys=[],
+        )
+        row = result.collision_backtracking_rows[0]
+        self.assertFalse(row["collision_blocked"])
+        self.assertEqual(row["blocked_iterations"], 0)
+        self.assertEqual(row["final_step_scale"], 1.0)
+        self.assertEqual(row["blocking_pairs"], [])
 
 
 if __name__ == "__main__":

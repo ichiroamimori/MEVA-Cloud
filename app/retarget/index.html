@@ -840,6 +840,7 @@ select{min-width:215px}
 .rv-slider-wrap input{display:block}
 .rv-failure-markers{position:absolute;left:8px;right:8px;top:50%;height:14px;transform:translateY(-50%);pointer-events:none}
 .rv-failure-marker{position:absolute;top:0;width:3px;height:14px;border-radius:2px;background:#c2413b;box-shadow:0 0 0 1px #fff;pointer-events:auto;cursor:help}
+.rv-failure-marker.collision-blocked{background:#d97706}
 .rv-frame{font-size:11px;color:var(--muted);text-align:right}.rv-frame b{font-size:13px;color:var(--ink)}
 .rv-plot-panel{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px}
 .rv-plot-title{padding:10px 12px 0;font-size:13px;font-weight:900}
@@ -1505,23 +1506,22 @@ input[type="checkbox"]{
             <div class="ik-one-line">
               <div class="ik-title-line">
                 <div class="ik-card-title">Self-collision avoidance</div>
-                <span class="info-mark" tabindex="0">?<span class="info-pop">Robot XMLのcollision GEOMとexcludeから対象Pairを生成します。IKでの回避とVIEWでの確認は独立しています。</span></span>
+                <span class="info-mark" tabindex="0">?<span class="info-pop">Robot XMLのcollision GEOMとexcludeから対象Pairを生成します。負の距離も許容するSoft penaltyで、他のJointによる回避を可能にします。</span></span>
                 <div class="inline-enabled">
                   <input id="selfCollisionEnabled" type="checkbox">
                   <label for="selfCollisionEnabled">Enabled</label>
                 </div>
               </div>
               <div class="ik-flex-spacer"></div>
-              <div class="setting-control"><label for="selfCollisionZone">Limit zone (m)</label><input id="selfCollisionZone" type="number" min="0" step="0.001" value="0.005"></div>
-              <div class="setting-control"><label for="selfCollisionBaseCost">Base cost</label><input id="selfCollisionBaseCost" type="number" min="0" step="0.01" value="0.01"></div>
-              <div class="setting-control"><label for="selfCollisionMaxCost">Max cost</label><input id="selfCollisionMaxCost" type="number" min="0" step="0.01" value="0.2"></div>
+              <div class="setting-control"><label for="selfCollisionZone">Approach zone (m)</label><input id="selfCollisionZone" type="number" min="0.000001" step="0.001" value="0.005"></div>
+              <div class="setting-control"><label for="selfCollisionPenetrationScale">Penetration scale (m)</label><input id="selfCollisionPenetrationScale" type="number" min="0.000001" step="0.001" value="0.005"></div>
+              <div class="setting-control"><label for="selfCollisionPenetrationGain">Penetration gain</label><input id="selfCollisionPenetrationGain" type="number" min="0" step="0.5" value="4"></div>
             </div>
             <div class="ik-one-line self-collision-algorithm-row">
               <div class="ik-flex-spacer"></div>
-              <div class="setting-control"><label for="selfCollisionInitialGain">Initial gain</label><input id="selfCollisionInitialGain" type="number" min="0.01" max="1" step="0.05" value="0.2"></div>
-              <div class="setting-control"><label for="selfCollisionBacktrackingFactor">Backtrack factor</label><input id="selfCollisionBacktrackingFactor" type="number" min="0.01" max="0.99" step="0.05" value="0.8"></div>
-              <div class="setting-control"><label for="selfCollisionMinimumGain">Min gain</label><input id="selfCollisionMinimumGain" type="number" min="0.01" max="1" step="0.05" value="0.05"></div>
-              <div class="setting-control"><label for="selfCollisionMinimumStepScale">Min step ratio</label><input id="selfCollisionMinimumStepScale" type="number" min="0.001" max="1" step="0.01" value="0.01" title="Smallest multiplier allowed for a backtracked IK step."></div>
+              <div class="setting-control"><label for="selfCollisionBaseCost">Base cost</label><input id="selfCollisionBaseCost" type="number" min="0" step="0.01" value="0.01"></div>
+              <div class="setting-control"><label for="selfCollisionMaxCost">Max cost</label><input id="selfCollisionMaxCost" type="number" min="0" step="0.01" value="0.2"></div>
+              <div class="setting-control"><label for="selfCollisionTaskGain">Task gain</label><input id="selfCollisionTaskGain" type="number" min="0.01" max="1" step="0.05" value="0.2"></div>
             </div>
             <details class="collision-pair-details"><summary>Collision GEOM pairs <span id="selfCollisionPairCount">0 / 0 selected</span><label class="collision-auto-toggle"><input id="selfCollisionAuto" type="checkbox"> Auto</label></summary><div id="selfCollisionPairs" class="collision-pair-list"></div></details>
           </div>
@@ -1585,9 +1585,9 @@ input[type="checkbox"]{
           <div class="ik-card joint-limit-card">
             <div class="ik-one-line">
               <div class="ik-title-line">
-                <div class="ik-card-title">Joint-limit damping</div>
+                <div class="ik-card-title">Joint-limit avoidance</div>
                 <span class="info-mark" tabindex="0">?
-                  <span class="info-pop">通常域はBase cost、limit zoneではDamping costを連続的に増加させます。qmidへ戻すPostureTaskは使いません。hard XML limitは別途維持します。</span>
+                  <span class="info-pop">中央の安全域では作用せず、limit zoneに入ると安全域境界へ戻す位置コストがBase costからMax costまで増加します。hard XML limitは別途維持します。</span>
                 </span>
                 <div class="inline-enabled">
                   <input id="jointLimitEnabled" type="checkbox">
@@ -2316,12 +2316,11 @@ input[type="checkbox"]{
   const selfCollisionEnabled = document.getElementById("selfCollisionEnabled");
   const selfCollisionAuto = document.getElementById("selfCollisionAuto");
   const selfCollisionZone = document.getElementById("selfCollisionZone");
+  const selfCollisionPenetrationScale = document.getElementById("selfCollisionPenetrationScale");
+  const selfCollisionPenetrationGain = document.getElementById("selfCollisionPenetrationGain");
   const selfCollisionBaseCost = document.getElementById("selfCollisionBaseCost");
   const selfCollisionMaxCost = document.getElementById("selfCollisionMaxCost");
-  const selfCollisionInitialGain = document.getElementById("selfCollisionInitialGain");
-  const selfCollisionBacktrackingFactor = document.getElementById("selfCollisionBacktrackingFactor");
-  const selfCollisionMinimumGain = document.getElementById("selfCollisionMinimumGain");
-  const selfCollisionMinimumStepScale = document.getElementById("selfCollisionMinimumStepScale");
+  const selfCollisionTaskGain = document.getElementById("selfCollisionTaskGain");
   const selfCollisionPairs = document.getElementById("selfCollisionPairs");
   const selfCollisionPairCount = document.getElementById("selfCollisionPairCount");
   const primaryMevaFootGroundOffset = document.getElementById("primaryMevaFootGroundOffset");
@@ -2943,12 +2942,11 @@ input[type="checkbox"]{
     if(selfCollisionEnabled) selfCollisionEnabled.checked = Boolean(selfCollision.enabled ?? false);
     if(selfCollisionAuto) selfCollisionAuto.checked = String(selfCollision.mode || "manual").toLowerCase() === "auto";
     if(selfCollisionZone) selfCollisionZone.value = Number(selfCollision.damping?.limit_zone_m ?? 0.005);
+    if(selfCollisionPenetrationScale) selfCollisionPenetrationScale.value = Number(selfCollision.damping?.penetration_scale_m ?? 0.005);
+    if(selfCollisionPenetrationGain) selfCollisionPenetrationGain.value = Number(selfCollision.damping?.penetration_gain ?? 4);
     if(selfCollisionBaseCost) selfCollisionBaseCost.value = Number(selfCollision.damping?.base_cost ?? 0.01);
     if(selfCollisionMaxCost) selfCollisionMaxCost.value = Number(selfCollision.damping?.max_cost ?? 0.2);
-    if(selfCollisionInitialGain) selfCollisionInitialGain.value = Number(selfCollision.backtracking?.initial_gain ?? 0.2);
-    if(selfCollisionBacktrackingFactor) selfCollisionBacktrackingFactor.value = Number(selfCollision.backtracking?.factor ?? 0.8);
-    if(selfCollisionMinimumGain) selfCollisionMinimumGain.value = Number(selfCollision.backtracking?.minimum_gain ?? 0.05);
-    if(selfCollisionMinimumStepScale) selfCollisionMinimumStepScale.value = Number(selfCollision.backtracking?.minimum_step_scale ?? 0.01);
+    if(selfCollisionTaskGain) selfCollisionTaskGain.value = Number(selfCollision.damping?.gain ?? selfCollision.backtracking?.initial_gain ?? 0.2);
     const selectedPairs = new Set(selfCollision.selected_pairs || []);
     selfCollisionPairs?.querySelectorAll(".collision-pair-check").forEach(input => {
       input.checked = selectedPairs.has(input.value);
@@ -3098,35 +3096,26 @@ input[type="checkbox"]{
     };
 
     const collisionZone = Number(selfCollisionZone?.value ?? 0.005);
+    const collisionPenetrationScale = Number(selfCollisionPenetrationScale?.value ?? 0.005);
+    const collisionPenetrationGain = Number(selfCollisionPenetrationGain?.value ?? 4);
     const collisionBase = Number(selfCollisionBaseCost?.value ?? 0.01);
     const collisionMax = Number(selfCollisionMaxCost?.value ?? 0.2);
-    const collisionInitialGain = Number(selfCollisionInitialGain?.value ?? 0.2);
-    const collisionBacktrackingFactor = Number(selfCollisionBacktrackingFactor?.value ?? 0.8);
-    const collisionMinimumGain = Number(selfCollisionMinimumGain?.value ?? 0.05);
-    const collisionMinimumStepScale = Number(selfCollisionMinimumStepScale?.value ?? 0.01);
-    if(!Number.isFinite(collisionZone) || collisionZone < 0) throw new Error("Self-collision Limit zone must be non-negative.");
+    const collisionTaskGain = Number(selfCollisionTaskGain?.value ?? 0.2);
+    if(!Number.isFinite(collisionZone) || collisionZone <= 0) throw new Error("Self-collision Approach zone must be positive.");
+    if(!Number.isFinite(collisionPenetrationScale) || collisionPenetrationScale <= 0) throw new Error("Self-collision Penetration scale must be positive.");
+    if(!Number.isFinite(collisionPenetrationGain) || collisionPenetrationGain < 0) throw new Error("Self-collision Penetration gain must be non-negative.");
     if(!Number.isFinite(collisionBase) || collisionBase < 0 || !Number.isFinite(collisionMax) || collisionMax < collisionBase){
       throw new Error("Self-collision costs must be non-negative and Max cost must be >= Base cost.");
     }
-    if(!Number.isFinite(collisionBacktrackingFactor) || collisionBacktrackingFactor <= 0 || collisionBacktrackingFactor >= 1){
-      throw new Error("Self-collision Backtrack factor must be between 0 and 1.");
-    }
-    if(!Number.isFinite(collisionInitialGain) || collisionInitialGain <= 0 || collisionInitialGain > 1){
-      throw new Error("Self-collision Initial gain must be in (0, 1].");
-    }
-    if(!Number.isFinite(collisionMinimumGain) || collisionMinimumGain <= 0 || collisionMinimumGain > collisionInitialGain){
-      throw new Error("Self-collision Min gain must be in (0, Initial gain].");
-    }
-    if(!Number.isFinite(collisionMinimumStepScale) || collisionMinimumStepScale <= 0 || collisionMinimumStepScale > 1){
-      throw new Error("Self-collision Min step scale must be in (0, 1].");
+    if(!Number.isFinite(collisionTaskGain) || collisionTaskGain <= 0 || collisionTaskGain > 1){
+      throw new Error("Self-collision Task gain must be in (0, 1].");
     }
     const selectedSelfCollisionPairs = [...(selfCollisionPairs?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length > 0,
       mode: selfCollisionAuto?.checked ? "auto" : "manual",
       selected_pairs: selectedSelfCollisionPairs,
-      damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
-      backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
+      damping: {limit_zone_m:collisionZone,penetration_scale_m:collisionPenetrationScale,penetration_gain:collisionPenetrationGain,base_cost:collisionBase,max_cost:collisionMax,gain:collisionTaskGain},
     };
     const accelerationOverrides = {};
     for(const input of document.querySelectorAll("#tab-mapping .joint-acceleration-input")){
@@ -3409,9 +3398,9 @@ input[type="checkbox"]{
       "maxIterations", "convergenceJointDeltaDeg",
       "convergenceConsecutiveIterations",
       "pelvisFootDirectionEnabled", "pelvisLeftFootDirectionCost", "pelvisRightFootDirectionCost",
-      "selfCollisionEnabled", "selfCollisionAuto", "selfCollisionZone", "selfCollisionBaseCost", "selfCollisionMaxCost",
-      "selfCollisionBacktrackingFactor", "selfCollisionMinimumStepScale",
-      "selfCollisionInitialGain", "selfCollisionMinimumGain",
+      "selfCollisionEnabled", "selfCollisionAuto", "selfCollisionZone",
+      "selfCollisionPenetrationScale", "selfCollisionPenetrationGain",
+      "selfCollisionBaseCost", "selfCollisionMaxCost", "selfCollisionTaskGain",
       "accelerationWeightAt2x",
     ]);
     root.querySelectorAll("[id]").forEach(el => {
@@ -3490,12 +3479,11 @@ input[type="checkbox"]{
     setChecked("selfCollisionEnabled", collision.enabled ?? false);
     setChecked("selfCollisionAuto", String(collision.mode || "manual").toLowerCase() === "auto");
     setValue("selfCollisionZone", Number(collision.damping?.limit_zone_m ?? 0.005));
+    setValue("selfCollisionPenetrationScale", Number(collision.damping?.penetration_scale_m ?? 0.005));
+    setValue("selfCollisionPenetrationGain", Number(collision.damping?.penetration_gain ?? 4));
     setValue("selfCollisionBaseCost", Number(collision.damping?.base_cost ?? 0.01));
     setValue("selfCollisionMaxCost", Number(collision.damping?.max_cost ?? 0.2));
-    setValue("selfCollisionInitialGain", Number(collision.backtracking?.initial_gain ?? 0.2));
-    setValue("selfCollisionBacktrackingFactor", Number(collision.backtracking?.factor ?? 0.8));
-    setValue("selfCollisionMinimumGain", Number(collision.backtracking?.minimum_gain ?? 0.05));
-    setValue("selfCollisionMinimumStepScale", Number(collision.backtracking?.minimum_step_scale ?? 0.01));
+    setValue("selfCollisionTaskGain", Number(collision.damping?.gain ?? collision.backtracking?.initial_gain ?? 0.2));
     const selectedCollisionPairs = new Set(collision.selected_pairs || []);
     root.querySelectorAll(".collision-pair-check").forEach(input=>input.checked=selectedCollisionPairs.has(input.value));
     updateSelfCollisionParent(root);
@@ -3771,24 +3759,19 @@ input[type="checkbox"]{
       right_cost: Number(control("pelvisRightFootDirectionCost")?.value ?? 0.1),
     };
     const collisionZone = Number(control("selfCollisionZone")?.value ?? 0.005);
+    const collisionPenetrationScale = Number(control("selfCollisionPenetrationScale")?.value ?? 0.005);
+    const collisionPenetrationGain = Number(control("selfCollisionPenetrationGain")?.value ?? 4);
     const collisionBase = Number(control("selfCollisionBaseCost")?.value ?? 0.01);
     const collisionMax = Number(control("selfCollisionMaxCost")?.value ?? 0.2);
-    const collisionInitialGain = Number(control("selfCollisionInitialGain")?.value ?? 0.2);
-    const collisionBacktrackingFactor = Number(control("selfCollisionBacktrackingFactor")?.value ?? 0.8);
-    const collisionMinimumGain = Number(control("selfCollisionMinimumGain")?.value ?? 0.05);
-    const collisionMinimumStepScale = Number(control("selfCollisionMinimumStepScale")?.value ?? 0.01);
-    if(collisionZone < 0 || collisionBase < 0 || collisionMax < collisionBase) throw new Error("Invalid Self-collision damping values.");
-    if(!Number.isFinite(collisionBacktrackingFactor) || collisionBacktrackingFactor <= 0 || collisionBacktrackingFactor >= 1) throw new Error("Invalid Self-collision Backtrack factor.");
-    if(!Number.isFinite(collisionInitialGain) || collisionInitialGain <= 0 || collisionInitialGain > 1) throw new Error("Invalid Self-collision Initial gain.");
-    if(!Number.isFinite(collisionMinimumGain) || collisionMinimumGain <= 0 || collisionMinimumGain > collisionInitialGain) throw new Error("Invalid Self-collision Min gain.");
-    if(!Number.isFinite(collisionMinimumStepScale) || collisionMinimumStepScale <= 0 || collisionMinimumStepScale > 1) throw new Error("Invalid Self-collision Min step scale.");
+    const collisionTaskGain = Number(control("selfCollisionTaskGain")?.value ?? 0.2);
+    if(!Number.isFinite(collisionZone) || collisionZone <= 0 || !Number.isFinite(collisionPenetrationScale) || collisionPenetrationScale <= 0 || !Number.isFinite(collisionPenetrationGain) || collisionPenetrationGain < 0 || collisionBase < 0 || collisionMax < collisionBase) throw new Error("Invalid Self-collision soft penalty values.");
+    if(!Number.isFinite(collisionTaskGain) || collisionTaskGain <= 0 || collisionTaskGain > 1) throw new Error("Invalid Self-collision Task gain.");
     const selectedSelfCollisionPairs=[...(mainInheritedSnapshot?.querySelectorAll(".collision-pair-check:checked") || [])].map(x=>x.value);
     cfg.self_collision_avoidance = {
       enabled: selectedSelfCollisionPairs.length>0,
       mode: Boolean(control("selfCollisionAuto")?.checked) ? "auto" : "manual",
       selected_pairs: selectedSelfCollisionPairs,
-      damping: {limit_zone_m:collisionZone,base_cost:collisionBase,max_cost:collisionMax},
-      backtracking: {initial_gain:collisionInitialGain,factor:collisionBacktrackingFactor,minimum_gain:collisionMinimumGain,minimum_step_scale:collisionMinimumStepScale},
+      damping: {limit_zone_m:collisionZone,penetration_scale_m:collisionPenetrationScale,penetration_gain:collisionPenetrationGain,base_cost:collisionBase,max_cost:collisionMax,gain:collisionTaskGain},
     };
     const accelerationOverrides={};
     for(const input of (mainInheritedSnapshot?.querySelectorAll(".joint-acceleration-input") || [])){
@@ -4667,7 +4650,7 @@ input[type="checkbox"]{
     updateSelfCollisionParent();refreshChangedState();
   });
   bindSelfCollisionAuto();
-  for(const input of [selfCollisionZone,selfCollisionBaseCost,selfCollisionMaxCost,selfCollisionInitialGain,selfCollisionBacktrackingFactor,selfCollisionMinimumGain,selfCollisionMinimumStepScale]) input?.addEventListener("input",refreshChangedState);
+  for(const input of [selfCollisionZone,selfCollisionPenetrationScale,selfCollisionPenetrationGain,selfCollisionBaseCost,selfCollisionMaxCost,selfCollisionTaskGain]) input?.addEventListener("input",refreshChangedState);
   async function activateStageTab(name){
     const btn = document.querySelector(`.stage-tab[data-tab="${name}"]`);
     if(!btn) return false;
@@ -6861,8 +6844,8 @@ input[type="checkbox"]{
     if(warningEl){
       const partial=String(bin?.header?.run_status||"")==="partial";
       const failed=Number(bin?.header?.failed_frame_count||0);
-      warningEl.classList.toggle("active",partial);
-      warningEl.title=partial?`${failed} failed or unavailable frame${failed===1?"":"s"}. Hover timeline markers for details.`:"";
+      warningEl.classList.toggle("active",partial||failed>0);
+      warningEl.title=(partial||failed>0)?`${failed} failed, blocked, or unavailable frame${failed===1?"":"s"}. Hover timeline markers for details.`:"";
     }
   }
 
@@ -6873,13 +6856,22 @@ input[type="checkbox"]{
     for(const [stage,entry] of Object.entries(rvData?.sources||{})){
       const bin=entry?.bin,status=bin?.arrays?.frame_status;if(!status)continue;
       const frames=sourceFrames(bin),errors=new Map((bin.header.frame_errors||[]).map(item=>[Number(item.frame_index),item]));
+      const blocked=new Map((bin.header.collision_backtracking?.frames||[]).map(item=>[Number(item.output_frame),item]));
       status.forEach((value,index)=>{
-        if(Number(value)!==2)return;
+        const statusCode=Number(value);
+        if(statusCode!==2&&statusCode!==4)return;
         const frame=Number(frames[index]);if(frame<min||frame>max)return;
         const detail=errors.get(index)||{};
         const marker=document.createElement("span");marker.className="rv-failure-marker";
+        if(statusCode===4)marker.classList.add("collision-blocked");
         marker.style.left=`${Math.max(0,Math.min(100,(frame-min)/span*100))}%`;
-        marker.title=`${stageLabel(stage)} frame ${frame}: ${detail.error||"Solver error"}`;
+        if(statusCode===4){
+          const row=blocked.get(index)||{};
+          const pairs=(row.blocking_pairs||[]).map(pair=>`${pair.body_a} ↔ ${pair.body_b} (${pair.key}, ${Number(pair.distance_m||0).toExponential(3)} m)`).join(", ");
+          marker.title=`${stageLabel(stage)} frame ${frame}: Collision backtracking blocked${pairs?` — ${pairs}`:""}`;
+        }else{
+          marker.title=`${stageLabel(stage)} frame ${frame}: ${detail.error||"Solver error"}`;
+        }
         marker.addEventListener("click",()=>{rvSlider.value=frame;drawViewer()});
         rvFailureMarkers.appendChild(marker);
       });

@@ -15,6 +15,11 @@ import numpy as np
 from mink.limits.limit import Constraint, Limit
 from mink.exceptions import NoSolutionFound
 
+try:
+    from .robot_model_info import geoms_are_directly_adjacent
+except ImportError:
+    from robot_model_info import geoms_are_directly_adjacent
+
 
 DEFAULT_ACCELERATION_WEIGHT_AT_2X_LIMIT = 0.1
 
@@ -76,6 +81,7 @@ class IKSequenceResult:
     iteration_joint_delta_rows: list[dict[str, Any]] | None
     acceleration_soft_limit_rows: list[dict[str, Any]] | None
     diagnostic_hinges: list[tuple[str, int]] | None
+    collision_backtracking_rows: list[dict[str, Any]] = field(default_factory=list)
 
 
 class IKSequenceFailure(RuntimeError):
@@ -205,10 +211,19 @@ def limit_start_ratio(default_setting, override_setting=None):
     return start
 
 
-def joint_limit_damping_cost(model, q, cfg):
+def joint_limit_avoidance_target_and_cost(model, q, cfg):
+    """Build an edge-only posture target that pushes limited hinges inward.
+
+    The limit-zone cost is positional, not velocity damping. Inside the safe
+    interval the task is inactive. Once a hinge enters either edge zone, its
+    target is the corresponding safe-zone boundary and its weight rises from
+    ``base_cost`` to ``max_cost`` toward the XML limit.
+    """
+    target = np.asarray(q, dtype=float).copy()
     cost = np.zeros(model.nv, dtype=float)
+    state_by_joint: dict[str, dict[str, float | str]] = {}
     if not cfg.get("enabled", False):
-        return cost
+        return target, cost, state_by_joint
     default_setting = dict(cfg.get("default", {}))
     for _, name, qadr, dadr, limited, lo, hi in hinge_info(model):
         if not limited or hi <= lo:
@@ -228,16 +243,51 @@ def joint_limit_damping_cost(model, q, cfg):
             raise ValueError(f"exponent must be positive for {name}")
         mid = (lo + hi) / 2.0
         half = (hi - lo) / 2.0
-        ratio = abs(float(q[qadr]) - mid) / half
-        if ratio <= start:
-            effective = base_cost
-        else:
-            t = float(np.clip(
-                (ratio - start) / max(1e-9, 1.0 - start), 0.0, 1.0
-            ))
-            effective = base_cost + (max_cost - base_cost) * (t ** exponent)
-        cost[dadr] = effective
-    return cost
+        safe_half = start * half
+        safe_lo = mid - safe_half
+        safe_hi = mid + safe_half
+        value = float(q[qadr])
+        side = "safe"
+        penetration = 0.0
+        zone_width = max(1e-9, half - safe_half)
+        if value < safe_lo:
+            side = "lower"
+            target[qadr] = safe_lo
+            penetration = safe_lo - value
+        elif value > safe_hi:
+            side = "upper"
+            target[qadr] = safe_hi
+            penetration = value - safe_hi
+        if side != "safe":
+            t = float(np.clip(penetration / zone_width, 0.0, 1.0))
+            cost[dadr] = base_cost + (max_cost - base_cost) * (t ** exponent)
+        state_by_joint[name] = {
+            "side": side,
+            "position_rad": value,
+            "target_rad": float(target[qadr]),
+            "zone_fraction": float(np.clip(penetration / zone_width, 0.0, 1.0)),
+            "cost": float(cost[dadr]),
+        }
+    return target, cost, state_by_joint
+
+
+class JointLimitAvoidanceTask(mink.PostureTask):
+    """Position task active only inside the configured XML joint-limit zones."""
+
+    def __init__(self, model, cfg):
+        super().__init__(model, cost=np.zeros(model.nv, dtype=float))
+        self.model = model
+        self.cfg = cfg
+        self.state_by_joint: dict[str, dict[str, float | str]] = {}
+
+    def update_from_configuration(self, configuration) -> bool:
+        target, cost, states = joint_limit_avoidance_target_and_cost(
+            self.model, configuration.q, self.cfg
+        )
+        self.set_target(target)
+        self.set_cost(cost)
+        self.state_by_joint = states
+        return bool(np.any(cost > 0.0))
 
 
 class FrameJointVelocityLimit(Limit):
@@ -360,21 +410,67 @@ class FrameJointAccelerationSoftTask(mink.PostureTask):
         return bool(np.any(costs > 0.0))
 
 
+def collision_penalty_and_derivative(
+    distance_m,
+    *,
+    zone_m=0.005,
+    penetration_scale_m=0.005,
+    penetration_gain=4.0,
+):
+    """Map signed collision distance to a continuous soft penalty."""
+    zone_m = float(zone_m)
+    penetration_scale_m = float(penetration_scale_m)
+    penetration_gain = float(penetration_gain)
+    if not np.isfinite(zone_m) or zone_m <= 0.0:
+        raise ValueError("collision penalty zone_m must be positive")
+    if not np.isfinite(penetration_scale_m) or penetration_scale_m <= 0.0:
+        raise ValueError("collision penetration_scale_m must be positive")
+    if not np.isfinite(penetration_gain) or penetration_gain < 0.0:
+        raise ValueError("collision penetration_gain must be non-negative")
+
+    distance = np.asarray(distance_m, dtype=float)
+    active = distance < zone_m
+    penetration = np.maximum(-distance, 0.0)
+    penalty = np.where(
+        active,
+        (zone_m - distance) / zone_m
+        + penetration_gain * (penetration / penetration_scale_m) ** 2,
+        0.0,
+    )
+    derivative = np.where(active, -1.0 / zone_m, 0.0)
+    derivative = np.where(
+        distance < 0.0,
+        derivative + 2.0 * penetration_gain * distance / penetration_scale_m ** 2,
+        derivative,
+    )
+    if distance.ndim == 0:
+        return float(penalty), float(derivative)
+    return penalty, derivative
+
+
 class SelfCollisionDampingTask(mink.Task):
-    """Non-negative collision violation with cost ramping in the damping zone.
+    """Robot-independent soft self-collision penalty task."""
 
-    MuJoCo's witness-point normal changes convention once signed distance becomes
-    negative.  Keep signed distance for measurement, but expose the optimizer to
-    ``max(zone - distance, 0)`` and correct the witness Jacobian on penetration.
-    """
-
-    def __init__(self, model, geom_pairs, zone_m, base_cost, max_cost, gain=1.0):
+    def __init__(
+        self,
+        model,
+        geom_pairs,
+        zone_m,
+        base_cost,
+        max_cost,
+        gain=1.0,
+        penetration_scale_m=0.005,
+        penetration_gain=4.0,
+    ):
         self.model = model
         self.geom_pairs = list(geom_pairs)
         self.zone_m = float(zone_m)
         self.base_cost = float(base_cost)
         self.max_cost = float(max_cost)
+        self.penetration_scale_m = float(penetration_scale_m)
+        self.penetration_gain = float(penetration_gain)
         self._distances = np.zeros(len(self.geom_pairs))
+        self._penalty_derivatives = np.zeros(len(self.geom_pairs))
         self._fromto = np.zeros((len(self.geom_pairs), 6))
         super().__init__(
             cost=np.full(len(self.geom_pairs), self.base_cost), gain=float(gain)
@@ -386,11 +482,21 @@ class SelfCollisionDampingTask(mink.Task):
                 self.model, configuration.data, geom_a, geom_b,
                 max(self.zone_m * 2.0, self.zone_m + 1e-4), self._fromto[index],
             )
-        penetration = np.clip(
+        proximity = np.clip(
             (self.zone_m - self._distances) / max(self.zone_m, 1e-9), 0.0, 1.0
         )
-        self.cost = self.base_cost + (self.max_cost - self.base_cost) * penetration ** 2
-        return np.maximum(self.zone_m - self._distances, 0.0)
+        self.cost = self.base_cost + (self.max_cost - self.base_cost) * proximity ** 2
+        penalty, derivative = collision_penalty_and_derivative(
+            self._distances,
+            zone_m=self.zone_m,
+            penetration_scale_m=self.penetration_scale_m,
+            penetration_gain=self.penetration_gain,
+        )
+        # Keep the task residual in metres.  This preserves the pre-contact
+        # sensitivity of the former distance residual while retaining the
+        # quadratic growth after penetration.
+        self._penalty_derivatives[:] = self.zone_m * derivative
+        return self.zone_m * penalty
 
     def compute_jacobian(self, configuration):
         jacobian = np.zeros((len(self.geom_pairs), self.model.nv))
@@ -418,51 +524,17 @@ class SelfCollisionDampingTask(mink.Task):
             # During penetration its witness normal reverses and gives the
             # negative derivative.  The task residual is zone-distance, hence
             # the two regions require opposite signs here.
-            jacobian[index] = (
+            distance_violation_jacobian = (
                 -raw_distance_jacobian
                 if self._distances[index] >= 0.0
                 else raw_distance_jacobian
             )
+            # Convert d(zone-distance)/dq to d(penalty)/dq.
+            jacobian[index] = (
+                -self._penalty_derivatives[index]
+                * distance_violation_jacobian
+            )
         return jacobian
-
-
-def _collision_step_worsens(current_distances, candidate_distances, tolerance=1e-9):
-    """Return whether a candidate creates or deepens selected-pair penetration."""
-    current = np.asarray(current_distances, dtype=float)
-    candidate = np.asarray(candidate_distances, dtype=float)
-    if current.shape != candidate.shape:
-        raise ValueError("collision distance shape mismatch")
-    creates_penetration = (current >= 0.0) & (candidate < -tolerance)
-    deepens_penetration = (current < 0.0) & (candidate < current - tolerance)
-    return bool(np.any(creates_penetration | deepens_penetration))
-
-
-def _integrate_with_collision_backtracking(
-    configuration,
-    velocity,
-    collision_task,
-    *,
-    dt_s,
-    factor,
-    minimum_step_scale,
-):
-    """Integrate the largest step that does not create/deepen penetration."""
-    q_before = configuration.q.copy()
-    collision_task.compute_error(configuration)
-    current_distances = collision_task._distances.copy()
-    step_scale = 1.0
-    while step_scale >= minimum_step_scale:
-        configuration.update(q=q_before)
-        configuration.integrate_inplace(velocity * step_scale, dt_s)
-        collision_task.compute_error(configuration)
-        if not _collision_step_worsens(
-            current_distances, collision_task._distances
-        ):
-            return step_scale
-        step_scale *= factor
-    configuration.update(q=q_before)
-    collision_task.compute_error(configuration)
-    return 0.0
 
 
 def _activate_broadphase_collision_pairs(
@@ -585,6 +657,9 @@ def solve_ik_sequence(
         temporal_posture = mink.PostureTask(
             model, cost=solver_settings.temporal_regularization_cost
         )
+    joint_limit_avoidance_task = JointLimitAvoidanceTask(
+        model, solver_settings.joint_limit_avoidance
+    )
 
     limits = (
         [mink.ConfigurationLimit(model)]
@@ -605,23 +680,23 @@ def solve_ik_sequence(
             solver_settings.acceleration_weight_at_2x_limit,
         )
     collision_damping_task = None
-    collision_limit = None
     collision_candidate_pairs = []
     collision_mode = "manual"
     collision_zone = 0.005
     collision_detection_distance = 0.01
     collision_base_cost = 0.01
     collision_max_cost = 0.2
-    collision_initial_gain = 0.2
-    collision_minimum_gain = 0.05
-    collision_backtracking_factor = 0.8
-    collision_minimum_step_scale = 0.01
+    collision_penetration_scale = 0.005
+    collision_penetration_gain = 4.0
+    collision_task_gain = 0.2
     collision_cfg = dict(solver_settings.self_collision_avoidance or {})
     selected_collision_pairs = list(collision_cfg.get("selected_pairs", []))
     if collision_cfg.get("enabled", False) and selected_collision_pairs:
         collision_mode = str(collision_cfg.get("mode", "manual")).strip().lower()
         if collision_mode not in {"manual", "auto"}:
             raise ValueError("self_collision_avoidance.mode must be manual or auto")
+        seen_collision_pairs: set[tuple[int, int]] = set()
+        ignored_adjacent_pairs: list[str] = []
         for key in selected_collision_pairs:
             try:
                 geom_a, geom_b = (int(x) for x in str(key).split(":", 1))
@@ -629,43 +704,46 @@ def solve_ik_sequence(
                 raise ValueError(f"bad self-collision pair key: {key}") from exc
             if not (0 <= geom_a < model.ngeom and 0 <= geom_b < model.ngeom):
                 raise ValueError(f"self-collision geom id out of range: {key}")
-            collision_candidate_pairs.append((geom_a, geom_b))
+            geom_pair = tuple(sorted((geom_a, geom_b)))
+            if geoms_are_directly_adjacent(model, *geom_pair):
+                ignored_adjacent_pairs.append(f"{geom_pair[0]}:{geom_pair[1]}")
+                continue
+            if geom_pair in seen_collision_pairs:
+                continue
+            seen_collision_pairs.add(geom_pair)
+            collision_candidate_pairs.append(geom_pair)
+        if ignored_adjacent_pairs:
+            print(
+                "Self-collision: ignored directly adjacent body pairs from config: "
+                + ", ".join(ignored_adjacent_pairs),
+                flush=True,
+            )
         collision_zone = float(collision_cfg.get("damping", {}).get("limit_zone_m", 0.005))
         collision_base_cost = float(collision_cfg.get("damping", {}).get("base_cost", 0.01))
         collision_max_cost = float(collision_cfg.get("damping", {}).get("max_cost", 0.2))
+        collision_penetration_scale = float(
+            collision_cfg.get("damping", {}).get("penetration_scale_m", 0.005)
+        )
+        collision_penetration_gain = float(
+            collision_cfg.get("damping", {}).get("penetration_gain", 4.0)
+        )
+        collision_task_gain = float(collision_cfg.get("damping", {}).get(
+            "gain",
+            collision_cfg.get("backtracking", {}).get("initial_gain", 0.2),
+        ))
         collision_detection_distance = max(
             collision_zone * 2.0, collision_zone + 1e-4
         )
-        backtracking_cfg = dict(collision_cfg.get("backtracking", {}))
-        collision_backtracking_factor = float(
-            backtracking_cfg.get("factor", 0.8)
-        )
-        collision_initial_gain = float(backtracking_cfg.get("initial_gain", 0.2))
-        collision_minimum_gain = float(backtracking_cfg.get("minimum_gain", 0.05))
-        collision_minimum_step_scale = float(
-            backtracking_cfg.get("minimum_step_scale", 0.01)
-        )
-        if not np.isfinite(collision_zone) or collision_zone < 0.0:
-            raise ValueError("self_collision_avoidance.damping.limit_zone_m must be non-negative")
+        if not np.isfinite(collision_zone) or collision_zone <= 0.0:
+            raise ValueError("self_collision_avoidance.damping.limit_zone_m must be positive")
         if not np.isfinite(collision_base_cost) or collision_base_cost < 0.0 or not np.isfinite(collision_max_cost) or collision_max_cost < collision_base_cost:
             raise ValueError("self-collision damping costs must satisfy 0 <= base_cost <= max_cost")
-        if (
-            not np.isfinite(collision_backtracking_factor)
-            or not 0.0 < collision_backtracking_factor < 1.0
-        ):
-            raise ValueError("self-collision backtracking factor must be between 0 and 1")
-        if not np.isfinite(collision_initial_gain) or not 0.0 < collision_initial_gain <= 1.0:
-            raise ValueError("self-collision initial gain must be in (0, 1]")
-        if (
-            not np.isfinite(collision_minimum_gain)
-            or not 0.0 < collision_minimum_gain <= collision_initial_gain
-        ):
-            raise ValueError("self-collision minimum gain must be in (0, initial_gain]")
-        if (
-            not np.isfinite(collision_minimum_step_scale)
-            or not 0.0 < collision_minimum_step_scale <= 1.0
-        ):
-            raise ValueError("self-collision minimum step scale must be in (0, 1]")
+        if not np.isfinite(collision_penetration_scale) or collision_penetration_scale <= 0.0:
+            raise ValueError("self_collision_avoidance.damping.penetration_scale_m must be positive")
+        if not np.isfinite(collision_penetration_gain) or collision_penetration_gain < 0.0:
+            raise ValueError("self_collision_avoidance.damping.penetration_gain must be non-negative")
+        if not np.isfinite(collision_task_gain) or not 0.0 < collision_task_gain <= 1.0:
+            raise ValueError("self_collision_avoidance.damping.gain must be in (0, 1]")
 
     qpos = []
     diag = []
@@ -677,6 +755,7 @@ def solve_ik_sequence(
     iteration_joint_deltas = None
     iteration_joint_delta_rows = None
     acceleration_soft_limit_rows = None
+    collision_backtracking_rows: list[dict[str, Any]] = []
     diagnostic_hinges = None
     if solver_settings.iteration_diagnostics:
         iteration_values = {
@@ -707,6 +786,7 @@ def solve_ik_sequence(
             iteration_joint_delta_rows=iteration_joint_delta_rows,
             acceleration_soft_limit_rows=acceleration_soft_limit_rows,
             diagnostic_hinges=diagnostic_hinges,
+            collision_backtracking_rows=collision_backtracking_rows,
         )
 
     for output_index, frame_spec in enumerate(frame_specs):
@@ -739,7 +819,6 @@ def solve_ik_sequence(
         )
         collision_components_dirty = bool(frame_active_collision_indices)
         collision_damping_task = None
-        collision_limit = None
 
         def activate_auto_collision_pairs():
             nonlocal collision_components_dirty
@@ -753,7 +832,7 @@ def solve_ik_sequence(
             return added
 
         def rebuild_collision_components_if_needed():
-            nonlocal collision_components_dirty, collision_damping_task, collision_limit
+            nonlocal collision_components_dirty, collision_damping_task
             if not collision_components_dirty:
                 return
             active_pairs = [
@@ -763,17 +842,12 @@ def solve_ik_sequence(
             if active_pairs:
                 collision_damping_task = SelfCollisionDampingTask(
                     model, active_pairs, collision_zone, collision_base_cost,
-                    collision_max_cost, gain=collision_adaptive_gain,
-                )
-                collision_limit = mink.CollisionAvoidanceLimit(
-                    model,
-                    geom_pairs=[((geom_a,), (geom_b,)) for geom_a, geom_b in active_pairs],
-                    minimum_distance_from_collisions=collision_zone,
-                    collision_detection_distance=collision_detection_distance,
+                    collision_max_cost, gain=collision_task_gain,
+                    penetration_scale_m=collision_penetration_scale,
+                    penetration_gain=collision_penetration_gain,
                 )
             else:
                 collision_damping_task = None
-                collision_limit = None
             collision_components_dirty = False
         if q_previous is not None and temporal_posture is not None:
             solve_tasks_base.append(temporal_posture)
@@ -807,28 +881,22 @@ def solve_ik_sequence(
         final_max_joint_delta_deg = float("inf")
         iterations_used = 0
         max_joint_limit_cost_this_frame = 0.0
-        collision_adaptive_gain = collision_initial_gain
-
         for iteration_index in range(1, solver_settings.max_iterations + 1):
             activate_auto_collision_pairs()
             rebuild_collision_components_if_needed()
             q_before_iteration = conf.q.copy()
-            joint_limit_cost = joint_limit_damping_cost(
-                model, conf.q, solver_settings.joint_limit_avoidance
-            )
+            joint_limit_active = joint_limit_avoidance_task.update_from_configuration(conf)
+            joint_limit_cost = joint_limit_avoidance_task.cost
             max_joint_limit_cost_this_frame = max(
                 max_joint_limit_cost_this_frame,
                 float(np.max(joint_limit_cost)) if len(joint_limit_cost) else 0.0,
             )
             solve_tasks = list(solve_tasks_base)
             if collision_damping_task is not None:
-                collision_damping_task.gain = collision_adaptive_gain
                 solve_tasks.append(collision_damping_task)
             solve_limits = list(limits)
-            if collision_limit is not None:
-                solve_limits.append(collision_limit)
-            if np.any(joint_limit_cost > 0.0):
-                solve_tasks.append(mink.DampingTask(model, cost=joint_limit_cost))
+            if joint_limit_active:
+                solve_tasks.append(joint_limit_avoidance_task)
             if (
                 frame_acceleration_task is not None
                 and frame_acceleration_task.update_from_configuration(conf)
@@ -879,22 +947,9 @@ def solve_ik_sequence(
                     result=current_result(), output_index=output_index,
                     source_frame=source_frame,
                 ) from exc
-            if collision_damping_task is not None:
-                collision_step_scale = _integrate_with_collision_backtracking(
-                    conf,
-                    velocity,
-                    collision_damping_task,
-                    dt_s=solver_settings.dt_s,
-                    factor=collision_backtracking_factor,
-                    minimum_step_scale=collision_minimum_step_scale,
-                )
-                if collision_step_scale < 1.0:
-                    collision_adaptive_gain = max(
-                        collision_minimum_gain,
-                        collision_adaptive_gain * collision_backtracking_factor,
-                    )
-            else:
-                conf.integrate_inplace(velocity, solver_settings.dt_s)
+            # Self-collision is a soft task.  Integrate the complete QP update
+            # so the optimizer can use other joints to escape penetration.
+            conf.integrate_inplace(velocity, solver_settings.dt_s)
             if not np.all(np.isfinite(conf.q)):
                 raise IKSequenceFailure(
                     "IK produced NaN/Inf at "
@@ -955,6 +1010,20 @@ def solve_ik_sequence(
 
         qpos.append(conf.q.copy())
         q_history.append(conf.q.copy())
+        collision_backtracking_rows.append({
+            "output_frame": int(output_index),
+            "source_frame": source_frame,
+            "was_blocked": False,
+            "collision_blocked": False,
+            "blocked_iterations": 0,
+            "final_step_scale": 1.0,
+            "final_gain": float(collision_task_gain),
+            "final_max_joint_delta_deg": float(final_max_joint_delta_deg),
+            "final_max_target_error": float(
+                max(frame_values) if frame_values else 0.0
+            ),
+            "blocking_pairs": [],
+        })
         diag.append((
             source_frame,
             float(max_joint_limit_cost_this_frame),

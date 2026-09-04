@@ -229,7 +229,14 @@ def _blank_primary_config(variant: Any) -> dict[str, Any]:
         },
         "self_collision_avoidance": {
             "enabled": False, "mode": "manual", "selected_pairs": [],
-            "damping": {"limit_zone_m": 0.005, "base_cost": 0.01, "max_cost": 0.2},
+            "damping": {
+                "limit_zone_m": 0.005,
+                "penetration_scale_m": 0.005,
+                "penetration_gain": 4.0,
+                "base_cost": 0.01,
+                "max_cost": 0.2,
+                "gain": 0.2,
+            },
         },
     }
 

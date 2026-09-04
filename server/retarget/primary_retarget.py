@@ -418,7 +418,13 @@ def _write_primary_failure_outputs(
     qpos = (list(failure.result.qpos) + [failed_q])[:partial_count]
     frame_status = np.zeros(partial_count, dtype=np.uint8)
     frame_status[:completed] = np.asarray(
-        [0 if bool(row[4]) else 1 for row in failure.result.diagnostics],
+        [
+            4 if index < len(failure.result.collision_backtracking_rows)
+            and failure.result.collision_backtracking_rows[index].get(
+                "collision_blocked", False
+            ) else (0 if bool(row[4]) else 1)
+            for index, row in enumerate(failure.result.diagnostics)
+        ],
         dtype=np.uint8,
     )
     frame_status[-1] = 2
@@ -431,6 +437,18 @@ def _write_primary_failure_outputs(
     partial_result = replace(
         failure.result, qpos=np.asarray(qpos), diagnostics=diagnostics,
         diagnostic_values_by_key=diagnostic_values,
+        collision_backtracking_rows=(
+            list(failure.result.collision_backtracking_rows) + [{
+                "output_frame": int(failure.output_index),
+                "source_frame": int(failure.source_frame),
+                "was_blocked": False,
+                "collision_blocked": False,
+                "blocked_iterations": 0,
+                "final_step_scale": 1.0,
+                "final_gain": 0.0,
+                "blocking_pairs": [],
+            }]
+        )[:partial_count],
     )
     roots, rotations, joints = [], [], []
     root_order = str(cfg["output"].get("root_rot_order", "xyzw"))

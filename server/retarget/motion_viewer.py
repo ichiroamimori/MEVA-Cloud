@@ -175,6 +175,19 @@ def build_motion_viewer_data(
     ).astype(np.float32)
     max_iterations = int(config.get("solver", {}).get("max_iterations_per_frame", 20))
     ik_reached_max = ((ik_iterations >= max_iterations) & (ik_converged == 0)).astype(np.uint8)
+    backtracking_rows = list(
+        getattr(result, "collision_backtracking_rows", []) or []
+    )
+    if backtracking_rows and len(backtracking_rows) != n:
+        raise ValueError("collision backtracking diagnostics length mismatch")
+    if not backtracking_rows:
+        backtracking_rows = [{
+            "collision_blocked": False,
+            "was_blocked": False,
+            "blocked_iterations": 0,
+            "final_step_scale": 1.0,
+            "blocking_pairs": [],
+        } for _ in range(n)]
     velocity_limits = _limit_values(config, "interframe_joint_velocity_limit", joint_names)
     acceleration_limits = _limit_values(config, "interframe_joint_acceleration_limit", joint_names)
 
@@ -191,6 +204,18 @@ def build_motion_viewer_data(
         "ik_iterations": ik_iterations, "ik_converged": ik_converged,
         "ik_final_joint_delta_rad": ik_final_delta,
         "ik_reached_max_iterations": ik_reached_max,
+        "collision_backtracking_blocked": np.asarray([
+            row.get("collision_blocked", False) for row in backtracking_rows
+        ], dtype=np.uint8),
+        "collision_backtracking_was_blocked": np.asarray([
+            row.get("was_blocked", False) for row in backtracking_rows
+        ], dtype=np.uint8),
+        "collision_backtracking_blocked_iterations": np.asarray([
+            row.get("blocked_iterations", 0) for row in backtracking_rows
+        ], dtype=np.int32),
+        "collision_backtracking_final_step_scale": np.asarray([
+            row.get("final_step_scale", 1.0) for row in backtracking_rows
+        ], dtype=np.float32),
         "joint_limit_actual_rad": joint_actual,
         "joint_limit_margin_rad": joint_margin,
         "joint_limit_severity": joint_severity,
@@ -215,6 +240,20 @@ def build_motion_viewer_data(
         "geom_names": geom_names,
         "collision_pair_names": [str(item["label"]) for item in pairs],
         "collision_pair_metadata": pairs, "joint_limit_metadata": joint_metadata,
+        "collision_backtracking": {
+            "blocked_frame_count": int(sum(
+                bool(row.get("collision_blocked", False))
+                for row in backtracking_rows
+            )),
+            "affected_frame_count": int(sum(
+                bool(row.get("was_blocked", False))
+                for row in backtracking_rows
+            )),
+            "frames": [
+                deepcopy(row) for row in backtracking_rows
+                if row.get("was_blocked", False)
+            ],
+        },
         "joint_velocity_limits_rad_s": velocity_limits.tolist(),
         "joint_acceleration_limits_rad_s2": acceleration_limits.tolist(),
         "severity_lut_anchors": [[0,"blue"],[64,"cyan"],[128,"green"],[191,"yellow"],[223,"orange"],[255,"red"]],

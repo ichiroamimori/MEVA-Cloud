@@ -12,7 +12,9 @@ from foot_support import (
     support_point_world_positions,
 )
 from server.robot_registry import apply_variant_to_runtime_config, resolve_variant
-from robot_model_info import collision_pair_descriptors
+from robot_model_info import (
+    bodies_are_directly_adjacent, collision_pair_descriptors,
+)
 
 
 class FootSupportTests(unittest.TestCase):
@@ -61,6 +63,19 @@ class FootSupportTests(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(jacobian)))
         record = resolve_variant("k1_22dof", root=self.root)
         self.assertEqual(len(collision_pair_descriptors(model, record.model_path)), 174)
+
+    def test_g1_and_k1_collision_candidates_exclude_direct_neighbors(self) -> None:
+        for variant_id in ("g1_29dof", "k1_22dof"):
+            with self.subTest(variant_id=variant_id):
+                record = resolve_variant(variant_id, root=self.root)
+                model = mujoco.MjModel.from_xml_path(str(record.model_path))
+                for pair in collision_pair_descriptors(model, record.model_path):
+                    body_a = int(model.geom_bodyid[int(pair["geom_a_id"])])
+                    body_b = int(model.geom_bodyid[int(pair["geom_b_id"])])
+                    self.assertFalse(
+                        bodies_are_directly_adjacent(model, body_a, body_b),
+                        pair["key"],
+                    )
 
 
 if __name__ == "__main__":
