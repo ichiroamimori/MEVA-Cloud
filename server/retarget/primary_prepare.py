@@ -12,6 +12,10 @@ import mujoco
 import mink
 import numpy as np
 
+from analytic_joint_target import (
+    AnalyticJointTargetProfile,
+    build_analytic_joint_target_profile,
+)
 from ik_solver import (
     IKFrameSpec,
     PreparedIKFrame,
@@ -62,6 +66,7 @@ class PrimaryPreparation:
     joint_limit_zone_percent: float
     joint_limit_base_cost: float
     joint_limit_max_cost: float
+    analytic_joint_target_profile: AnalyticJointTargetProfile
 
 
 def load_json(path: Path):
@@ -210,6 +215,44 @@ def prepare_primary(
         offset_details=offset_details,
         position_cost_by_link=position_cost_by_link,
     )
+    resolved_mapping_targets = [
+        mapping_tasks.resolve_targets(row) for row in rows
+    ]
+    target_quaternions_by_link = {
+        link: np.asarray([
+            resolved.quaternions_by_link[link]
+            for resolved in resolved_mapping_targets
+        ], dtype=np.float64)
+        for link in mapping_tasks.tasks_by_link
+    }
+    target_directions_by_link = {
+        link: np.asarray([
+            resolved.directions_by_link[link]
+            for resolved in resolved_mapping_targets
+        ], dtype=np.float64)
+        for link in mapping_tasks.robot_axis_by_link
+    }
+    analytic_profile = build_analytic_joint_target_profile(
+        runtime_definition,
+        cfg,
+        target_quaternions_by_link,
+        target_directions_by_link,
+    )
+    analytic_weights = dict(
+        cfg.get("analytic_joint_target", {}).get("joint_weights", {})
+        if isinstance(cfg.get("analytic_joint_target"), dict) else {}
+    )
+    analytic_task = mink.PostureTask(model, cost=np.zeros(model.nv))
+    analytic_joint_columns = {
+        name: index for index, name in enumerate(analytic_profile.joint_names)
+    }
+    analytic_qpos_dof = {}
+    for joint_id in range(model.njnt):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+        if name in analytic_joint_columns:
+            analytic_qpos_dof[name] = (
+                int(model.jnt_qposadr[joint_id]), int(model.jnt_dofadr[joint_id])
+            )
 
     spatial_direction_tasks = {}
     if pelvis_foot_enabled:
@@ -242,8 +285,25 @@ def prepare_primary(
                 configuration=configuration,
                 source_frame=source_frame,
                 position_targets_by_link={root_body: root0},
+                resolved_targets=resolved_mapping_targets[frame_index],
             )
             active = list(prepared_mapping.tasks)
+
+            analytic_cost = np.zeros(model.nv, dtype=float)
+            analytic_target_q = configuration.q.copy()
+            for joint_name, column in analytic_joint_columns.items():
+                weight = float(analytic_weights.get(joint_name, 0.0))
+                if weight <= 0.0 or not analytic_profile.target_enabled[frame_index, column]:
+                    continue
+                qpos_address, dof_address = analytic_qpos_dof[joint_name]
+                analytic_target_q[qpos_address] = analytic_profile.target_rad[
+                    frame_index, column
+                ]
+                analytic_cost[dof_address] = weight
+            if np.any(analytic_cost > 0.0):
+                analytic_task.set_cost(analytic_cost)
+                analytic_task.set_target(analytic_target_q)
+                active.append(analytic_task)
 
             if spatial_direction_tasks:
                 pelvis_source_pos = target_positions["Pelvis"][frame_index]
@@ -325,4 +385,5 @@ def prepare_primary(
         joint_limit_zone_percent=zone_percent,
         joint_limit_base_cost=base_cost,
         joint_limit_max_cost=max_cost,
+        analytic_joint_target_profile=analytic_profile,
     )

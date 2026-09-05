@@ -110,6 +110,7 @@ def ui_metadata(
     bodies: list[dict[str, Any]],
     joints: list[dict[str, Any]],
     raw_ui: dict[str, Any] | None,
+    root_body: str | None = None,
 ) -> dict[str, Any]:
     """Validate optional manifest presentation metadata against the Runtime Model."""
     raw_ui = raw_ui or {}
@@ -187,6 +188,18 @@ def ui_metadata(
                 "collapsed": False,
             })
             group_ids.add("other")
+
+    if root_body and root_body in body_by_name:
+        for group in groups:
+            group["body_names"] = [
+                name for name in group["body_names"] if name != root_body
+            ]
+        groups = [group for group in groups if group["body_names"]]
+        groups.insert(0, {
+            "id": "root", "name": "ROOT", "body_names": [root_body],
+            "collapsed": False, "root_group": True,
+        })
+        group_ids.add("root")
 
     symmetry = raw_ui.get("symmetry", {})
     if symmetry is not None and not isinstance(symmetry, dict):
@@ -361,7 +374,35 @@ def robot_model_metadata(repo_root: Path, config: dict[str, Any]) -> dict[str, A
             if orientation.secondary_axis is not None else None
         )
         body["secondary_axis_name"] = orientation.secondary_name
-    presentation = ui_metadata(model, bodies, joints, config["robot"].get("ui", {}))
+    presentation = ui_metadata(
+        model, bodies, joints, config["robot"].get("ui", {}), runtime.root_body
+    )
+    analytic_clusters = []
+    analytic_target_joints: list[str] = []
+    analytic_axial_joints: list[str] = []
+    if isinstance(config.get("mappings"), list) and config.get("mappings"):
+        try:
+            from server.retarget.analytic_joint_target import (
+                detect_analytic_joint_clusters,
+            )
+            detected = detect_analytic_joint_clusters(runtime, config)
+            analytic_clusters = [cluster.metadata() for cluster in detected]
+            for cluster in detected:
+                if not cluster.supported:
+                    continue
+                if cluster.mapping_mode == "full":
+                    analytic_target_joints.extend(cluster.joint_names)
+                else:
+                    analytic_target_joints.extend(cluster.joint_names[:2])
+                    if cluster.axial_joint_index is not None:
+                        analytic_axial_joints.append(
+                            cluster.joint_names[cluster.axial_joint_index]
+                        )
+        except Exception as exc:
+            analytic_clusters = [{
+                "supported": False,
+                "detection_reason": f"detection_error:{type(exc).__name__}:{exc}",
+            }]
     return {
         "joints": joints,
         "bodies": bodies,
@@ -373,4 +414,8 @@ def robot_model_metadata(repo_root: Path, config: dict[str, Any]) -> dict[str, A
         "body_symmetry": presentation["body_symmetry"],
         "mapping_target_links": mapping_target_links,
         "collision_pairs": collision_pair_descriptors(model, xml_path),
+        "analytic_joint_clusters": analytic_clusters,
+        "analytic_joint_target_joints": sorted(set(analytic_target_joints)),
+        "analytic_joint_axial_joints": sorted(set(analytic_axial_joints)),
+        "root_body": runtime.root_body,
     }

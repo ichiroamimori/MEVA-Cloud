@@ -258,6 +258,8 @@ class MotionArtifactTests(unittest.TestCase):
                 "orientation_residual_rotvec_rad", "orientation_residual_angle_rad",
                 "orientation_target_direction", "orientation_result_direction",
                 "orientation_axis_error_rad",
+                "analytic_joint_target_rad", "analytic_joint_target_enabled",
+                "analytic_joint_target_branch", "analytic_joint_target_singularity",
                 "joint_velocity_rad_s", "joint_acceleration_rad_s2",
                 "joint_limit_severity", "self_collision_signed_distance_m",
                 "link_pos", "link_quat", "geom_pos", "foot_support_point_pos",
@@ -281,6 +283,9 @@ class MotionArtifactTests(unittest.TestCase):
                 blocks["position_residual_xyz_m"]["shape"], [3, 1, 3]
             )
             self.assertEqual(blocks["ik_converged"]["dtype"], "uint8")
+            self.assertEqual(blocks["analytic_joint_target_rad"]["shape"], [3, 29])
+            self.assertEqual(blocks["analytic_joint_target_enabled"]["dtype"], "uint8")
+            self.assertIn("analytic_joint_target", header)
             payload_start = 16 + header_length
 
             def viewer_array(name: str) -> np.ndarray:

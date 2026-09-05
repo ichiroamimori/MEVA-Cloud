@@ -117,6 +117,21 @@
       "orientation_mode": "full"
     }
   ],
+  "analytic_joint_target": {
+    "joint_weights": {
+      "waist_yaw_joint": 1.0,
+      "waist_roll_joint": 1.0,
+      "waist_pitch_joint": 1.0,
+      "left_shoulder_pitch_joint": 1.0,
+      "left_shoulder_roll_joint": 1.0,
+      "right_shoulder_pitch_joint": 1.0,
+      "right_shoulder_roll_joint": 1.0,
+      "left_hip_pitch_joint": 1.0,
+      "left_hip_roll_joint": 1.0,
+      "right_hip_pitch_joint": 1.0,
+      "right_hip_roll_joint": 1.0
+    }
+  },
   "joint_limit_avoidance": {
     "enabled": true,
     "enforce_hard_xml_limits": true,

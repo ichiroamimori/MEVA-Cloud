@@ -42,6 +42,7 @@ def write_primary_viewer(
     motion: dict[str, Any], target: dict[str, Any], result: Any,
     mapping_offsets: dict[str, Any], offset_details: dict[str, Any],
     post_diagnostics: Any | None,
+    analytic_joint_target_profile: Any | None = None,
     frame_status: np.ndarray | None = None,
     frame_errors: list[dict[str, Any]] | None = None,
 ) -> Path:
@@ -152,6 +153,21 @@ def write_primary_viewer(
         "meva_left_foot_z_m": target["left_foot_z_m"],
         "meva_right_foot_z_m": target["right_foot_z_m"],
     }
+    if analytic_joint_target_profile is not None:
+        arrays.update({
+            "analytic_joint_target_rad": np.asarray(
+                analytic_joint_target_profile.target_rad, dtype=np.float32
+            ),
+            "analytic_joint_target_enabled": np.asarray(
+                analytic_joint_target_profile.target_enabled, dtype=np.uint8
+            ),
+            "analytic_joint_target_branch": np.asarray(
+                analytic_joint_target_profile.selected_branch, dtype=np.int16
+            ),
+            "analytic_joint_target_singularity": np.asarray(
+                analytic_joint_target_profile.singularity_flag, dtype=np.uint8
+            ),
+        })
     if post_diagnostics is not None:
         arrays["primary_pelvis_target_z_m"] = post_diagnostics.pelvis_targets_z
         arrays["primary_pelvis_shift_z_m"] = post_diagnostics.pelvis_shifts_z
@@ -191,4 +207,14 @@ def write_primary_viewer(
         },
         "frame_errors": errors,
     }
+    if analytic_joint_target_profile is not None:
+        metadata["analytic_joint_target"] = {
+            "generation": "before_mink_frame_loop",
+            "initialization_usage": "soft_objective_only",
+            "joint_names": list(analytic_joint_target_profile.joint_names),
+            "cluster_ids": list(analytic_joint_target_profile.cluster_ids),
+            "clusters": [
+                cluster.metadata() for cluster in analytic_joint_target_profile.clusters
+            ],
+        }
     return write_motion_viewer(path=path, data=data, arrays=arrays, metadata=metadata)

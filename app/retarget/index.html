@@ -1331,11 +1331,17 @@ input[type="checkbox"]{
 .head-row,.link-row{grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 82px 82px 82px 82px 82px !important}
 .joint-row{position:relative;grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 82px 82px 82px 82px 82px !important}
 .joint-row .joint-line{position:absolute;left:20px;top:0;bottom:0}
-.joint-row .joint-info{grid-column:1 / 5;padding-left:40px}
-.joint-accel-label{grid-column:5 / 7;display:flex;align-items:center;justify-content:flex-end;gap:6px;text-align:right;font-size:10px;font-weight:800;line-height:1.2;white-space:nowrap;color:#526a80;cursor:pointer}
+.joint-row .joint-info{grid-column:1 / 2;padding-left:40px}
+.joint-weight{grid-column:3;display:flex;align-items:center;justify-content:center}
+.joint-weight input{width:82px !important;height:30px !important}
+.joint-weight-na{font-size:11px;font-weight:800;color:#9aabb9}
+.joint-target-option{grid-column:4;display:flex;align-items:center;gap:5px;min-width:0}
+.joint-accel-label{display:flex;align-items:center;gap:3px;font-size:9px;font-weight:800;line-height:1.1;white-space:nowrap;color:#526a80;cursor:pointer}
 .joint-accel-label input{flex:0 0 auto;margin:0}
-.joint-accel{grid-column:7;display:flex;align-items:center}
-.joint-accel input{width:82px !important;height:30px !important}
+.joint-accel{display:flex;align-items:center;min-width:0}
+.joint-accel input{width:58px !important;height:30px !important}
+.root-world-row .link-name{font-weight:850}
+.root-joint-row .joint-info{grid-column:1 / 5}
 .data-management-row{margin:16px 0 28px;padding:12px 16px;border:1px solid var(--line);border-radius:13px;background:#fff;display:flex;align-items:center;justify-content:space-between;font-weight:900;color:var(--ink)}
 .data-management-modal{width:min(720px,92vw);max-height:78vh;background:#fff;border-radius:16px;box-shadow:0 18px 55px rgba(13,38,49,.28);display:flex;flex-direction:column;overflow:hidden}
 .data-management-body{padding:16px;overflow:auto;min-height:220px;max-height:56vh}
@@ -1672,11 +1678,11 @@ input[type="checkbox"]{
           <div class="head-row">
             <div>Robot Link</div>
             <div>MEVA Segment</div>
-            <div>Ori. weight</div>
-            <div class="ignore-head">Ignore<br>axial rot.</div>
-            <div>Pos. weight X</div>
-            <div>Pos. weight Y</div>
-            <div>Pos. weight Z</div>
+            <div>Ori. / Joint weight</div>
+            <div>Target option</div>
+            <div>Pos. X weight</div>
+            <div>Pos. Y weight</div>
+            <div>Pos. Z weight</div>
           </div>
 
           <div class="region">
@@ -2255,6 +2261,7 @@ input[type="checkbox"]{
   let workingConfig = structuredClone(EMBEDDED_CONFIG);
   let baselineByLink = new Map();
   let robotModelMetadata = {joints:[],joint_symmetry:{},body_symmetry:{},collision_pairs:[]};
+  let analyticDetectionTimer = null;
 
   const statusLine = document.getElementById("statusLine");
   const resetBtn = document.getElementById("resetBtn");
@@ -2478,6 +2485,7 @@ input[type="checkbox"]{
     loadedConfig = deepClone(data.config);
     workingConfig = deepClone(data.config);
     selectSharedRecord(data.selection);
+    await refreshAnalyticJointDetection(data.config, true);
     applyConfig(data.config, {updateBaseline:true});
     if(startFrame) startFrame.value = 0;
     if(endFrame) endFrame.value = sourceMaxFrame ?? "";
@@ -2563,6 +2571,35 @@ input[type="checkbox"]{
     const out = new Map();
     for(const m of (cfg.mappings || [])) out.set(m.target_link, deepClone(m));
     return out;
+  }
+
+  async function refreshAnalyticJointDetection(cfg, rerender=false){
+    const robot=cfg?.robot||{};
+    const response=await fetch("/api/retarget/analytic-joint-target/detect",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        manufacturer:robot.manufacturer||"unitree",
+        robot_variant:robot.variant||"g1_29dof",
+        config:cfg,
+      }),
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(typeof data.detail==="string"?data.detail:JSON.stringify(data.detail));
+    robotModelMetadata.analytic_joint_clusters=data.clusters||[];
+    robotModelMetadata.analytic_joint_target_joints=data.target_joints||[];
+    robotModelMetadata.analytic_joint_axial_joints=data.axial_joints||[];
+    if(rerender)setupModelDrivenUi(robotModelMetadata);
+  }
+
+  function scheduleAnalyticJointDetection(){
+    clearTimeout(analyticDetectionTimer);
+    analyticDetectionTimer=setTimeout(async()=>{
+      try{
+        const current=collectConfig();
+        await refreshAnalyticJointDetection(current,true);
+        applyConfig(current);
+      }catch(error){console.warn("Analytic Joint Target detection:",error)}
+    },250);
   }
 
   function editableRows(){
@@ -2652,9 +2689,10 @@ input[type="checkbox"]{
       if(row.querySelector(".joint-accel")) return;
       const jointName = row.querySelector(".joint-name")?.textContent.trim() || "";
       const descriptor = byName.get(jointName);
+      if(descriptor?.type_name === "free") return;
       const label = document.createElement("label");label.className="joint-accel-label";
       const enabled = document.createElement("input");enabled.type="checkbox";enabled.className="joint-acceleration-enabled";enabled.dataset.joint=jointName;
-      const labelText = document.createElement("span");labelText.textContent="Acc. Limit (rad/s²)";
+      const labelText = document.createElement("span");labelText.textContent="Acc. limit";
       label.append(enabled,labelText);
       const cell = document.createElement("div");cell.className="joint-accel";
       const input = document.createElement("input");input.type="number";input.min="0";input.step="0.1";
@@ -2671,7 +2709,9 @@ input[type="checkbox"]{
         refreshChangedState();
       });
       input.addEventListener("input",()=>{syncSymmetricJointInput(input);refreshChangedState()});
-      cell.appendChild(input);row.append(label,cell);
+      const option = row.querySelector(".joint-target-option") || document.createElement("div");
+      option.className="joint-target-option";
+      cell.appendChild(input);option.append(label,cell);row.appendChild(option);
     });
     document.querySelectorAll("#tab-mapping .region").forEach(region=>{
       const title=region.querySelector(":scope > .region-title");if(!title||title.dataset.ready)return;
@@ -2706,6 +2746,8 @@ input[type="checkbox"]{
     const dofSummary=document.getElementById("modelDofSummary");
     if(dofSummary)dofSummary.textContent=`${Number(metadata.actuated_dof_count||0)} DoF`;
 
+    const analyticTargets=new Set(metadata?.analytic_joint_target_joints||[]);
+    const analyticAxial=new Set(metadata?.analytic_joint_axial_joints||[]);
     const jointRow=(joint,depth)=>{
       const row=document.createElement("div");row.className="joint-row";
       const line=document.createElement("div");line.className="joint-line";
@@ -2722,7 +2764,29 @@ input[type="checkbox"]{
         axis.textContent=`axis [${joint.axis.map(value=>String(Number(value))).join(", ")}]`;
         info.appendChild(axis);
       }
-      row.append(line,info);return row;
+      row.append(line,info);
+      if(joint?.type_name === "free"){
+        row.classList.add("root-joint-row");
+        name.textContent=`ROOT: ${joint.name}`;
+        return row;
+      }
+      const weight=document.createElement("div");weight.className="joint-weight";
+      if(joint && analyticTargets.has(joint.name)){
+        const input=document.createElement("input");input.type="number";input.min="0";
+        input.step="0.05";input.value="0";input.className="joint-weight-input";
+        input.dataset.joint=joint.name;input.title="Analytic Joint Target soft weight";
+        input.addEventListener("input",()=>{syncSymmetricJointInput(input);refreshChangedState()});
+        weight.appendChild(input);
+      }else{
+        const marker=document.createElement("span");marker.className="joint-weight-na";
+        marker.textContent="—";
+        marker.title=analyticAxial.has(joint?.name)
+          ? "Excluded axial Joint: orientation direction does not target this rotation"
+          : "No supported Analytic Joint Target";
+        weight.appendChild(marker);
+      }
+      const option=document.createElement("div");option.className="joint-target-option";
+      row.append(weight,option);return row;
     };
 
     for(const group of groups){
@@ -2734,6 +2798,15 @@ input[type="checkbox"]{
       const title=document.createElement("div");title.className="region-title";
       title.append(document.createTextNode(String(group.name||group.id||"ROBOT")));
       region.appendChild(title);
+      if(group.root_group){
+        const world=document.createElement("div");world.className="link-row root-world-row";
+        const worldName=document.createElement("div");worldName.className="link-name";
+        worldName.textContent="world";
+        const fixed=document.createElement("div");fixed.className="mapping-slot fixed";
+        world.append(worldName,fixed);
+        for(let index=0;index<5;index++)world.appendChild(document.createElement("div"));
+        region.appendChild(world);
+      }
       const groupBodies=(group.body_names||[]).map(name=>byBody.get(String(name))).filter(Boolean);
       const baseDepth=groupBodies.length?Math.min(...groupBodies.map(body=>Number(body.depth||0))):0;
       for(const body of groupBodies){
@@ -2803,7 +2876,10 @@ input[type="checkbox"]{
   function syncSymmetricJointInput(input){
     const region=input.closest(".region");if(region?.dataset.symmetric!=="on")return;
     const otherName=robotModelMetadata.joint_symmetry?.[input.dataset.joint];if(!otherName)return;
-    const root=input.closest(".robot-area")||document;const other=root.querySelector(`.joint-acceleration-input[data-joint="${otherName}"]`);if(other&&!other.disabled)other.value=input.value;
+    const root=input.closest(".robot-area")||document;
+    const className=input.classList.contains("joint-weight-input")
+      ? "joint-weight-input" : "joint-acceleration-input";
+    const other=root.querySelector(`.${className}[data-joint="${otherName}"]`);if(other&&!other.disabled)other.value=input.value;
   }
   function syncSymmetricJointControl(control){
     const region=control.closest(".region");if(region?.dataset.symmetric!=="on")return;
@@ -2890,9 +2966,12 @@ input[type="checkbox"]{
         syncDuplicateOptions();
         refreshChangedState();
         refreshPalette();
+        scheduleAnalyticJointDetection();
       });
       ori?.addEventListener("input", refreshChangedState);
-      axisCheck?.addEventListener("change", refreshChangedState);
+      axisCheck?.addEventListener("change",()=>{
+        refreshChangedState();scheduleAnalyticJointDetection();
+      });
     }
   }
 
@@ -2986,6 +3065,10 @@ input[type="checkbox"]{
       if(ori) ori.value = Number(m?.orientation_weight ?? 0).toFixed(2);
       if(axisCheck) axisCheck.checked = !axisCheck.disabled && (m?.orientation_mode === "axis");
     }
+    const analyticWeights=cfg.analytic_joint_target?.joint_weights||{};
+    for(const input of document.querySelectorAll("#tab-mapping .joint-weight-input")){
+      input.value=Number(analyticWeights[input.dataset.joint]??0);
+    }
     const acceleration = cfg.interframe_joint_acceleration_limit || {};
     if(accelerationWeightAt2x){
       accelerationWeightAt2x.value = Number(acceleration.weight_at_2x_limit ?? 0.1);
@@ -3043,6 +3126,15 @@ input[type="checkbox"]{
       seenLinks.add(m.target_link);
       return true;
     });
+    const analyticJointWeights={...(cfg.analytic_joint_target?.joint_weights||{})};
+    for(const input of document.querySelectorAll("#tab-mapping .joint-weight-input")){
+      const value=Number(input.value||0);
+      if(!Number.isFinite(value)||value<0){
+        throw new Error(`Analytic Joint weight must be non-negative: ${input.dataset.joint}`);
+      }
+      analyticJointWeights[input.dataset.joint]=value;
+    }
+    cfg.analytic_joint_target={joint_weights:analyticJointWeights};
 
     const temporalCostValue = Number(temporalCost?.value ?? 0.01);
     if(!Number.isFinite(temporalCostValue) || temporalCostValue < 0){

@@ -139,6 +139,34 @@ class RobotRuntimeDefinition:
                 f"joints={', '.join(sorted(missing_joints))}, model={self.model_path}"
             )
 
+        analytic = config.get("analytic_joint_target", {})
+        if analytic is not None and not isinstance(analytic, dict):
+            raise RobotRuntimeDefinitionError(
+                f"analytic_joint_target must be an object: {self.identity}"
+            )
+        weights = analytic.get("joint_weights", {}) if isinstance(analytic, dict) else {}
+        if not isinstance(weights, dict):
+            raise RobotRuntimeDefinitionError(
+                f"analytic_joint_target.joint_weights must be an object: {self.identity}"
+            )
+        unknown = sorted(str(name) for name in weights if str(name) not in joint_names)
+        if unknown:
+            raise RobotRuntimeDefinitionError(
+                f"Analytic Joint Target Joint not found: {self.identity}, "
+                f"joints={', '.join(unknown)}"
+            )
+        invalid = [
+            str(name) for name, value in weights.items()
+            if isinstance(value, (bool, np.bool_))
+            or not isinstance(value, (int, float, np.integer, np.floating))
+            or not math.isfinite(float(value)) or float(value) < 0.0
+        ]
+        if invalid:
+            raise RobotRuntimeDefinitionError(
+                f"Analytic Joint Target weights must be finite and non-negative: "
+                f"{self.identity}, joints={', '.join(sorted(invalid))}"
+            )
+
 
 def _name(model: mujoco.MjModel, object_type: mujoco.mjtObj, index: int) -> str:
     return mujoco.mj_id2name(model, object_type, index) or f"unnamed_{index}"

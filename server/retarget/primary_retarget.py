@@ -156,6 +156,50 @@ def _write_iteration_diagnostics(run, cfg, result):
         print("Acceleration soft limit:", acceleration_path)
 
 
+def _write_analytic_joint_target_diagnostics(run, preparation):
+    profile = preparation.analytic_joint_target_profile
+    path = run / "analytic_joint_targets.csv"
+    joint_columns = {name: index for index, name in enumerate(profile.joint_names)}
+    with path.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=[
+            "frame", "source_frame", "detected_cluster_id", "joint_name",
+            "analytic_target_deg", "target_enabled", "axial_joint_excluded",
+            "selected_branch", "singularity_flag", "detection_reason",
+            "axial_alignment_deg", "axis_sensitivity",
+        ])
+        writer.writeheader()
+        for cluster_index, cluster in enumerate(profile.clusters):
+            for frame in range(profile.target_rad.shape[0]):
+                for local_index, joint_name in enumerate(cluster.joint_names):
+                    column = joint_columns[joint_name]
+                    enabled = bool(profile.target_enabled[frame, column])
+                    writer.writerow({
+                        "frame": frame,
+                        "source_frame": preparation.source_frame_indices[frame],
+                        "detected_cluster_id": cluster.cluster_id,
+                        "joint_name": joint_name,
+                        "analytic_target_deg": (
+                            float(np.degrees(profile.target_rad[frame, column]))
+                            if enabled else ""
+                        ),
+                        "target_enabled": int(enabled),
+                        "axial_joint_excluded": int(
+                            cluster.mapping_mode == "axis"
+                            and local_index == cluster.axial_joint_index
+                        ),
+                        "selected_branch": int(
+                            profile.selected_branch[frame, cluster_index]
+                        ),
+                        "singularity_flag": int(
+                            profile.singularity_flag[frame, cluster_index]
+                        ),
+                        "detection_reason": cluster.detection_reason,
+                        "axial_alignment_deg": cluster.axial_alignment_deg,
+                        "axis_sensitivity": cluster.axial_sensitivity,
+                    })
+    print("Analytic Joint Targets:", path)
+
+
 def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_diagnostics):
     roots, rots, dofs = [], [], []
     for q in result.qpos:
@@ -359,8 +403,10 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
         mapping_offsets=preparation.mapping_offsets,
         offset_details=preparation.offset_details,
         post_diagnostics=diagnostics,
+        analytic_joint_target_profile=preparation.analytic_joint_target_profile,
     )
     if debug_artifacts:
+        _write_analytic_joint_target_diagnostics(run, preparation)
         primary_post_path, _ = write_primary_post_diagnostics(
             run / f"{run.name}_primary_post.csv", diagnostics
         )
@@ -516,6 +562,13 @@ def _write_primary_failure_outputs(
         motion=motion, target=partial_target, result=partial_result,
         mapping_offsets=preparation.mapping_offsets,
         offset_details=preparation.offset_details, post_diagnostics=None,
+        analytic_joint_target_profile=replace(
+            preparation.analytic_joint_target_profile,
+            target_rad=preparation.analytic_joint_target_profile.target_rad[:partial_count],
+            target_enabled=preparation.analytic_joint_target_profile.target_enabled[:partial_count],
+            selected_branch=preparation.analytic_joint_target_profile.selected_branch[:partial_count],
+            singularity_flag=preparation.analytic_joint_target_profile.singularity_flag[:partial_count],
+        ),
         frame_status=frame_status, frame_errors=frame_errors,
     )
     (run / f"{run_id}_error.log").write_text(

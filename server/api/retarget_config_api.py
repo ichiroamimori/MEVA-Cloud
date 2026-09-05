@@ -76,6 +76,51 @@ class SharedConfigSaveRequest(BaseModel):
     overwrite: bool = False
     config: dict[str, Any]
 
+
+class AnalyticJointDetectionRequest(BaseModel):
+    manufacturer: str = "unitree"
+    robot_variant: str = "g1_29dof"
+    config: dict[str, Any]
+
+
+@router.post("/analytic-joint-target/detect")
+def detect_analytic_joint_target(req: AnalyticJointDetectionRequest):
+    variant = _registered_variant(req.robot_variant, manufacturer=req.manufacturer)
+    _assert_config_robot(req.config, variant)
+    runtime_config = _runtime_robot_config(req.config, variant)
+    try:
+        from server.retarget.analytic_joint_target import (
+            detect_analytic_joint_clusters,
+        )
+        from server.retarget.robot_runtime_definition import (
+            load_robot_runtime_definition_for_config,
+        )
+        runtime = load_robot_runtime_definition_for_config(
+            repo_root(), runtime_config, validate_config=False
+        )
+        clusters = detect_analytic_joint_clusters(runtime, runtime_config)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Analytic Joint Target detection failed: {type(exc).__name__}: {exc}",
+        ) from exc
+    target_joints: list[str] = []
+    axial_joints: list[str] = []
+    for cluster in clusters:
+        if not cluster.supported:
+            continue
+        target_joints.extend(
+            cluster.joint_names if cluster.mapping_mode == "full"
+            else cluster.joint_names[:2]
+        )
+        if cluster.mapping_mode == "axis" and cluster.axial_joint_index is not None:
+            axial_joints.append(cluster.joint_names[cluster.axial_joint_index])
+    return {
+        "clusters": [cluster.metadata() for cluster in clusters],
+        "target_joints": sorted(set(target_joints)),
+        "axial_joints": sorted(set(axial_joints)),
+    }
+
 def _capsule_runtime_context(
     capsule_id: str,
     robot_variant: str,
@@ -196,6 +241,7 @@ def _blank_primary_config(variant: Any) -> dict[str, Any]:
         "root": {"position_mode": "keep_robot_initial", "position_cost": 100.0},
         "world_alignment": {"offset_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0]},
         "mappings": [],
+        "analytic_joint_target": {"joint_weights": {}},
         "joint_limit_avoidance": {
             "enabled": True, "enforce_hard_xml_limits": True,
             "default": {"limit_zone_percent": 5.0, "base_cost": 0.01,
@@ -455,7 +501,7 @@ def get_context(
         # Robot structure belongs to the registered Runtime Model, not to a
         # Retargeting Config.  It must therefore be available before the first
         # Primary/Main standard Config is installed.
-        model_config = {
+        model_config = default_config or {
             "robot": variant.runtime_robot(repo_root()),
         }
         from server.retarget.robot_model_info import robot_model_metadata
@@ -511,6 +557,8 @@ def get_context(
 
 def _overlay_main_defaults(primary_cfg: dict[str, Any], overlay: dict[str, Any] | None) -> dict[str, Any]:
     cfg = deepcopy(primary_cfg)
+    # Analytic Joint Targets belong exclusively to Primary.
+    cfg.pop("analytic_joint_target", None)
     cfg["config_name"] = "Main Standard"
     cfg["main"] = {
         "gcp_smoothing_ms": 150.0,

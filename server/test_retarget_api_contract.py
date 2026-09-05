@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
 from fastapi import FastAPI
 
 from server.api.retarget_api import router
-from server.api.retarget_config_api import _blank_primary_config
+from server.api.retarget_config_api import (
+    AnalyticJointDetectionRequest,
+    _blank_primary_config,
+    detect_analytic_joint_target,
+)
 from server.api.retarget_robot_api import _runtime_robot_config
 from server.robot_registry import resolve_variant, validate_retarget_config
 
@@ -16,6 +21,7 @@ EXPECTED_ROUTES = {
     ("GET", "/api/retarget/configs"),
     ("GET", "/api/retarget/configs/load"),
     ("POST", "/api/retarget/configs"),
+    ("POST", "/api/retarget/analytic-joint-target/detect"),
     ("GET", "/api/retarget/context"),
     ("GET", "/api/retarget/data-management"),
     ("POST", "/api/retarget/data-management/delete"),
@@ -68,8 +74,24 @@ class RetargetApiContractTests(unittest.TestCase):
         self.assertEqual(config["robot"]["manufacturer"], "booster")
         self.assertEqual(config["robot"]["variant"], "k1_22dof")
         self.assertEqual(config["mappings"], [])
+        self.assertEqual(config["analytic_joint_target"]["joint_weights"], {})
         self.assertEqual(config["interframe_joint_acceleration_limit"]["overrides"], {})
         validate_retarget_config(variant, config)
+
+    def test_analytic_joint_detection_endpoint_uses_runtime_model(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        config_path = (
+            root / "server" / "retarget_assets" / "configs" / "meva"
+            / "unitree" / "g1_29dof" / "primary_standard.json"
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        result = detect_analytic_joint_target(AnalyticJointDetectionRequest(
+            manufacturer="unitree", robot_variant="g1_29dof", config=config
+        ))
+        self.assertIn("left_shoulder_pitch_joint", result["target_joints"])
+        self.assertIn("left_shoulder_roll_joint", result["target_joints"])
+        self.assertNotIn("left_shoulder_yaw_joint", result["target_joints"])
+        self.assertIn("left_shoulder_yaw_joint", result["axial_joints"])
 
 
 if __name__ == "__main__":

@@ -45,6 +45,8 @@ class RobotModelInfoTests(unittest.TestCase):
             ]
             self.assertEqual(len(assigned), bodies)
             self.assertEqual(len(set(assigned)), bodies)
+            self.assertEqual(metadata["groups"][0]["id"], "root")
+            self.assertTrue(metadata["groups"][0]["root_group"])
 
             mapping_targets = set(metadata["mapping_target_links"])
             self.assertEqual(len(mapping_targets), bodies)
@@ -56,6 +58,21 @@ class RobotModelInfoTests(unittest.TestCase):
                     if body["mapping_target"]
                 },
             )
+
+    def test_g1_mapping_metadata_exposes_analytic_joint_rows(self) -> None:
+        import json
+
+        config = json.loads((
+            self.root / "server" / "retarget_assets" / "configs" / "meva"
+            / "unitree" / "g1_29dof" / "primary_standard.json"
+        ).read_text(encoding="utf-8"))
+        metadata = robot_model_metadata(self.root, config)
+        targets = set(metadata["analytic_joint_target_joints"])
+        axial = set(metadata["analytic_joint_axial_joints"])
+        self.assertIn("left_shoulder_pitch_joint", targets)
+        self.assertIn("left_shoulder_roll_joint", targets)
+        self.assertNotIn("left_shoulder_yaw_joint", targets)
+        self.assertIn("left_shoulder_yaw_joint", axial)
 
     def test_k1_has_only_its_runtime_joint_structure(self) -> None:
         from server.robot_registry import resolve_variant

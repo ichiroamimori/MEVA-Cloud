@@ -147,6 +147,14 @@ class PreparedMappingTasks:
     diagnostics: list[IKDiagnosticTarget]
 
 
+@dataclass(frozen=True)
+class ResolvedMappingTargets:
+    """Robot-frame Mapping targets after all MEVA coordinate processing."""
+
+    quaternions_by_link: dict[str, np.ndarray]
+    directions_by_link: dict[str, np.ndarray]
+
+
 class RelativeDirectionTask(mink.Task):
     """Keep the world direction between two Body-fixed Robot points."""
 
@@ -315,6 +323,24 @@ class MappingTaskSet:
                     ))
             self.tasks_by_link[link] = link_tasks
 
+    def resolve_targets(self, row: dict) -> ResolvedMappingTargets:
+        """Resolve one frame once for both Mink and analytic Joint targets."""
+        target_quats: dict[str, np.ndarray] = {}
+        target_dirs: dict[str, np.ndarray] = {}
+        for mapping in self.mappings:
+            link = str(mapping["target_link"])
+            q_meva = segq(row, self.pattern, mapping["source_segment"])
+            q_target = qmul(
+                self.world_alignment,
+                qmul(q_meva, self.mapping_offsets[link]),
+            )
+            target_quats[link] = q_target.copy()
+            if str(mapping.get("orientation_mode", "full")) == "axis":
+                target_dirs[link] = normalize_vec(
+                    quat_rotate_vec(q_target, self.robot_axis_by_link[link])
+                )
+        return ResolvedMappingTargets(target_quats, target_dirs)
+
     def prepare(
         self,
         *,
@@ -322,21 +348,18 @@ class MappingTaskSet:
         configuration,
         source_frame: int,
         position_targets_by_link: dict[str, Any] | None = None,
+        resolved_targets: ResolvedMappingTargets | None = None,
     ) -> PreparedMappingTasks:
         position_targets_by_link = dict(position_targets_by_link or {})
         active: list[Any] = []
-        target_quats: dict[str, np.ndarray] = {}
-        target_dirs: dict[str, np.ndarray] = {}
+        resolved_targets = resolved_targets or self.resolve_targets(row)
+        target_quats = resolved_targets.quaternions_by_link
+        target_dirs = resolved_targets.directions_by_link
 
         for mapping in self.mappings:
             link = str(mapping["target_link"])
             mode = str(mapping.get("orientation_mode", "full"))
-            q_meva = segq(row, self.pattern, mapping["source_segment"])
-            q_target = qmul(
-                self.world_alignment,
-                qmul(q_meva, self.mapping_offsets[link]),
-            )
-            target_quats[link] = q_target.copy()
+            q_target = target_quats[link]
             rotation = mink.SO3(wxyz=q_target)
             translation = position_targets_by_link.get(link)
             if translation is None:
@@ -350,10 +373,7 @@ class MappingTaskSet:
                     mink.SE3.from_rotation_and_translation(rotation, translation)
                 )
             else:
-                target_direction = normalize_vec(
-                    quat_rotate_vec(q_target, self.robot_axis_by_link[link])
-                )
-                target_dirs[link] = target_direction
+                target_direction = target_dirs[link]
                 link_tasks[0].set_target(target_direction)
                 if len(link_tasks) > 1:
                     link_tasks[1].set_target(
