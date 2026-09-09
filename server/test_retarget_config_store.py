@@ -377,6 +377,23 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn('applyConfig(data.config)', html)
         self.assertIn('stage: "main"', html)
         self.assertIn('loadSelectedMainSharedConfig(runId)', html)
+        self.assertIn('class="joint-condition-group"', html)
+        self.assertIn('id="accelerationLimitEnabled"', html)
+        self.assertIn('id="accelerationLimitRadS2"', html)
+        self.assertIn('class="mapping-weight-head"', html)
+        self.assertIn('class="ignore-head">Ignore<br>axial rot.', html)
+        self.assertIn('class="mapping-weight-head-sub">Ori. / Joint', html)
+        self.assertIn('ori.disabled = !sel.value', html)
+        self.assertIn('ori.disabled = !m?.source_segment', html)
+        self.assertNotIn('class="joint-acceleration-input"', html)
+        self.assertIn('analyticClusterMembers.has(joint.name)', html)
+        self.assertIn('input.disabled=!analyticTargets.has(joint.name)', html)
+        self.assertIn('id="rvShowA" type="checkbox" checked', html)
+        self.assertIn('id="rvShowB" type="checkbox" checked', html)
+        self.assertIn('localFrameTime(sf).toFixed(3)', html)
+        self.assertNotIn('id="rvG1Visual"', html)
+        self.assertNotIn('id="rvAPill"', html)
+        self.assertNotIn('id="rvBPill"', html)
         self.assertIn(
             'data.config?.robot || null',
             html,

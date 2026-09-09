@@ -260,7 +260,7 @@ def _blank_primary_config(variant: Any) -> dict[str, Any]:
             "enabled": True, "default_rad_s": 3.0 * math.pi, "overrides": {},
         },
         "interframe_joint_acceleration_limit": {
-            "enabled": False, "default_rad_s2": 0.0,
+            "enabled": False, "default_rad_s2": 220.0,
             "weight_at_2x_limit": 0.1, "overrides": {},
         },
         "spatial_constraints": {

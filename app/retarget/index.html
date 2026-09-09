@@ -30,8 +30,6 @@ h1{font-size:34px;margin:0 0 5px}
 .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}
 .v{font-size:16px;font-weight:750;margin-top:5px}
 .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--soft);color:var(--brand2);font-weight:800;font-size:11px}
-.pill-pkl{background:rgba(217,119,6,.12);color:#d97706;border:1px solid rgba(217,119,6,.18)}
-.pill-meva{background:rgba(47,95,143,.12);color:#2f5f8f;border:1px solid rgba(47,95,143,.18)}
 .layout{display:grid;grid-template-columns:185px minmax(0,1fr);gap:18px}
 .steps{padding:13px}
 .step{padding:11px 10px;color:var(--muted);font-weight:750;border-radius:10px;margin:3px 0}
@@ -230,12 +228,6 @@ select{min-width:215px}
 .ik-convergence-grid .setting-control label{margin-bottom:4px}
 
 .link-mapping-head{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:900;color:var(--ink);margin:16px 0 8px}
-.acceleration-soft-setting-row{display:flex;align-items:center;gap:10px;margin:0 0 9px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#f7f9fc;color:#526a80}
-.acceleration-soft-setting-title{font-size:11px;font-weight:850;color:var(--ink)}
-.acceleration-soft-setting-note{font-size:9px;color:#72869a}
-.acceleration-weight-control{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:10px;font-weight:750;color:#526a80}
-.acceleration-weight-control input{width:82px;height:30px}
-@media(max-width:900px){.acceleration-soft-setting-row{flex-wrap:wrap}.acceleration-weight-control{margin-left:0}}
 .mapping-panel>.toolbar{display:none}
 .mapping-panel{padding-top:14px}
 .mapping-panel .notice{margin:0 0 12px}
@@ -561,6 +553,7 @@ select{min-width:215px}
   align-items:center;
   justify-content:center;
 }
+.weight input:disabled,
 .pos-axis input:disabled{
   background:#f2f5f6;
   color:#9aabad;
@@ -833,7 +826,7 @@ select{min-width:215px}
 .rv-scene{height:245px;background:linear-gradient(#fbfdfd,#f4f8f9)}
 .rv-scene canvas{width:100%;height:100%;display:block}
 .rv-timeline{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;padding:9px 11px}
-.rv-time-row{display:grid;grid-template-columns:38px 1fr 135px;gap:9px;align-items:center}
+.rv-time-row{display:grid;grid-template-columns:38px minmax(100px,1fr) max-content;gap:9px;align-items:center}
 .rv-play{height:33px;border:1px solid #bfd0d3;border-radius:8px;background:#fff;cursor:pointer}
 .rv-time-row input{width:100%;accent-color:var(--brand)}
 .rv-slider-wrap{position:relative;min-width:0}
@@ -841,7 +834,7 @@ select{min-width:215px}
 .rv-failure-markers{position:absolute;left:8px;right:8px;top:50%;height:14px;transform:translateY(-50%);pointer-events:none}
 .rv-failure-marker{position:absolute;top:0;width:3px;height:14px;border-radius:2px;background:#c2413b;box-shadow:0 0 0 1px #fff;pointer-events:auto;cursor:help}
 .rv-failure-marker.collision-blocked{background:#d97706}
-.rv-frame{font-size:11px;color:var(--muted);text-align:right}.rv-frame b{font-size:13px;color:var(--ink)}
+.rv-frame{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}.rv-frame b{font-size:13px;color:var(--ink)}
 .rv-plot-panel{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px}
 .rv-plot-title{padding:10px 12px 0;font-size:13px;font-weight:900}
 .rv-plot-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:7px 12px 2px}
@@ -873,6 +866,10 @@ body.rv-open{overflow:hidden}
   height:30px;border:1px solid #bfd0d3;border-radius:7px;background:#fff;
   color:var(--ink);padding:0 7px;font-size:11px;
 }
+.rv-stage-choice{display:flex;align-items:center;gap:5px;min-width:0}
+.rv-stage-choice-a{margin-right:13px}
+.rv-stage-toggle{display:inline-flex;align-items:center;gap:4px;margin:0;white-space:nowrap;font-size:10px;font-weight:900}
+.rv-stage-toggle input{margin:0;accent-color:var(--brand)}
 .rv-check{
   display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:750;
   color:var(--ink);white-space:nowrap;
@@ -911,7 +908,7 @@ body.rv-open{overflow:hidden}
   height:auto !important;flex:1;min-height:0;padding:2px 6px 6px !important;
 }
 .rv-timeline{flex:0 0 auto;margin-top:8px !important;padding:7px 9px !important}
-.rv-time-row{grid-template-columns:34px 1fr 128px !important}
+.rv-time-row{grid-template-columns:34px minmax(100px,1fr) max-content !important}
 .rv-play{height:30px !important}
 @media(max-width:1180px){
   .rv-main-grid{grid-template-columns:1fr 1fr}
@@ -966,7 +963,7 @@ body.rv-open{overflow:hidden}
   .rv-main-grid.mode-none{grid-template-columns:1fr 1fr}
 }
 
-/* Primary IK conditions are intentionally one vertical five-row list. */
+/* Primary/Main IK conditions use one vertical list with a grouped Joint section. */
 #tab-mapping > .mapping-panel > .ik-condition-wrap:first-of-type .ik-condition-grid,
 #tab-mapping .ik-condition-grid{grid-template-columns:1fr}
 
@@ -1089,9 +1086,7 @@ body.rv-open{overflow:hidden}
   padding:0 5px !important;
   min-width:0 !important;
 }
-#rvCompare{width:126px !important;flex:0 0 126px}
 #rvStage{width:105px !important;flex:0 0 105px}
-#rvG1Visual{width:102px !important;flex:0 0 102px}
 #rvViewMode{width:140px !important;flex:0 0 140px}
 .result-modal-close{
   width:32px !important;
@@ -1102,9 +1097,7 @@ body.rv-open{overflow:hidden}
 .result-modal-meta{font-size:10px !important}
 @media(max-width:1200px){
   .rv-head-id{min-width:150px !important;max-width:170px}
-  #rvCompare{width:112px !important;flex-basis:112px}
   #rvStage{width:92px !important;flex-basis:92px}
-  #rvG1Visual{width:90px !important;flex-basis:90px}
   #rvViewMode{width:125px !important;flex-basis:125px}
 }
 
@@ -1273,7 +1266,6 @@ input[type="checkbox"]{
 
 /* ===== Result Viewer A/B stage comparison ===== */
 #rvStageA,#rvStageB{width:112px;flex:0 0 112px}
-#rvCompare{width:104px !important;flex:0 0 104px !important}
 .rv-main-grid.mode-a #rvMevaPanel{display:none !important}
 .rv-main-grid.mode-b #rvRobotPanel{display:none !important}
 .rv-main-grid.mode-none #rvRobotPanel,.rv-main-grid.mode-none #rvMevaPanel{display:none !important}
@@ -1310,6 +1302,30 @@ input[type="checkbox"]{
 .joint-limit-card{
   display:block;
 }
+.joint-condition-group{
+  margin-top:4px;
+  padding:14px 16px 10px;
+  border:1px solid #d7e2ec;
+  border-radius:14px;
+  background:#f7f9fc;
+}
+.joint-condition-heading{
+  margin:0 0 8px 2px;
+  color:#607895;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.joint-condition-group .ik-card{
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  background:transparent !important;
+}
+.joint-condition-group .ik-card + .ik-card{
+  border-top:1px solid #e1e8ef !important;
+}
 .main-ground-estimation-row{
   flex-wrap:nowrap;
   gap:10px;
@@ -1328,18 +1344,19 @@ input[type="checkbox"]{
 }
 
 /* Model-driven mapping and shared validation views. */
-.head-row,.link-row{grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 82px 82px 82px 82px 82px !important}
-.joint-row{position:relative;grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 82px 82px 82px 82px 82px !important}
+.head-row,.link-row{grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 110px 82px 82px 82px 82px !important}
+.joint-row{position:relative;grid-template-columns:minmax(175px,1.25fr) minmax(170px,1.05fr) 110px 82px 82px 82px 82px !important;gap:8px !important;padding-left:10px !important;padding-right:10px !important}
 .joint-row .joint-line{position:absolute;left:20px;top:0;bottom:0}
-.joint-row .joint-info{grid-column:1 / 2;padding-left:40px}
-.joint-weight{grid-column:3;display:flex;align-items:center;justify-content:center}
-.joint-weight input{width:82px !important;height:30px !important}
+.joint-row .joint-info{grid-column:1 / 4;padding-left:40px}
+.weight input[type=number]{width:100% !important;min-width:0;box-sizing:border-box}
+.joint-weight{grid-column:4;display:flex;align-items:center;justify-content:flex-start;justify-self:stretch;min-width:0;margin:0;padding:0}
+.joint-weight input{width:100% !important;min-width:0;height:32px !important;box-sizing:border-box;margin:0}
+.robot-area .weight input[type=number],.robot-area .joint-weight input,.robot-area .pos-axis input{text-align:left}
+.joint-weight input:disabled{background:#eef2f4;color:#98a7b3;border-color:#dce4e8;cursor:not-allowed}
 .joint-weight-na{font-size:11px;font-weight:800;color:#9aabb9}
-.joint-target-option{grid-column:4;display:flex;align-items:center;gap:5px;min-width:0}
-.joint-accel-label{display:flex;align-items:center;gap:3px;font-size:9px;font-weight:800;line-height:1.1;white-space:nowrap;color:#526a80;cursor:pointer}
-.joint-accel-label input{flex:0 0 auto;margin:0}
-.joint-accel{display:flex;align-items:center;min-width:0}
-.joint-accel input{width:58px !important;height:30px !important}
+.mapping-weight-head{grid-column:4 / 8;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+.mapping-weight-head-title{grid-column:1 / -1;font-size:11px;font-weight:900;letter-spacing:.08em}
+.mapping-weight-head-sub{font-size:9px;font-weight:800;color:#607895;white-space:nowrap}
 .root-world-row .link-name{font-weight:850}
 .root-joint-row .joint-info{grid-column:1 / 5}
 .data-management-row{margin:16px 0 28px;padding:12px 16px;border:1px solid var(--line);border-radius:13px;background:#fff;display:flex;align-items:center;justify-content:space-between;font-weight:900;color:var(--ink)}
@@ -1541,84 +1558,6 @@ input[type="checkbox"]{
           <div class="ik-card">
             <div class="ik-one-line">
               <div class="ik-title-line">
-                <div class="ik-card-title">Temporal regularization</div>
-                <span class="info-mark" tabindex="0">?
-                  <span class="info-pop">前フレームの最終Joint姿勢に近いIK解を弱く優先します。各フレーム内の反復では同じ前フレーム姿勢を参照します。</span>
-                </span>
-                <div class="inline-enabled">
-                  <input id="temporalEnabled" type="checkbox">
-                  <label for="temporalEnabled">Enabled</label>
-                </div>
-              </div>
-              <div class="ik-flex-spacer"></div>
-              <div class="setting-control">
-                <label for="temporalCost">Cost λ</label>
-                <input id="temporalCost" type="number" min="0" step="0.001" value="0.01">
-              </div>
-            </div>
-          </div>
-
-          <div class="ik-card acceleration-soft-setting-row">
-            <div class="acceleration-soft-setting-title">Joint acceleration soft limit</div>
-            <div class="acceleration-soft-setting-note">Per-joint Enabled and Acc. Limit values are configured in each Joint row.</div>
-            <div class="acceleration-weight-control">
-              <label for="accelerationWeightAt2x">Acceleration Weight at 2× Limit</label>
-              <span class="info-mark" tabindex="0">?<span class="info-pop">Soft constraint weight when joint acceleration reaches 2× the configured acceleration limit. The weight is 0 within the limit and increases linearly above the limit.</span></span>
-              <input id="accelerationWeightAt2x" type="number" min="0" step="0.01" value="0.1">
-            </div>
-          </div>
-
-          <div class="ik-card">
-            <div class="ik-one-line">
-              <div class="ik-title-line">
-                <div class="ik-card-title">Inter-frame joint velocity limit</div>
-                <span class="info-mark" tabindex="0">?
-                  <span class="info-pop">前フレーム最終Joint角を基準に、現在フレームで取り得るJoint角をhard constraintで制限します。3なら3π rad/sです。</span>
-                </span>
-                <div class="inline-enabled">
-                  <input id="velocityLimitEnabled" type="checkbox">
-                  <label for="velocityLimitEnabled">Enabled</label>
-                </div>
-              </div>
-              <div class="ik-flex-spacer"></div>
-              <div class="setting-control">
-                <label for="velocityLimitRadS">Limit (π rad/s)</label>
-                <input id="velocityLimitRadS" type="number" min="0" step="0.1" value="3">
-              </div>
-            </div>
-          </div>
-
-          <div class="ik-card joint-limit-card">
-            <div class="ik-one-line">
-              <div class="ik-title-line">
-                <div class="ik-card-title">Joint-limit avoidance</div>
-                <span class="info-mark" tabindex="0">?
-                  <span class="info-pop">中央の安全域では作用せず、limit zoneに入ると安全域境界へ戻す位置コストがBase costからMax costまで増加します。hard XML limitは別途維持します。</span>
-                </span>
-                <div class="inline-enabled">
-                  <input id="jointLimitEnabled" type="checkbox">
-                  <label for="jointLimitEnabled">Enabled</label>
-                </div>
-              </div>
-              <div class="ik-flex-spacer"></div>
-              <div class="setting-control">
-                <label for="jointLimitZonePercent">Limit zone (%)</label>
-                <input id="jointLimitZonePercent" type="number" min="0" max="50" step="1" value="10">
-              </div>
-              <div class="setting-control">
-                <label for="jointLimitBaseCost">Base cost</label>
-                <input id="jointLimitBaseCost" type="number" min="0" step="0.001" value="0.01">
-              </div>
-              <div class="setting-control">
-                <label for="jointLimitMaxCost">Max cost</label>
-                <input id="jointLimitMaxCost" type="number" min="0" step="0.05" value="0.2">
-              </div>
-            </div>
-          </div>
-
-          <div class="ik-card">
-            <div class="ik-one-line">
-              <div class="ik-title-line">
                 <div class="ik-card-title">IK convergence</div>
                 <span class="info-mark" tabindex="0">?
                   <span class="info-pop">全Robot Joint角の最大変化量がStop Δjoint以下の状態が指定回数連続したら収束として終了します。収束しない場合だけMax iterationsまで計算します。</span>
@@ -1636,6 +1575,26 @@ input[type="checkbox"]{
               <div class="setting-control">
                 <label for="convergenceConsecutiveIterations">Consecutive iterations</label>
                 <input id="convergenceConsecutiveIterations" type="number" min="1" step="1" value="2">
+              </div>
+            </div>
+          </div>
+
+          <div class="ik-card">
+            <div class="ik-one-line">
+              <div class="ik-title-line">
+                <div class="ik-card-title">Temporal regularization</div>
+                <span class="info-mark" tabindex="0">?
+                  <span class="info-pop">前フレームの最終Joint姿勢に近いIK解を弱く優先します。各フレーム内の反復では同じ前フレーム姿勢を参照します。</span>
+                </span>
+                <div class="inline-enabled">
+                  <input id="temporalEnabled" type="checkbox">
+                  <label for="temporalEnabled">Enabled</label>
+                </div>
+              </div>
+              <div class="ik-flex-spacer"></div>
+              <div class="setting-control">
+                <label for="temporalCost">Cost λ</label>
+                <input id="temporalCost" type="number" min="0" step="0.001" value="0.01">
               </div>
             </div>
           </div>
@@ -1664,6 +1623,83 @@ input[type="checkbox"]{
             </div>
           </div>
 
+          <div class="joint-condition-group">
+            <div class="joint-condition-heading">Joint Condition</div>
+
+            <div class="ik-card joint-limit-card">
+              <div class="ik-one-line">
+                <div class="ik-title-line">
+                  <div class="ik-card-title">Joint-limit avoidance</div>
+                  <span class="info-mark" tabindex="0">?
+                    <span class="info-pop">中央の安全域では作用せず、limit zoneに入ると安全域境界へ戻す位置コストがBase costからMax costまで増加します。hard XML limitは別途維持します。</span>
+                  </span>
+                  <div class="inline-enabled">
+                    <input id="jointLimitEnabled" type="checkbox">
+                    <label for="jointLimitEnabled">Enabled</label>
+                  </div>
+                </div>
+                <div class="ik-flex-spacer"></div>
+                <div class="setting-control">
+                  <label for="jointLimitZonePercent">Limit zone (%)</label>
+                  <input id="jointLimitZonePercent" type="number" min="0" max="50" step="1" value="10">
+                </div>
+                <div class="setting-control">
+                  <label for="jointLimitBaseCost">Base cost</label>
+                  <input id="jointLimitBaseCost" type="number" min="0" step="0.001" value="0.01">
+                </div>
+                <div class="setting-control">
+                  <label for="jointLimitMaxCost">Max cost</label>
+                  <input id="jointLimitMaxCost" type="number" min="0" step="0.05" value="0.2">
+                </div>
+              </div>
+            </div>
+
+            <div class="ik-card">
+              <div class="ik-one-line">
+                <div class="ik-title-line">
+                  <div class="ik-card-title">Joint velocity limit</div>
+                  <span class="info-mark" tabindex="0">?
+                    <span class="info-pop">前フレーム最終Joint角を基準に、現在フレームで取り得るJoint角をhard constraintで制限します。3なら3π rad/sです。</span>
+                  </span>
+                  <div class="inline-enabled">
+                    <input id="velocityLimitEnabled" type="checkbox">
+                    <label for="velocityLimitEnabled">Enabled</label>
+                  </div>
+                </div>
+                <div class="ik-flex-spacer"></div>
+                <div class="setting-control">
+                  <label for="velocityLimitRadS">Limit (π rad/s)</label>
+                  <input id="velocityLimitRadS" type="number" min="0" step="0.1" value="3">
+                </div>
+              </div>
+            </div>
+
+            <div class="ik-card">
+              <div class="ik-one-line">
+                <div class="ik-title-line">
+                  <div class="ik-card-title">Joint acceleration limit</div>
+                  <span class="info-mark" tabindex="0">?
+                    <span class="info-pop">全hinge Jointに共通の加速度soft limitを設定します。旧ConfigのJoint別overrideも引き続き読み込めます。</span>
+                  </span>
+                  <div class="inline-enabled">
+                    <input id="accelerationLimitEnabled" type="checkbox">
+                    <label for="accelerationLimitEnabled">Enabled</label>
+                  </div>
+                </div>
+                <div class="ik-flex-spacer"></div>
+                <div class="setting-control">
+                  <label for="accelerationLimitRadS2">Limit (rad/s²)</label>
+                  <input id="accelerationLimitRadS2" type="number" min="0" step="1" value="220">
+                </div>
+                <div class="setting-control">
+                  <label for="accelerationWeightAt2x">Acc. Weight at 2× Limit</label>
+                  <span class="info-mark" tabindex="0">?<span class="info-pop">加速度がLimit以内ならweight 0、超過後は線形に増え、2× Limitでこのweightになります。</span></span>
+                  <input id="accelerationWeightAt2x" type="number" min="0" step="0.01" value="0.1">
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -1678,11 +1714,14 @@ input[type="checkbox"]{
           <div class="head-row">
             <div>Robot Link</div>
             <div>MEVA Segment</div>
-            <div>Ori. / Joint weight</div>
-            <div>Target option</div>
-            <div>Pos. X weight</div>
-            <div>Pos. Y weight</div>
-            <div>Pos. Z weight</div>
+            <div class="ignore-head">Ignore<br>axial rot.</div>
+            <div class="mapping-weight-head">
+              <div class="mapping-weight-head-title">Weight</div>
+              <div class="mapping-weight-head-sub">Ori. / Joint</div>
+              <div class="mapping-weight-head-sub">Pos. X</div>
+              <div class="mapping-weight-head-sub">Pos. Y</div>
+              <div class="mapping-weight-head-sub">Pos. Z</div>
+            </div>
           </div>
 
           <div class="region">
@@ -2062,26 +2101,17 @@ input[type="checkbox"]{
       </div>
 
       <div class="rv-head-controls">
-        <label class="rv-slot-a">A</label>
-        <select id="rvStageA" class="rv-slot-a"></select>
+        <div class="rv-stage-choice rv-stage-choice-a">
+          <label class="rv-stage-toggle rv-slot-a" for="rvShowA"><input id="rvShowA" type="checkbox" checked>A</label>
+          <select id="rvStageA" class="rv-slot-a"></select>
+        </div>
 
-        <label class="rv-slot-b">B</label>
-        <select id="rvStageB" class="rv-slot-b"></select>
+        <div class="rv-stage-choice">
+          <label class="rv-stage-toggle rv-slot-b" for="rvShowB"><input id="rvShowB" type="checkbox" checked>B</label>
+          <select id="rvStageB" class="rv-slot-b"></select>
+        </div>
 
-        <label>DISPLAY</label>
-        <select id="rvCompare">
-          <option value="both">A + B</option>
-          <option value="a">A only</option>
-          <option value="b">B only</option>
-          <option value="none">Graph only</option>
-        </select>
-
-        <label>ROBOT VISUAL</label>
-        <select id="rvG1Visual">
-          <option value="skeleton" selected>Skeleton</option>
-          <option value="points">Points</option>
-          <option value="mesh">Mesh (MuJoCo WASM)</option>
-        </select>
+        <input id="rvCompare" type="hidden" value="both">
         <label>VIEW</label>
         <select id="rvViewMode">
           <option value="follow_front" selected>Front / Follow</option>
@@ -2103,7 +2133,6 @@ input[type="checkbox"]{
               <div class="rv-name rv-slot-a"><span id="rvAName">A</span><span class="rv-run-warning" id="rvAWarning" aria-label="Run warning">⚠</span></div>
               <div class="rv-meta" id="rvRobotMeta">—</div>
             </div>
-            <span class="pill pill-pkl" id="rvAPill">—</span>
           </div>
           <div class="rv-scene"><canvas id="rvRobotCanvas"></canvas></div>
         </div>
@@ -2114,7 +2143,6 @@ input[type="checkbox"]{
               <div class="rv-name rv-slot-b"><span id="rvBName">B</span><span class="rv-run-warning" id="rvBWarning" aria-label="Run warning">⚠</span></div>
               <div class="rv-meta" id="rvMevaMeta">—</div>
             </div>
-            <span class="pill pill-meva" id="rvBPill">—</span>
           </div>
           <div class="rv-scene"><canvas id="rvMevaCanvas"></canvas></div>
         </div>
@@ -2313,6 +2341,8 @@ input[type="checkbox"]{
   const jointLimitMaxCost = document.getElementById("jointLimitMaxCost");
   const velocityLimitEnabled = document.getElementById("velocityLimitEnabled");
   const velocityLimitRadS = document.getElementById("velocityLimitRadS");
+  const accelerationLimitEnabled = document.getElementById("accelerationLimitEnabled");
+  const accelerationLimitRadS2 = document.getElementById("accelerationLimitRadS2");
   const accelerationWeightAt2x = document.getElementById("accelerationWeightAt2x");
   const maxIterations = document.getElementById("maxIterations");
   const convergenceJointDeltaDeg = document.getElementById("convergenceJointDeltaDeg");
@@ -2573,6 +2603,90 @@ input[type="checkbox"]{
     return out;
   }
 
+  function accelerationJointNames(){
+    return (robotModelMetadata.joints || [])
+      .filter(joint => Number(joint.dof_count) === 1 && ["hinge", "revolute"].includes(String(joint.type_name)))
+      .map(joint => String(joint.name));
+  }
+
+  function accelerationValue(raw, fallback=0){
+    const value = typeof raw === "object" && raw !== null ? raw.max_rad_s2 : raw;
+    const numeric = Number(value ?? fallback);
+    return Number.isFinite(numeric) ? numeric : Number(fallback || 0);
+  }
+
+  function accelerationControlState(cfg){
+    const section = cfg?.interframe_joint_acceleration_limit || {};
+    const fallback = accelerationValue(section.default_rad_s2, 0);
+    const overrides = section.overrides || {};
+    const jointNames = accelerationJointNames();
+    const values = jointNames.length
+      ? jointNames.map(name => accelerationValue(overrides[name], fallback))
+      : [fallback, ...Object.values(overrides).map(value => accelerationValue(value, fallback))];
+    const distinct = [...new Set(values.map(value => Number(value).toPrecision(12)))];
+    const mixed = distinct.length > 1;
+    return {
+      enabled: Boolean(section.enabled),
+      mixed,
+      value: mixed ? "" : Number(values[0] ?? fallback),
+    };
+  }
+
+  function applyAccelerationControls(enabledControl, limitControl, cfg){
+    if(!enabledControl || !limitControl) return;
+    const state = accelerationControlState(cfg);
+    enabledControl.checked = state.enabled;
+    limitControl.value = state.mixed ? "" : String(state.value);
+    limitControl.placeholder = state.mixed ? "Mixed (legacy)" : "";
+    limitControl.title = state.mixed
+      ? "This legacy Config contains different per-Joint limits. They are preserved until a common value is entered."
+      : "Common acceleration limit for all hinge Joints";
+    limitControl.dataset.preserveLegacy = state.mixed ? "true" : "false";
+    limitControl.dataset.touched = "false";
+    limitControl.disabled = !state.enabled;
+  }
+
+  function collectAccelerationConfig(current, enabledControl, limitControl, weightControl){
+    const enabled = Boolean(enabledControl?.checked);
+    const weightAt2x = Number(weightControl?.value ?? 0.1);
+    if(!Number.isFinite(weightAt2x) || weightAt2x < 0){
+      throw new Error("Acceleration Weight at 2× Limit must be non-negative.");
+    }
+    const preserveLegacy = limitControl?.dataset.preserveLegacy === "true"
+      && limitControl?.dataset.touched !== "true";
+    if(preserveLegacy){
+      return {
+        ...(deepClone(current || {})),
+        enabled,
+        weight_at_2x_limit: weightAt2x,
+      };
+    }
+    const value = Number(limitControl?.value ?? 0);
+    if(!Number.isFinite(value) || value < 0 || (enabled && value <= 0)){
+      throw new Error("Joint acceleration Limit must be positive when enabled.");
+    }
+    return {
+      enabled,
+      default_rad_s2: value,
+      weight_at_2x_limit: weightAt2x,
+      overrides: {},
+    };
+  }
+
+  function bindAccelerationControls(enabledControl, limitControl, onChanged){
+    if(!enabledControl || !limitControl || enabledControl.dataset.accelerationBound) return;
+    enabledControl.dataset.accelerationBound = "true";
+    enabledControl.addEventListener("change",()=>{
+      limitControl.disabled = !enabledControl.checked;
+      onChanged();
+    });
+    limitControl.addEventListener("input",()=>{
+      limitControl.dataset.touched = "true";
+      limitControl.placeholder = "";
+      onChanged();
+    });
+  }
+
   async function refreshAnalyticJointDetection(cfg, rerender=false){
     const robot=cfg?.robot||{};
     const response=await fetch("/api/retarget/analytic-joint-target/detect",{
@@ -2684,35 +2798,6 @@ input[type="checkbox"]{
     renderCollisionPairs(workingConfig.self_collision_avoidance?.selected_pairs || []);
     bindSelfCollisionAuto();
 
-    const byName = new Map((robotModelMetadata.joints || []).map(j=>[j.name,j]));
-    document.querySelectorAll("#tab-mapping .joint-row").forEach(row=>{
-      if(row.querySelector(".joint-accel")) return;
-      const jointName = row.querySelector(".joint-name")?.textContent.trim() || "";
-      const descriptor = byName.get(jointName);
-      if(descriptor?.type_name === "free") return;
-      const label = document.createElement("label");label.className="joint-accel-label";
-      const enabled = document.createElement("input");enabled.type="checkbox";enabled.className="joint-acceleration-enabled";enabled.dataset.joint=jointName;
-      const labelText = document.createElement("span");labelText.textContent="Acc. limit";
-      label.append(enabled,labelText);
-      const cell = document.createElement("div");cell.className="joint-accel";
-      const input = document.createElement("input");input.type="number";input.min="0";input.step="0.1";
-      input.value="0";input.className="joint-acceleration-input";input.dataset.joint=jointName;
-      input.title="Inter-frame joint acceleration limit (rad/s²)";
-      const hasDof = Boolean(descriptor?.controllable) && Number(descriptor.dof_count) > 0;
-      enabled.dataset.hasDof = hasDof ? "true" : "false";
-      input.dataset.hasDof = hasDof ? "true" : "false";
-      enabled.disabled = !hasDof;
-      input.disabled = true;
-      enabled.addEventListener("change",()=>{
-        input.disabled = !enabled.checked || !hasDof;
-        syncSymmetricJointControl(enabled);
-        refreshChangedState();
-      });
-      input.addEventListener("input",()=>{syncSymmetricJointInput(input);refreshChangedState()});
-      const option = row.querySelector(".joint-target-option") || document.createElement("div");
-      option.className="joint-target-option";
-      cell.appendChild(input);option.append(label,cell);row.appendChild(option);
-    });
     document.querySelectorAll("#tab-mapping .region").forEach(region=>{
       const title=region.querySelector(":scope > .region-title");if(!title||title.dataset.ready)return;
       title.dataset.ready="1";
@@ -2748,6 +2833,16 @@ input[type="checkbox"]{
 
     const analyticTargets=new Set(metadata?.analytic_joint_target_joints||[]);
     const analyticAxial=new Set(metadata?.analytic_joint_axial_joints||[]);
+    const analyticClusterMembers=new Set();
+    const analyticUnsupportedReason=new Map();
+    for(const cluster of (metadata?.analytic_joint_clusters||[])){
+      for(const jointName of (cluster.joint_names||[])){
+        analyticClusterMembers.add(jointName);
+        if(!cluster.supported){
+          analyticUnsupportedReason.set(jointName,cluster.detection_reason||"unsupported cluster");
+        }
+      }
+    }
     const jointRow=(joint,depth)=>{
       const row=document.createElement("div");row.className="joint-row";
       const line=document.createElement("div");line.className="joint-line";
@@ -2771,22 +2866,26 @@ input[type="checkbox"]{
         return row;
       }
       const weight=document.createElement("div");weight.className="joint-weight";
-      if(joint && analyticTargets.has(joint.name)){
+      if(joint && analyticClusterMembers.has(joint.name)){
         const input=document.createElement("input");input.type="number";input.min="0";
-        input.step="0.05";input.value="0";input.className="joint-weight-input";
-        input.dataset.joint=joint.name;input.title="Analytic Joint Target soft weight";
+        input.step="0.01";input.value="0.00";input.className="joint-weight-input";
+        input.dataset.joint=joint.name;
+        input.disabled=!analyticTargets.has(joint.name);
+        input.title=analyticAxial.has(joint.name)
+          ? "Deactivated: distal axial Joint is ignored by this Axis-only Mapping"
+          : analyticUnsupportedReason.has(joint.name)
+            ? `Deactivated: ${analyticUnsupportedReason.get(joint.name)}`
+            : "Analytic Joint Target soft weight";
         input.addEventListener("input",()=>{syncSymmetricJointInput(input);refreshChangedState()});
+        input.addEventListener("blur",()=>{formatMappingWeightInput(input);syncSymmetricJointInput(input)});
         weight.appendChild(input);
       }else{
         const marker=document.createElement("span");marker.className="joint-weight-na";
         marker.textContent="—";
-        marker.title=analyticAxial.has(joint?.name)
-          ? "Excluded axial Joint: orientation direction does not target this rotation"
-          : "No supported Analytic Joint Target";
+        marker.title="Not a detected three-hinge Analytic Joint Target cluster";
         weight.appendChild(marker);
       }
-      const option=document.createElement("div");option.className="joint-target-option";
-      row.append(weight,option);return row;
+      row.appendChild(weight);return row;
     };
 
     for(const group of groups){
@@ -2863,7 +2962,7 @@ input[type="checkbox"]{
     if(!symmetryEnabledFor(row))return;const other=counterpartRow(row);if(!other)return;
     const source=row.querySelector(".segment-select"),target=other.querySelector(".segment-select");
     if(source&&target){const counterpart=robotModelMetadata.body_symmetry?.[source.value] || source.value.replace(/^Left/,"Right");if([...target.options].some(x=>x.value===counterpart))target.value=counterpart}
-    const ori=row.children[2]?.querySelector("input"),otherOri=other.children[2]?.querySelector("input");if(ori&&otherOri)otherOri.value=ori.value;
+    const ori=row.querySelector(".orientation-weight-input"),otherOri=other.querySelector(".orientation-weight-input");if(ori&&otherOri)otherOri.value=ori.value;
     const axis=row.querySelector(".axis-mode-check"),otherAxis=other.querySelector(".axis-mode-check");if(axis&&otherAxis)otherAxis.checked=axis.checked;
     if(row.closest("#mainInheritedSnapshot")){
       syncMainDuplicateOptions();
@@ -2873,23 +2972,16 @@ input[type="checkbox"]{
       refreshChangedState();
     }
   }
+  function formatMappingWeightInput(input){
+    const value=Number(input?.value);
+    if(input&&Number.isFinite(value))input.value=value.toFixed(2);
+  }
   function syncSymmetricJointInput(input){
     const region=input.closest(".region");if(region?.dataset.symmetric!=="on")return;
     const otherName=robotModelMetadata.joint_symmetry?.[input.dataset.joint];if(!otherName)return;
     const root=input.closest(".robot-area")||document;
-    const className=input.classList.contains("joint-weight-input")
-      ? "joint-weight-input" : "joint-acceleration-input";
-    const other=root.querySelector(`.${className}[data-joint="${otherName}"]`);if(other&&!other.disabled)other.value=input.value;
-  }
-  function syncSymmetricJointControl(control){
-    const region=control.closest(".region");if(region?.dataset.symmetric!=="on")return;
-    const otherName=robotModelMetadata.joint_symmetry?.[control.dataset.joint];if(!otherName)return;
-    const root=control.closest(".robot-area")||document;
-    const other=root.querySelector(`.joint-acceleration-enabled[data-joint="${otherName}"]`);
-    if(!other||other.disabled)return;
-    other.checked=control.checked;
-    const otherInput=root.querySelector(`.joint-acceleration-input[data-joint="${otherName}"]`);
-    if(otherInput)otherInput.disabled=!other.checked;
+    const other=root.querySelector(`.joint-weight-input[data-joint="${otherName}"]`);
+    if(other&&!other.disabled)other.value=input.value;
   }
   function installSymmetryListeners(root=document.querySelector("#tab-mapping")){
     root?.querySelectorAll(".region[data-symmetric] .link-row").forEach(row=>{
@@ -2910,19 +3002,19 @@ input[type="checkbox"]{
         row.removeChild(row.lastElementChild);
       }
 
-      // Ori. weight
-      const oriCell = document.createElement("div");
-      oriCell.className = "weight";
-      oriCell.innerHTML =
-        `<input type="number" value="0.00" ${isShared || isFixed ? "disabled" : ""}>`;
-      row.appendChild(oriCell);
-
       // Ignore axial rotation
       const axisCell = document.createElement("div");
       axisCell.className = "axis-mode disabled";
       axisCell.innerHTML =
         '<input type="checkbox" class="axis-mode-check" aria-label="Ignore axial rotation" disabled>';
       row.appendChild(axisCell);
+
+      // Orientation weight shares the same column with Analytic Joint weights.
+      const oriCell = document.createElement("div");
+      oriCell.className = "weight";
+      oriCell.innerHTML =
+        `<input type="number" class="orientation-weight-input" value="0.00" ${isShared || isFixed ? "disabled" : ""}>`;
+      row.appendChild(oriCell);
 
       // Primary mapping: position constraints are visible but inactive.
       for(const axis of ["X","Y","Z"]){
@@ -2949,10 +3041,10 @@ input[type="checkbox"]{
         MEVA_SEGMENTS.map(s => `<option value="${s}">${s}</option>`).join("");
       slot.appendChild(sel);
 
-      const ori = row.children[2]?.querySelector("input[type=number]");
-      if(ori){ ori.disabled = false; ori.step="0.05"; ori.min="0"; ori.value="0.00"; }
+      const ori = row.querySelector(".orientation-weight-input");
+      if(ori){ ori.disabled = false; ori.step="0.01"; ori.min="0"; ori.value="0.00"; }
 
-      const axisCell = row.children[3];
+      const axisCell = row.querySelector(".axis-mode");
       axisCell.className = "axis-mode";
       const axisSupported = row.dataset.axisAlignmentSupported === "true";
       axisCell.classList.toggle("disabled", !axisSupported);
@@ -2961,17 +3053,23 @@ input[type="checkbox"]{
         : "Primary axis is not defined for this Robot Link";
       axisCell.innerHTML = `<input type="checkbox" class="axis-mode-check" aria-label="Ignore axial rotation" ${axisSupported ? "" : "disabled"}>`;
       const axisCheck = axisCell.querySelector(".axis-mode-check");
+      const updateOrientationState = () => {
+        if(ori) ori.disabled = !sel.value;
+      };
 
       sel.addEventListener("change", () => {
+        updateOrientationState();
         syncDuplicateOptions();
         refreshChangedState();
         refreshPalette();
         scheduleAnalyticJointDetection();
       });
       ori?.addEventListener("input", refreshChangedState);
+      ori?.addEventListener("blur",()=>{formatMappingWeightInput(ori);syncSymmetricMapping(row)});
       axisCheck?.addEventListener("change",()=>{
         refreshChangedState();scheduleAnalyticJointDetection();
       });
+      updateOrientationState();
     }
   }
 
@@ -3057,30 +3155,26 @@ input[type="checkbox"]{
     for(const row of editableRows()){
       const link = row.querySelector(".link-name").textContent.trim();
       const sel = row.querySelector(".segment-select");
-      const ori = row.children[2]?.querySelector("input[type=number]");
+      const ori = row.querySelector(".orientation-weight-input");
       const axisCheck = row.querySelector(".axis-mode-check");
 
       const m = byLink.get(link);
       sel.value = m?.source_segment || "";
-      if(ori) ori.value = Number(m?.orientation_weight ?? 0).toFixed(2);
+      if(ori){
+        ori.value = Number(m?.orientation_weight ?? 0).toFixed(2);
+        ori.disabled = !m?.source_segment;
+      }
       if(axisCheck) axisCheck.checked = !axisCheck.disabled && (m?.orientation_mode === "axis");
     }
     const analyticWeights=cfg.analytic_joint_target?.joint_weights||{};
     for(const input of document.querySelectorAll("#tab-mapping .joint-weight-input")){
-      input.value=Number(analyticWeights[input.dataset.joint]??0);
+      input.value=Number(analyticWeights[input.dataset.joint]??0).toFixed(2);
     }
     const acceleration = cfg.interframe_joint_acceleration_limit || {};
     if(accelerationWeightAt2x){
       accelerationWeightAt2x.value = Number(acceleration.weight_at_2x_limit ?? 0.1);
     }
-    for(const input of document.querySelectorAll("#tab-mapping .joint-acceleration-input")){
-      const raw = acceleration.overrides?.[input.dataset.joint];
-      input.value = Number(typeof raw === "object" ? raw.max_rad_s2 : (raw ?? 0));
-      const enabled=input.closest(".joint-row")?.querySelector(".joint-acceleration-enabled");
-      const active=Boolean(acceleration.enabled) && raw != null && Number(input.value)>0;
-      if(enabled)enabled.checked=active;
-      input.disabled=!active || Boolean(enabled?.disabled);
-    }
+    applyAccelerationControls(accelerationLimitEnabled, accelerationLimitRadS2, cfg);
     syncDuplicateOptions();
     if(updateBaseline){
       baselineConfigSignature = configSignature(collectConfig());
@@ -3093,6 +3187,8 @@ input[type="checkbox"]{
     const selects = [...document.querySelectorAll("#tab-mapping .segment-select")];
     const chosen = new Set(selects.map(s => s.value).filter(Boolean));
     for(const sel of selects){
+      const ori = sel.closest(".link-row")?.querySelector(".orientation-weight-input");
+      if(ori) ori.disabled = !sel.value;
       for(const opt of sel.options){
         if(!opt.value) continue;
         opt.disabled = chosen.has(opt.value) && opt.value !== sel.value;
@@ -3105,7 +3201,7 @@ input[type="checkbox"]{
     const segment = row.querySelector(".segment-select").value;
     if(!segment) return null;
 
-    const ori = Number(row.children[2]?.querySelector("input")?.value || 0);
+    const ori = Number(row.querySelector(".orientation-weight-input")?.value || 0);
     const axisCheck = row.querySelector(".axis-mode-check");
     return {
       source_segment: segment,
@@ -3209,24 +3305,12 @@ input[type="checkbox"]{
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,penetration_scale_m:collisionPenetrationScale,penetration_gain:collisionPenetrationGain,base_cost:collisionBase,max_cost:collisionMax,gain:collisionTaskGain},
     };
-    const accelerationOverrides = {};
-    for(const input of document.querySelectorAll("#tab-mapping .joint-acceleration-input")){
-      const enabled=input.closest(".joint-row")?.querySelector(".joint-acceleration-enabled");
-      if(!enabled?.checked)continue;
-      const value = Number(input.value || 0);
-      if(!Number.isFinite(value) || value < 0) throw new Error(`Acceleration limit must be non-negative: ${input.dataset.joint}`);
-      if(value > 0) accelerationOverrides[input.dataset.joint] = {max_rad_s2:value};
-    }
-    const accelerationWeightAt2xValue = Number(accelerationWeightAt2x?.value ?? 0.1);
-    if(!Number.isFinite(accelerationWeightAt2xValue) || accelerationWeightAt2xValue < 0){
-      throw new Error("Acceleration Weight at 2× Limit must be non-negative.");
-    }
-    cfg.interframe_joint_acceleration_limit = {
-      enabled: Object.keys(accelerationOverrides).length > 0,
-      default_rad_s2: 0,
-      weight_at_2x_limit: accelerationWeightAt2xValue,
-      overrides: accelerationOverrides,
-    };
+    cfg.interframe_joint_acceleration_limit = collectAccelerationConfig(
+      cfg.interframe_joint_acceleration_limit,
+      accelerationLimitEnabled,
+      accelerationLimitRadS2,
+      accelerationWeightAt2x,
+    );
 
     const mevaOffset = Number(primaryMevaFootGroundOffset?.value ?? 0.030);
     const robotOffset = Number(primaryRobotFootGroundOffset?.value ?? 0.035);
@@ -3493,7 +3577,7 @@ input[type="checkbox"]{
       "selfCollisionEnabled", "selfCollisionAuto", "selfCollisionZone",
       "selfCollisionPenetrationScale", "selfCollisionPenetrationGain",
       "selfCollisionBaseCost", "selfCollisionMaxCost", "selfCollisionTaskGain",
-      "accelerationWeightAt2x",
+      "accelerationLimitEnabled", "accelerationLimitRadS2", "accelerationWeightAt2x",
     ]);
     root.querySelectorAll("[id]").forEach(el => {
       el.dataset.sourceId = el.id;
@@ -3507,20 +3591,14 @@ input[type="checkbox"]{
         mappingRow && segmentSelect && (
           el.classList.contains("segment-select")
           || el.classList.contains("axis-mode-check")
-          || mappingRow.children[2]?.contains(el)
+          || el.classList.contains("orientation-weight-input")
         )
       );
       const editable = editableCommonIds.has(el.dataset.sourceId)
         || isMappingOrientationControl
-        || el.classList.contains("joint-acceleration-input")
-        || el.classList.contains("joint-acceleration-enabled")
         || el.classList.contains("collision-pair-check")
         || Boolean(el.closest(".symmetric-setting"));
-      const unavailableAcceleration = (
-        (el.classList.contains("joint-acceleration-enabled") || el.classList.contains("joint-acceleration-input"))
-        && el.dataset.hasDof === "false"
-      );
-      el.disabled = !editable || unavailableAcceleration;
+      el.disabled = !editable;
       el.tabIndex = editable ? 0 : -1;
     });
     root.querySelectorAll(".changed").forEach(el => el.classList.remove("changed"));
@@ -3581,13 +3659,11 @@ input[type="checkbox"]{
     updateSelfCollisionParent(root);
     const acceleration = cfg.interframe_joint_acceleration_limit || {};
     setValue("accelerationWeightAt2x", Number(acceleration.weight_at_2x_limit ?? 0.1));
-    root.querySelectorAll(".joint-acceleration-input").forEach(input=>{
-      const raw=acceleration.overrides?.[input.dataset.joint];input.value=Number(typeof raw==="object"?raw.max_rad_s2:(raw??0));
-      const enabled=input.closest(".joint-row")?.querySelector(".joint-acceleration-enabled");
-      const active=Boolean(acceleration.enabled)&&raw!=null&&Number(input.value)>0;
-      if(enabled)enabled.checked=active;
-      input.disabled=!active||Boolean(enabled?.disabled);
-    });
+    applyAccelerationControls(
+      root.querySelector('[data-source-id="accelerationLimitEnabled"]'),
+      root.querySelector('[data-source-id="accelerationLimitRadS2"]'),
+      cfg,
+    );
 
     const byLink = mapByLink(cfg);
     for(const row of root.querySelectorAll(".link-row")){
@@ -3595,10 +3671,13 @@ input[type="checkbox"]{
       if(!link) continue;
       const mapping = byLink.get(link);
       const sel = row.querySelector(".segment-select");
-      const ori = row.children[2]?.querySelector("input[type=number]");
+      const ori = row.querySelector(".orientation-weight-input");
       const axis = row.querySelector(".axis-mode-check");
       if(sel) sel.value = mapping?.source_segment || "";
-      if(ori) ori.value = Number(mapping?.orientation_weight ?? 0);
+      if(ori){
+        ori.value = Number(mapping?.orientation_weight ?? 0).toFixed(2);
+        ori.disabled = !mapping?.source_segment;
+      }
       const axisSupported = row.dataset.axisAlignmentSupported === "true";
       if(axis) axis.checked = axisSupported && (mapping?.orientation_mode === "axis");
       if(axis) axis.disabled = !mapping?.source_segment || !axisSupported;
@@ -3609,6 +3688,8 @@ input[type="checkbox"]{
     const selects = [...(mainInheritedSnapshot?.querySelectorAll(".segment-select") || [])];
     const chosen = new Set(selects.map(select => select.value).filter(Boolean));
     for(const select of selects){
+      const ori = select.closest(".link-row")?.querySelector(".orientation-weight-input");
+      if(ori) ori.disabled = !select.value;
       for(const option of select.options){
         if(!option.value) continue;
         option.disabled = chosen.has(option.value) && option.value !== select.value;
@@ -3662,12 +3743,11 @@ input[type="checkbox"]{
     mainInheritedSnapshot.querySelectorAll(".symmetric-setting input").forEach(input=>input.addEventListener("change",()=>{
       const region=input.closest(".region");if(region)region.dataset.symmetric=input.checked?"on":"off";
     }));
-    mainInheritedSnapshot.querySelectorAll(".joint-acceleration-input").forEach(input=>input.addEventListener("input",()=>syncSymmetricJointInput(input)));
-    mainInheritedSnapshot.querySelectorAll(".joint-acceleration-enabled").forEach(enabled=>enabled.addEventListener("change",()=>{
-      const input=enabled.closest(".joint-row")?.querySelector(".joint-acceleration-input");
-      if(input)input.disabled=!enabled.checked;
-      syncSymmetricJointControl(enabled);
-    }));
+    bindAccelerationControls(
+      mainInheritedSnapshot.querySelector('[data-source-id="accelerationLimitEnabled"]'),
+      mainInheritedSnapshot.querySelector('[data-source-id="accelerationLimitRadS2"]'),
+      refreshMainChangedState,
+    );
     installSymmetryListeners(mainInheritedSnapshot);
     const collisionParent=mainInheritedSnapshot.querySelector('[data-source-id="selfCollisionEnabled"]');
     collisionParent?.addEventListener("change",()=>{
@@ -3729,8 +3809,9 @@ input[type="checkbox"]{
           const input = document.createElement("input");
           input.type = "number";
           input.min = "0";
-          input.step = "0.1";
-          input.value = String(Number(weight?.[axis] ?? defaultSoleWeight()[axis]));
+          input.step = "0.01";
+          input.value = Number(weight?.[axis] ?? defaultSoleWeight()[axis]).toFixed(2);
+          input.addEventListener("blur",()=>formatMappingWeightInput(input));
           input.dataset.axis = axis;
           cell.appendChild(input);
           row.appendChild(cell);
@@ -3780,7 +3861,7 @@ input[type="checkbox"]{
       if(!link || !select || !select.value || seenLinks.has(link)) continue;
       seenLinks.add(link);
       const orientationWeight = Number(
-        row.children[2]?.querySelector("input[type=number]")?.value ?? 0
+        row.querySelector(".orientation-weight-input")?.value ?? 0
       );
       if(!Number.isFinite(orientationWeight) || orientationWeight < 0){
         throw new Error(`Orientation weight must be non-negative: ${link}`);
@@ -3865,14 +3946,12 @@ input[type="checkbox"]{
       selected_pairs: selectedSelfCollisionPairs,
       damping: {limit_zone_m:collisionZone,penetration_scale_m:collisionPenetrationScale,penetration_gain:collisionPenetrationGain,base_cost:collisionBase,max_cost:collisionMax,gain:collisionTaskGain},
     };
-    const accelerationOverrides={};
-    for(const input of (mainInheritedSnapshot?.querySelectorAll(".joint-acceleration-input") || [])){
-      const enabled=input.closest(".joint-row")?.querySelector(".joint-acceleration-enabled");if(!enabled?.checked)continue;
-      const value=Number(input.value||0);if(value>0)accelerationOverrides[input.dataset.joint]={max_rad_s2:value};
-    }
-    const accelerationWeightAt2xValue=Number(control("accelerationWeightAt2x")?.value??0.1);
-    if(!Number.isFinite(accelerationWeightAt2xValue)||accelerationWeightAt2xValue<0)throw new Error("Acceleration Weight at 2× Limit must be non-negative.");
-    cfg.interframe_joint_acceleration_limit={enabled:Object.keys(accelerationOverrides).length>0,default_rad_s2:0,weight_at_2x_limit:accelerationWeightAt2xValue,overrides:accelerationOverrides};
+    cfg.interframe_joint_acceleration_limit=collectAccelerationConfig(
+      cfg.interframe_joint_acceleration_limit,
+      control("accelerationLimitEnabled"),
+      control("accelerationLimitRadS2"),
+      control("accelerationWeightAt2x"),
+    );
 
     const maxIterationsValue = Number(control("maxIterations")?.value ?? 20);
     const convergenceDeltaValue = Number(
@@ -4729,6 +4808,11 @@ input[type="checkbox"]{
   jointLimitMaxCost?.addEventListener("input", refreshChangedState);
   velocityLimitEnabled?.addEventListener("change", refreshChangedState);
   velocityLimitRadS?.addEventListener("input", refreshChangedState);
+  bindAccelerationControls(
+    accelerationLimitEnabled,
+    accelerationLimitRadS2,
+    refreshChangedState,
+  );
   accelerationWeightAt2x?.addEventListener("input", refreshChangedState);
   maxIterations?.addEventListener("input", refreshChangedState);
   convergenceJointDeltaDeg?.addEventListener("input", refreshChangedState);
@@ -5010,10 +5094,10 @@ input[type="checkbox"]{
   const rvBName = document.getElementById("rvBName");
   const rvAWarning = document.getElementById("rvAWarning");
   const rvBWarning = document.getElementById("rvBWarning");
-  const rvAPill = document.getElementById("rvAPill");
-  const rvBPill = document.getElementById("rvBPill");
   const rvStageA = document.getElementById("rvStageA");
   const rvStageB = document.getElementById("rvStageB");
+  const rvShowA = document.getElementById("rvShowA");
+  const rvShowB = document.getElementById("rvShowB");
   const rvGraphALabel = document.getElementById("rvGraphALabel");
   const rvGraphBLabel = document.getElementById("rvGraphBLabel");
   const rvGraphAPairLabel = document.getElementById("rvGraphAPairLabel");
@@ -5031,7 +5115,6 @@ input[type="checkbox"]{
   const rvMevaNode = document.getElementById("rvMevaNode");
   const rvMetric = document.getElementById("rvMetric");
   const rvCompare = document.getElementById("rvCompare");
-  const rvG1Visual = document.getElementById("rvG1Visual");
   const rvViewMode = document.getElementById("rvViewMode");
   const rvMainGrid = document.querySelector(".rv-main-grid");
   const rvPlotStart = document.getElementById("rvPlotStart");
@@ -5776,14 +5859,7 @@ input[type="checkbox"]{
     const P=j=>projectWorld(rawPoint(j));
 
     if(kind==="retarget"){
-      if(rvG1Visual?.value==="mesh"){
-        ctx.fillStyle=color;
-        ctx.font="12px Segoe UI";
-        ctx.fillText("MuJoCo WASM mesh renderer not bundled in this build",18,24);
-        for(let j=0;j<count;j++){const p=P(j);ctx.beginPath();ctx.arc(p[0],p[1],3.2,0,Math.PI*2);ctx.fill()}
-        return;
-      }
-      if(rvG1Visual?.value==="skeleton" && bin.arrays.body_parent_index){
+      if(bin.arrays.body_parent_index){
         const parents=bin.arrays.body_parent_index;
         const hiddenEdges=new Set(bin.header.robot_skeleton?.hide_parent_edges||[]);
         ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap="round";
@@ -6895,7 +6971,7 @@ input[type="checkbox"]{
     if(!rvData?.a||!rvData?.b)return;
     const sf=currentSourceFrame();
     rvFrameLabel.textContent=sf;
-    if(rvTimeLabel)rvTimeLabel.textContent=localFrameTime(sf).toFixed(6);
+    if(rvTimeLabel)rvTimeLabel.textContent=localFrameTime(sf).toFixed(3);
     if(rvMevaFrameLabel)rvMevaFrameLabel.textContent=nearestMevaFrame(sf);
     drawPointsSkeleton(
       rvRobotCanvas,rvData.a,frameIndexForSource(rvData.a,sf),
@@ -6922,17 +6998,11 @@ input[type="checkbox"]{
 
   function updateStagePanel(which,stage,bin,info){
     const label=stageLabel(stage);
-    const isRet=bin?.header?.kind==="retarget";
     const nameEl=which==="a"?rvAName:rvBName;
     const metaEl=which==="a"?rvRobotMeta:rvMevaMeta;
-    const pillEl=which==="a"?rvAPill:rvBPill;
     const warningEl=which==="a"?rvAWarning:rvBWarning;
     if(nameEl)nameEl.textContent=label;
     if(metaEl)metaEl.textContent=`${info?.file||"viewer.bin"} · ${bin?.header?.frame_count||0} frames`;
-    if(pillEl){
-      pillEl.textContent=isRet?"Robot":"MEVA";
-      pillEl.className=`pill ${isRet?"pill-pkl":"pill-meva"}`;
-    }
     if(warningEl){
       const partial=String(bin?.header?.run_status||"")==="partial";
       const failed=Number(bin?.header?.failed_frame_count||0);
@@ -7041,7 +7111,6 @@ input[type="checkbox"]{
     rvSlider.step=Math.max(1,Number(aEntry.bin.header.source_frame_step)||1,Number(bEntry.bin.header.source_frame_step)||1);
     if(Number(rvSlider.value)<start||Number(rvSlider.value)>end)rvSlider.value=start;
     renderFailureMarkers();
-    rvG1Visual.disabled=!(aEntry.bin.header.kind==="retarget"||bEntry.bin.header.kind==="retarget");
     applyCompareLayout();
     drawViewer();
     loadValidation(aStage!=="meva"?aStage:(bStage!=="meva"?bStage:null));
@@ -7084,7 +7153,9 @@ input[type="checkbox"]{
       else if(sources.main&&sources.meva){rvStageA.value="main";rvStageB.value="meva";}
       else{rvStageA.value=stages[0];rvStageB.value=stages[Math.min(1,stages.length-1)]||stages[0];}
 
-      rvCompare.value=stages.length>1?"both":"a";
+      rvShowA.checked=true;
+      rvShowB.checked=stages.length>1;
+      rvShowB.disabled=stages.length<2;
       rvStageA.disabled=stages.length<2;rvStageB.disabled=stages.length<2;
       applyStageSelection();
       if(rvStatus)rvStatus.textContent="";
@@ -7190,12 +7261,14 @@ input[type="checkbox"]{
     input?.addEventListener("input",()=>{if(viewerIsOpen())drawPlot()});
   }
 
-  rvG1Visual?.addEventListener("change",drawViewer);
   rvViewMode?.addEventListener("change",drawViewer);
   rvStageA?.addEventListener("change",applyStageSelection);
   rvStageB?.addEventListener("change",applyStageSelection);
   function applyCompareLayout(){
-    const mode=rvCompare?.value || "both";
+    const showA=Boolean(rvShowA?.checked);
+    const showB=Boolean(rvShowB?.checked);
+    const mode=showA?(showB?"both":"a"):(showB?"b":"none");
+    if(rvCompare)rvCompare.value=mode;
     document.getElementById("rvRobotPanel").style.display=(mode==="b"||mode==="none")?"none":"flex";
     document.getElementById("rvMevaPanel").style.display=(mode==="a"||mode==="none")?"none":"flex";
     rvPlotPanel1.style.display="";
@@ -7206,7 +7279,8 @@ input[type="checkbox"]{
     rvMainGrid.classList.add(`mode-${mode}`);
     requestAnimationFrame(()=>requestAnimationFrame(drawViewer));
   }
-  rvCompare?.addEventListener("change",applyCompareLayout);
+  rvShowA?.addEventListener("change",applyCompareLayout);
+  rvShowB?.addEventListener("change",applyCompareLayout);
 
   window.addEventListener("resize",()=>{if(resultModal?.classList.contains("open"))drawViewer()});
 

@@ -76,6 +76,10 @@ class RetargetApiContractTests(unittest.TestCase):
         self.assertEqual(config["mappings"], [])
         self.assertEqual(config["analytic_joint_target"]["joint_weights"], {})
         self.assertEqual(config["interframe_joint_acceleration_limit"]["overrides"], {})
+        self.assertEqual(
+            config["interframe_joint_acceleration_limit"]["default_rad_s2"],
+            220.0,
+        )
         validate_retarget_config(variant, config)
 
     def test_analytic_joint_detection_endpoint_uses_runtime_model(self) -> None:
