@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from server.robot_registry import (
     RobotRegistryError,
@@ -150,3 +151,140 @@ def get_robot_catalog():
         return public_catalog(repo_root())
     except RobotRegistryError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/robots/viewer/launch")
+def launch_registered_robot_viewer(
+    robot_variant: str,
+    manufacturer: str,
+    robot_id: str,
+    capsule_id: str,
+    run_id: str,
+    stage: Literal["primary", "main"] = "primary",
+    main_id: str = "legacy",
+    user_id: str = "local_user",
+):
+    record = _registered_variant(
+        robot_variant, manufacturer=manufacturer, robot_id=robot_id,
+    )
+    from server.api.retarget_artifact_api import (
+        MAIN_ID_RE, RUN_RE, resolve_main_result_dir, robot_dir,
+    )
+    from server.api.capsule_api import CAPSULE_ID_RE
+    from server.robot_viewer_launcher import launch_robot_viewer
+
+    if not CAPSULE_ID_RE.fullmatch(capsule_id) or user_id != "local_user":
+        raise HTTPException(status_code=400, detail="Invalid Viewer context")
+    if not RUN_RE.fullmatch(run_id):
+        raise HTTPException(status_code=400, detail="Retargeted Data IDを選択してください。")
+    run = robot_dir(capsule_id, robot_variant, user_id) / run_id
+    if stage == "main":
+        if main_id == "new":
+            raise HTTPException(status_code=400, detail="Main Resultを選択してください。")
+        if main_id == "legacy":
+            result_dir, file_id = run, run_id
+        else:
+            if not MAIN_ID_RE.fullmatch(main_id) or not main_id.startswith(f"{run_id}-"):
+                raise HTTPException(status_code=400, detail="Invalid main_id")
+            result_dir = resolve_main_result_dir(
+                capsule_id, robot_variant, run_id, main_id, user_id,
+            )
+            file_id = main_id
+        candidates = (
+            result_dir / f"{file_id}_main.pkl",
+            result_dir / f"{file_id}_main.npz",
+        )
+    else:
+        candidates = (
+            run / f"{run_id}_primary.pkl",
+            run / f"{run_id}_primary.npz",
+            run / "primary.pkl",
+        )
+    motion = next((path for path in candidates if path.is_file()), None)
+    if motion is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{stage.title()} motionが見つかりません。Retargetingを実行してください。",
+        )
+
+    try:
+        pid = launch_robot_viewer(record, motion)
+    except (FileNotFoundError, OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "ok": True, "pid": pid, "robot_variant": record.variant_id,
+        "stage": stage, "motion_file": motion.name,
+    }
+
+
+@router.get("/robots/viewer/browser/config")
+def get_browser_robot_viewer_config(
+    robot_variant: str,
+    manufacturer: str,
+    robot_id: str,
+    capsule_id: str | None = None,
+    run_id: str | None = None,
+    stage: Literal["primary", "main"] = "primary",
+    main_id: str = "legacy",
+    user_id: str = "local_user",
+):
+    """Describe one registered MJCF and its transitive browser-loadable assets."""
+    record = _registered_variant(
+        robot_variant, manufacturer=manufacturer, robot_id=robot_id,
+    )
+    motion_query = None
+    if any(value is not None for value in (capsule_id, run_id)):
+        from server.api.capsule_api import CAPSULE_ID_RE
+        from server.api.retarget_artifact_api import MAIN_ID_RE, RUN_RE
+
+        if (
+            user_id != "local_user"
+            or not capsule_id
+            or not CAPSULE_ID_RE.fullmatch(capsule_id)
+            or not run_id
+            or not RUN_RE.fullmatch(run_id)
+        ):
+            raise HTTPException(status_code=400, detail="Invalid Viewer motion context")
+        if stage == "main" and main_id not in {"legacy"} and (
+            not MAIN_ID_RE.fullmatch(main_id) or not main_id.startswith(f"{run_id}-")
+        ):
+            raise HTTPException(status_code=400, detail="Invalid main_id")
+        motion_query = {
+            "capsule_id": capsule_id,
+            "run_id": run_id,
+            "robot_variant": robot_variant,
+            "stage": stage,
+            "main_id": main_id,
+            "user_id": user_id,
+        }
+    from server.robot_browser_viewer import (
+        RobotBrowserViewerError, browser_viewer_config,
+    )
+    try:
+        return browser_viewer_config(record, motion_query=motion_query)
+    except (OSError, RobotBrowserViewerError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/robots/viewer/browser/asset")
+def get_browser_robot_viewer_asset(
+    path: str,
+    robot_variant: str,
+    manufacturer: str,
+    robot_id: str,
+):
+    record = _registered_variant(
+        robot_variant, manufacturer=manufacturer, robot_id=robot_id,
+    )
+    from server.robot_browser_viewer import (
+        RobotBrowserViewerError, resolve_browser_asset,
+    )
+    try:
+        asset = resolve_browser_asset(record, path)
+    except (OSError, RobotBrowserViewerError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        asset,
+        filename=asset.name,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )

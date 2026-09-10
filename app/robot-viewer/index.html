@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MEVA Cloud Robot Viewer</title>
+  <link rel="stylesheet" href="./viewer.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>ROBOT VIEWER</strong>
+      <span id="robotTitle">Loading…</span>
+    </div>
+    <div class="toolbar">
+      <label>POSE <select id="poseSelect"><option value="model_default">MODEL DEFAULT</option><option value="standing">STANDING POSE</option><option value="motion">MOTION</option></select></label>
+      <button id="playButton" type="button" disabled>PLAY</button>
+      <button id="resetCameraButton" type="button">RESET CAMERA</button>
+    </div>
+  </header>
+  <main>
+    <section id="viewport" aria-label="Robot 3D viewport">
+      <div id="loading" class="loading"><span></span><b id="loadingText">MuJoCo WASM を初期化しています…</b></div>
+      <div id="errorPanel" class="error-panel" hidden><strong>Viewerを開けませんでした</strong><p id="errorText"></p><button id="retryButton" type="button">RETRY</button></div>
+      <div id="selectionLabel" class="selection-label" hidden></div>
+      <div class="help">左ドラッグ: Orbit　右ドラッグ: Pan　Wheel: Zoom　Click: Select</div>
+    </section>
+    <aside>
+      <section class="info-card">
+        <div class="eyebrow">SELECTED</div>
+        <strong id="selectedName">None</strong>
+        <div id="selectedDetail" class="muted">Robotをクリックするか一覧から選択してください。</div>
+      </section>
+      <section class="settings">
+        <label><input id="jointVizToggle" type="checkbox"> Joint / axis</label>
+        <label><input id="collisionToggle" type="checkbox"> Collision group</label>
+        <label><input id="transparentToggle" type="checkbox"> Transparent</label>
+        <label><input id="labelsToggle" type="checkbox" checked> Selected name</label>
+      </section>
+      <div class="tabs"><button class="active" data-tab="bodies" type="button">BODIES / LINKS</button><button data-tab="joints" type="button">JOINTS</button></div>
+      <input id="filterInput" class="filter" type="search" placeholder="Filter names…">
+      <div id="structureList" class="structure-list"></div>
+      <section class="motion-panel">
+        <input id="timeline" type="range" min="0" max="0" value="0" disabled>
+        <div><span id="frameText">FRAME —</span><span id="fpsText">— FPS</span></div>
+      </section>
+      <section id="warningPanel" class="warning-panel" hidden></section>
+    </aside>
+  </main>
+  <script type="module">
+    import("/assets/robot-viewer/browser-viewer.js").catch(error => {
+      const panel = document.getElementById("errorPanel");
+      panel.hidden = false;
+      document.getElementById("loading").hidden = true;
+      document.getElementById("errorText").textContent = `Viewer bundle load error: ${error.message}`;
+    });
+  </script>
+</body>
+</html>

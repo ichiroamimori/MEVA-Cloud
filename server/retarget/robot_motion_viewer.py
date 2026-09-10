@@ -7,6 +7,7 @@ with one the same model is driven by the GMR-compatible motion arrays.
 from __future__ import annotations
 
 import math
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -285,6 +286,56 @@ def load_viewer_motion(
     )
 
 
+def _maximize_current_process_window() -> bool:
+    """Maximize this process's visible native Viewer window on Windows."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    process_id = os.getpid()
+    found: list[int] = []
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def visit(window: int, _parameter: int) -> bool:
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+        if owner.value == process_id and user32.IsWindowVisible(window):
+            found.append(window)
+            return False
+        return True
+
+    callback = callback_type(visit)
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        found.clear()
+        user32.EnumWindows(callback, 0)
+        if found:
+            user32.ShowWindow(found[0], 3)  # SW_MAXIMIZE
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _motion_frame_for_elapsed(
+    origin_frame: int,
+    elapsed_s: float,
+    *,
+    frame_count: int,
+    fps: float,
+    speed: float,
+    loop: bool,
+) -> tuple[int, bool]:
+    """Return the wall-clock motion frame and whether playback reached its end."""
+    unwrapped = origin_frame + int(max(0.0, elapsed_s) * fps * speed)
+    if unwrapped < frame_count:
+        return unwrapped, False
+    if loop:
+        return unwrapped % frame_count, False
+    return frame_count - 1, True
+
+
 def run_native_viewer(
     robot: RobotViewerModel,
     motion: MotionData | None = None,
@@ -295,6 +346,7 @@ def run_native_viewer(
     axis_length_m: float | None = None,
     show_labels: bool = False,
     start_paused: bool = False,
+    maximized: bool = False,
 ) -> None:
     """Open MuJoCo's interactive native viewer."""
     if not math.isfinite(speed) or speed <= 0.0:
@@ -335,6 +387,8 @@ def run_native_viewer(
         "transparent": False,
         "appearance_dirty": True,
         "dirty": True,
+        "playback_origin_frame": 0,
+        "playback_origin_time": time.perf_counter(),
     }
 
     def selected_label() -> str:
@@ -357,6 +411,9 @@ def run_native_viewer(
     def key_callback(keycode: int) -> None:
         if keycode == KEY_SPACE and motion is not None:
             state["paused"] = not state["paused"]
+            if not state["paused"]:
+                state["playback_origin_frame"] = int(state["frame"])
+                state["playback_origin_time"] = time.perf_counter()
             print(f"[{'PAUSE' if state['paused'] else 'PLAY'}] {frame_label()}")
         elif keycode == KEY_RIGHT and motion is not None and state["paused"]:
             state["step"] = 1
@@ -473,6 +530,8 @@ def run_native_viewer(
         show_left_ui=False,
         show_right_ui=False,
     ) as viewer:
+        if maximized:
+            _maximize_current_process_window()
         viewer.cam.type = (
             mujoco.mjtCamera.mjCAMERA_FREE
             if state["camera_mode"] == "free"
@@ -481,15 +540,23 @@ def run_native_viewer(
         viewer.cam.trackbodyid = (
             -1 if state["camera_mode"] == "free" else robot.root_body_id
         )
-        viewer.cam.lookat[:] = robot.model.stat.center
+        # Model stat.center describes the compiled reference model and can be far
+        # from a motion's first root position. Frame the pose actually displayed.
+        viewer.cam.lookat[:] = robot.data.subtree_com[robot.root_body_id]
         viewer.cam.distance = max(0.5, float(robot.model.stat.extent) * 1.7)
         viewer.cam.azimuth = 135.0
         viewer.cam.elevation = -15.0
 
+        # Window creation/maximization can deliver transient input and can take
+        # several seconds on a large display. Start playback from frame zero only
+        # after that work is complete.
+        state["paused"] = motion is None or bool(start_paused)
+        state["playback_origin_frame"] = int(state["frame"])
+        state["playback_origin_time"] = time.perf_counter()
+
         last_frame = -1
         alt_pan = _WindowsAltLeftPan(viewer) if sys.platform == "win32" else None
         while viewer.is_running():
-            started = time.perf_counter()
             if state["camera_dirty"]:
                 with viewer.lock():
                     viewer.cam.type = (
@@ -504,6 +571,19 @@ def run_native_viewer(
                     )
                 state["camera_dirty"] = False
             if motion is not None:
+                if not state["paused"]:
+                    frame, ended = _motion_frame_for_elapsed(
+                        int(state["playback_origin_frame"]),
+                        time.perf_counter() - float(state["playback_origin_time"]),
+                        frame_count=motion.frame_count,
+                        fps=motion.fps,
+                        speed=speed,
+                        loop=loop,
+                    )
+                    state["frame"] = frame
+                    if ended:
+                        state["paused"] = True
+                        print(f"[END] {frame_label()}")
                 frame = int(state["frame"])
                 if state["paused"] and int(state["step"]):
                     frame = max(
@@ -605,17 +685,14 @@ def run_native_viewer(
             if motion is None or state["paused"]:
                 time.sleep(0.01)
                 continue
-            next_frame = int(state["frame"]) + 1
-            if next_frame >= motion.frame_count:
-                if loop:
-                    next_frame = 0
-                else:
-                    next_frame = motion.frame_count - 1
-                    state["paused"] = True
-                    print(f"[END] {frame_label()}")
-            state["frame"] = next_frame
-            elapsed = time.perf_counter() - started
-            delay = 1.0 / (motion.fps * speed) - elapsed
+            rate = motion.fps * speed
+            elapsed = time.perf_counter() - float(state["playback_origin_time"])
+            completed_intervals = int(max(0.0, elapsed) * rate)
+            next_deadline = (
+                float(state["playback_origin_time"])
+                + (completed_intervals + 1) / rate
+            )
+            delay = next_deadline - time.perf_counter()
             if delay > 0.0:
                 time.sleep(delay)
 
@@ -852,7 +929,7 @@ def _link_list_text(
     *,
     cursor_index: int,
     selected_index: int,
-    active: bool,
+    active: bool = False,
     visible_rows: int = 11,
 ) -> str:
     """Build a compact, fixed-position Link selector for the 3D overlay."""

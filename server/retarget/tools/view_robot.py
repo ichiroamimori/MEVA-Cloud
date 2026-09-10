@@ -38,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-loop", action="store_true")
     parser.add_argument("--start-paused", action="store_true")
     parser.add_argument(
+        "--maximized", action="store_true",
+        help="Start the native Viewer window maximized",
+    )
+    parser.add_argument(
         "--axes",
         choices=("off", "selected", "all"),
         default="off",
@@ -105,6 +109,7 @@ def main() -> None:
             axis_length_m=args.axis_length,
             show_labels=args.show_link_list,
             start_paused=args.start_paused,
+            maximized=args.maximized,
         )
     except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
         parser.error(str(exc))

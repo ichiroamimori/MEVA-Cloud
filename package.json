@@ -1,0 +1,14 @@
+{
+  "name": "meva-cloud-web-assets",
+  "private": true,
+  "scripts": {
+    "build:robot-viewer": "node scripts/build_robot_viewer.mjs"
+  },
+  "dependencies": {
+    "@mujoco/mujoco": "3.11.0",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9"
+  }
+}

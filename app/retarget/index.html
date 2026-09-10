@@ -1442,6 +1442,8 @@ input[type="checkbox"]{
       <button class="stage-tab" type="button" data-tab="modify-z">Contact Refinement <span class="tab-state">Review</span></button>
       <button class="stage-tab" type="button" data-tab="translate">Translate <span class="tab-state">Later</span></button>
     </nav>
+    <button class="btn" id="robotViewerBtn" type="button" title="選択中のRetargeting結果をBrowser Robot Viewerで開く">VIEWER</button>
+    <span id="robotViewerStatus" role="status" style="font-size:12px;max-width:180px;overflow-wrap:anywhere"></span>
     <button class="btn view-data-top" id="viewResultBtn" type="button">VIEW DATA</button>
   </div>
 
@@ -2122,6 +2124,8 @@ input[type="checkbox"]{
         </select>
       </div>
 
+      <span id="dataRobotViewerStatus" role="status" style="font-size:12px;max-width:180px;overflow-wrap:anywhere"></span>
+      <button class="btn" id="dataRobotViewerBtn" type="button" style="flex-shrink:0" title="選択中のRetargeting結果をBrowser Robot Viewerで開く">VIEWER</button>
       <button class="result-modal-close" id="rvCloseBtn" type="button">×</button>
     </div>
 
@@ -2274,6 +2278,7 @@ input[type="checkbox"]{
     </div>
   </div>
 </div>
+<script src="../assets/js/robot-viewer.js"></script>
 <script>
 (() => {
   const MEVA_SEGMENTS = [
@@ -2313,6 +2318,38 @@ input[type="checkbox"]{
   const capsuleSummary = document.getElementById("capsuleSummary");
   const mainCapsuleSummary = document.getElementById("mainCapsuleSummary");
   const targetRobotSelect = document.getElementById("targetRobotSelect");
+  for (const [buttonId, statusId] of [
+    ["robotViewerBtn", "robotViewerStatus"],
+    ["dataRobotViewerBtn", "dataRobotViewerStatus"],
+  ]) {
+    document.getElementById(buttonId).addEventListener("click", event => {
+      const option = targetRobotSelect?.selectedOptions?.[0];
+      const inViewData = buttonId === "dataRobotViewerBtn";
+      const activeStage = document.querySelector(".stage-tab.active")?.dataset?.tab || "mapping";
+      let runId = retargetedDataSelect?.value || "new";
+      let stage = "primary";
+      let mainId = "legacy";
+      if(inViewData && rvData){
+        runId = rvData.runId;
+        mainId = rvData.mainId || "legacy";
+        const selectedA = rvStageA?.value;
+        const selectedB = rvStageB?.value;
+        stage = selectedA === "main" || selectedA === "primary"
+          ? selectedA
+          : (selectedB === "main" ? "main" : "primary");
+      }else if(activeStage === "primary" && mainRetargetedDataSelect?.value){
+        runId = mainRetargetedDataSelect.value;
+        mainId = mainResultSelect?.value || "new";
+        stage = mainId === "new" ? "primary" : "main";
+      }
+      launchRobotViewer({
+        manufacturer_id: option?.dataset.manufacturerId,
+        robot_id: option?.dataset.robotId,
+        variant: {id: option?.dataset.variantId},
+      }, {capsule_id:capsuleId, run_id:runId, stage, main_id:mainId},
+      event.currentTarget, document.getElementById(statusId));
+    });
+  }
   const mainTargetRobotSummary = document.getElementById("mainTargetRobotSummary");
   const startFrame = document.getElementById("startFrame");
   const endFrame = document.getElementById("endFrame");

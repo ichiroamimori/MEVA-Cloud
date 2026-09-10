@@ -18,6 +18,9 @@ from server.robot_registry import resolve_variant, validate_retarget_config
 
 EXPECTED_ROUTES = {
     ("GET", "/api/retarget/robots"),
+    ("POST", "/api/retarget/robots/viewer/launch"),
+    ("GET", "/api/retarget/robots/viewer/browser/config"),
+    ("GET", "/api/retarget/robots/viewer/browser/asset"),
     ("GET", "/api/retarget/configs"),
     ("GET", "/api/retarget/configs/load"),
     ("POST", "/api/retarget/configs"),
