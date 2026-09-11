@@ -41,6 +41,11 @@ from server.api.retarget_robot_api import (
     _runtime_robot_config,
     repo_root,
 )
+from server.remote_ik_client import (
+    RemoteIKError,
+    configured_backend,
+    execute_remote_job,
+)
 
 
 router = APIRouter()
@@ -230,9 +235,155 @@ def _run_job(
             except Exception:
                 pass
 
+
+def _replace_remote_primary_result(
+    staging: Path, destination: Path, *, overwrite: bool,
+) -> tuple[Path, list[str]]:
+    if destination.exists():
+        if not overwrite:
+            raise FileExistsError(f"Retarget run already exists: {destination}")
+        shutil.rmtree(destination)
+    staging.replace(destination)
+    files = sorted(path.name for path in destination.iterdir() if path.is_file())
+    return destination, files
+
+
+def _existing_primary_result(destination: Path) -> tuple[Path, list[str]]:
+    if not destination.is_dir():
+        raise FileNotFoundError(f"Remote Primary result was not received: {destination}")
+    return destination, sorted(path.name for path in destination.iterdir() if path.is_file())
+
+
+def _restore_received_source_path(received_config: Path, local_config: Path) -> None:
+    received = json.loads(received_config.read_text(encoding="utf-8"))
+    local = json.loads(local_config.read_text(encoding="utf-8"))
+    if "source" in local:
+        received["source"] = deepcopy(local["source"])
+    atomic_write_json(received_config, received)
+
+
+def _restore_remote_primary_config(destination: Path, request_path: Path) -> None:
+    run_id = destination.name
+    _restore_received_source_path(
+        destination / f"{run_id}_primary_config.json", request_path,
+    )
+
+
+def _receive_remote_primary(
+    staging: Path, destination: Path, request_path: Path, *, overwrite: bool,
+) -> None:
+    _replace_remote_primary_result(staging, destination, overwrite=overwrite)
+    _restore_remote_primary_config(destination, request_path)
+
+
+def _merge_remote_main_result(
+    staging: Path, destination: Path, local_config: Path,
+) -> None:
+    received_configs = list(staging.glob("*_main_config.json"))
+    if len(received_configs) != 1:
+        raise RuntimeError("Remote Main result must contain one config snapshot")
+    _restore_received_source_path(received_configs[0], local_config)
+    for path in staging.iterdir():
+        if not path.is_file():
+            raise RuntimeError(f"Unexpected nested Remote Main result: {path.name}")
+        path.replace(destination / path.name)
+    staging.rmdir()
+
+
+def _run_remote_job(
+    job_id: str,
+    *,
+    stage: str,
+    config_path: Path,
+    result_staging: Path,
+    primary_directory: Path | None,
+    iteration_diagnostics: bool,
+    success_finalize: Callable[[], tuple[Path, list[str]]],
+    failure_finalize: Callable[[list[str]], tuple[Path, list[str]]],
+    receive_finalize: Callable[[], None] | None = None,
+    cleanup: Callable[[], None] | None = None,
+) -> None:
+    remote_job_id: str | None = None
+
+    def status_update(remote: dict[str, Any]) -> None:
+        nonlocal remote_job_id
+        remote_job_id = str(remote.get("job_id") or remote_job_id or "") or None
+        values = {
+            key: remote[key]
+            for key in ("progress", "processed", "total", "source_frame", "message")
+            if key in remote
+        }
+        values["remote_job_id"] = remote_job_id
+        values["remote_status"] = remote.get("status")
+        update_job(job_id, **values)
+
+    try:
+        update_job(job_id, status="running", message="Uploading to Remote IK worker...")
+        remote = execute_remote_job(
+            repository_root=repo_root(),
+            stage=stage,
+            client_job_id=job_id,
+            config_path=config_path,
+            result_staging=result_staging,
+            primary_directory=primary_directory,
+            iteration_diagnostics=iteration_diagnostics,
+            status_callback=status_update,
+        )
+        if receive_finalize is not None:
+            receive_finalize()
+        _, files = success_finalize()
+        update_job(
+            job_id,
+            status="done",
+            progress=1.0,
+            message="Completed",
+            files=files,
+            remote_job_id=str(remote.get("job_id") or remote_job_id or "") or None,
+            elapsed_sec=remote.get("elapsed_sec"),
+        )
+    except RemoteIKError as exc:
+        if result_staging.exists() and receive_finalize is not None:
+            try:
+                receive_finalize()
+            except Exception:
+                pass
+        try:
+            _, files = failure_finalize([f"{exc.code}: {exc}"])
+        except Exception:
+            files = []
+        update_job(
+            job_id,
+            status="failed",
+            message="Retarget failed",
+            error=f"{exc.code}: {exc}",
+            error_code=exc.code,
+            remote_job_id=exc.remote_job_id or remote_job_id,
+            files=files,
+        )
+    except Exception as exc:
+        update_job(
+            job_id,
+            status="failed",
+            message="Retarget failed",
+            error=f"{type(exc).__name__}: {exc}",
+            error_code="unexpected_exception",
+            remote_job_id=remote_job_id,
+        )
+    finally:
+        config_path.unlink(missing_ok=True)
+        if result_staging.exists():
+            shutil.rmtree(result_staging, ignore_errors=True)
+        if cleanup is not None:
+            try:
+                cleanup()
+            except Exception:
+                pass
+
 @router.post("/run-start")
 def run_retarget_start(req: RunRequest):
     run_id, rdir, cmd, request_path, overwrite = _prepare_run(req)
+
+    backend = configured_backend()
 
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
@@ -251,18 +402,41 @@ def run_retarget_start(req: RunRequest):
                 else "Preparing..."
             ),
             "overwritten": overwrite,
+            "backend": backend,
         }
 
-    thread = threading.Thread(
-        target=_run_job,
-        args=(job_id, run_id, rdir, cmd, request_path, overwrite),
-        kwargs={
-            "failure_finalize": lambda log_lines: _publish_primary_failure_artifacts(
-                rdir, run_id, request_path, log_lines,
-            ),
-        },
-        daemon=True,
-    )
+    if backend == "remote_python":
+        remote_staging = rdir / f".{run_id}.{job_id}.remote-result"
+        thread = threading.Thread(
+            target=_run_remote_job,
+            kwargs={
+                "job_id": job_id,
+                "stage": "primary",
+                "config_path": request_path,
+                "result_staging": remote_staging,
+                "primary_directory": None,
+                "iteration_diagnostics": req.iteration_diagnostics,
+                "success_finalize": lambda: _existing_primary_result(rdir / run_id),
+                "failure_finalize": lambda log_lines: _publish_primary_failure_artifacts(
+                    rdir, run_id, request_path, log_lines,
+                ),
+                "receive_finalize": lambda: _receive_remote_primary(
+                    remote_staging, rdir / run_id, request_path, overwrite=overwrite,
+                ),
+            },
+            daemon=True,
+        )
+    else:
+        thread = threading.Thread(
+            target=_run_job,
+            args=(job_id, run_id, rdir, cmd, request_path, overwrite),
+            kwargs={
+                "failure_finalize": lambda log_lines: _publish_primary_failure_artifacts(
+                    rdir, run_id, request_path, log_lines,
+                ),
+            },
+            daemon=True,
+        )
     thread.start()
 
     return JOBS[job_id]
@@ -412,6 +586,7 @@ def run_main_start(req: MainRunRequest):
     script = repo_root() / "server" / "retarget" / "main_retarget.py"
     cmd = [sys.executable, "-u", str(script), str(cfg_path)]
 
+    backend = configured_backend()
     with JOBS_LOCK:
         initial_total = expected_frames
         JOBS[job_id] = {
@@ -430,23 +605,50 @@ def run_main_start(req: MainRunRequest):
                 else "Preparing..."
             ),
             "overwritten": overwrite,
+            "backend": backend,
         }
 
-    thread = threading.Thread(
-        target=_run_job,
-        args=(job_id, main_id, run, cmd, None, overwrite),
-        kwargs={
-            "finalize": lambda: _publish_main_artifact_set(
-                staging_dir, final_dir, main_id,
-                expected_frames=expected_frames, generation_id=job_id,
-            ),
-            "failure_finalize": lambda log_lines: _publish_main_failure_artifacts(
-                staging_dir, final_dir, main_id, log_lines,
-            ),
-            "cleanup": lambda: _cleanup_main_staging(staging_dir, main_id),
-        },
-        daemon=True,
-    )
+    if backend == "remote_python":
+        remote_staging = staging_dir / ".remote-result"
+        thread = threading.Thread(
+            target=_run_remote_job,
+            kwargs={
+                "job_id": job_id,
+                "stage": "main",
+                "config_path": cfg_path,
+                "result_staging": remote_staging,
+                "primary_directory": run,
+                "iteration_diagnostics": False,
+                "receive_finalize": lambda: _merge_remote_main_result(
+                    remote_staging, staging_dir, cfg_path,
+                ),
+                "success_finalize": lambda: _publish_main_artifact_set(
+                    staging_dir, final_dir, main_id,
+                    expected_frames=expected_frames, generation_id=job_id,
+                ),
+                "failure_finalize": lambda log_lines: _publish_main_failure_artifacts(
+                    staging_dir, final_dir, main_id, log_lines,
+                ),
+                "cleanup": lambda: _cleanup_main_staging(staging_dir, main_id),
+            },
+            daemon=True,
+        )
+    else:
+        thread = threading.Thread(
+            target=_run_job,
+            args=(job_id, main_id, run, cmd, None, overwrite),
+            kwargs={
+                "finalize": lambda: _publish_main_artifact_set(
+                    staging_dir, final_dir, main_id,
+                    expected_frames=expected_frames, generation_id=job_id,
+                ),
+                "failure_finalize": lambda log_lines: _publish_main_failure_artifacts(
+                    staging_dir, final_dir, main_id, log_lines,
+                ),
+                "cleanup": lambda: _cleanup_main_staging(staging_dir, main_id),
+            },
+            daemon=True,
+        )
     thread.start()
     return JOBS[job_id]
 
