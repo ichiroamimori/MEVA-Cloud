@@ -7,7 +7,7 @@ from unittest.mock import patch
 import mink
 import mujoco
 
-from ik_solver import (
+from server.retarget.ik_solver import (
     IKFrameSpec,
     IKSequenceFailure,
     PreparedIKFrame,

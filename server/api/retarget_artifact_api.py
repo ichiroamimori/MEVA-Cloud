@@ -6,6 +6,7 @@ import math
 import re
 import shutil
 import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -14,14 +15,17 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from server.capsule_identity import CAPSULE_ID_RE
 from server.retarget_config_store import workspace_root
 from server.api.retarget_robot_api import repo_root
+from server.robot_registry import RobotRegistryError, resolve_variant
 
 
 router = APIRouter()
 
 RUN_RE = re.compile(r"^\d{10}$")
 MAIN_ID_RE = re.compile(r"^(\d{10})-(\d{2})$")
+SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 
@@ -31,15 +35,30 @@ def robot_dir(
     robot_variant: str,
     user_id: str = "local_user",
 ) -> Path:
-    return (
-        workspace_root()
-        / "users"
-        / user_id
-        / "capsules"
-        / capsule_id
-        / "retarget"
-        / robot_variant
-    )
+    if not CAPSULE_ID_RE.fullmatch(capsule_id):
+        raise HTTPException(status_code=404, detail="Capsule not found")
+    if not SAFE_COMPONENT_RE.fullmatch(user_id) or user_id in {".", ".."}:
+        raise HTTPException(status_code=404, detail="Capsule not found")
+    try:
+        registered = resolve_variant(robot_variant, root=repo_root())
+    except RobotRegistryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    users_root = (workspace_root() / "users").resolve()
+    capsule_root = (users_root / user_id / "capsules").resolve()
+    capsule = (capsule_root / capsule_id).resolve()
+    try:
+        capsule.relative_to(users_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Capsule not found") from exc
+    if capsule.parent != capsule_root or not capsule.is_dir():
+        raise HTTPException(status_code=404, detail="Capsule not found")
+    destination = (capsule / "retarget" / registered.variant_id).resolve()
+    try:
+        destination.relative_to(capsule)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Robot Variant path") from exc
+    return destination
 
 def default_config_path(
     capsule_id: str,
@@ -74,6 +93,8 @@ def main_results_dir(
     user_id: str = "local_user",
 ) -> Path:
     """Preferred directory containing new Main result directories."""
+    if not RUN_RE.fullmatch(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id")
     return robot_dir(capsule_id, robot_variant, user_id) / run_id
 
 def resolve_main_result_dir(
@@ -85,6 +106,8 @@ def resolve_main_result_dir(
     *,
     must_exist: bool = True,
 ) -> Path:
+    if not MAIN_ID_RE.fullmatch(main_id) or not main_id.startswith(f"{run_id}-"):
+        raise HTTPException(status_code=400, detail="Invalid main_id")
     run = main_results_dir(capsule_id, robot_variant, run_id, user_id)
     preferred = run / main_id
     legacy = run / "main" / main_id
@@ -111,12 +134,44 @@ def list_main_result_ids(path: Path, run_id: str) -> list[str]:
         )
     return sorted(result, reverse=True)
 
-def allocate_main_id(path: Path, run_id: str) -> str:
-    nums = [int(x.rsplit("-", 1)[1]) for x in list_main_result_ids(path, run_id)]
-    number = max(nums) + 1 if nums else 1
-    if number > 99:
-        raise HTTPException(status_code=409, detail=f"Main ID range exhausted for {run_id}")
-    return f"{run_id}-{number:02d}"
+def _reserve_id(path: Path, candidate: str, reservation_id: str) -> Path | None:
+    marker = path / f".{candidate}.reserved"
+    if (path / candidate).exists():
+        return None
+    try:
+        with marker.open("x", encoding="utf-8") as stream:
+            stream.write(reservation_id + "\n")
+    except FileExistsError:
+        return None
+    if (path / candidate).exists():
+        marker.unlink(missing_ok=True)
+        return None
+    return marker
+
+
+def release_id_reservation(marker: Path | None, reservation_id: str) -> None:
+    if marker is None:
+        return
+    try:
+        if marker.read_text(encoding="utf-8").strip() == reservation_id:
+            marker.unlink(missing_ok=True)
+    except FileNotFoundError:
+        pass
+
+
+def allocate_main_id(
+    path: Path, run_id: str, reservation_id: str | None = None,
+) -> tuple[str, Path]:
+    if not RUN_RE.fullmatch(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id")
+    path.mkdir(parents=True, exist_ok=True)
+    owner = reservation_id or uuid.uuid4().hex
+    for number in range(1, 100):
+        candidate = f"{run_id}-{number:02d}"
+        marker = _reserve_id(path, candidate, owner)
+        if marker is not None:
+            return candidate, marker
+    raise HTTPException(status_code=409, detail=f"Main ID range exhausted for {run_id}")
 
 def main_result_json_path(
     capsule_id: str,
@@ -161,19 +216,18 @@ def list_run_ids(path: Path) -> list[str]:
     ]
     return sorted(out, reverse=True)
 
-def allocate_run_id(path: Path) -> str:
+def allocate_run_id(
+    path: Path, reservation_id: str | None = None,
+) -> tuple[str, Path]:
     prefix = datetime.now().strftime("%y%m%d")
-    nums: list[int] = []
-    if path.exists():
-        for p in path.iterdir():
-            if not p.is_dir():
-                continue
-            m = re.fullmatch(prefix + r"(\d{4})", p.name)
-            if m:
-                nums.append(int(m.group(1)))
-    # Preserve the convention already used by primary_retarget.py.
-    n = max(nums) + 1 if nums else 1
-    return f"{prefix}{n:04d}"
+    path.mkdir(parents=True, exist_ok=True)
+    owner = reservation_id or uuid.uuid4().hex
+    for number in range(1, 10000):
+        candidate = f"{prefix}{number:04d}"
+        marker = _reserve_id(path, candidate, owner)
+        if marker is not None:
+            return candidate, marker
+    raise HTTPException(status_code=409, detail="Primary Run ID range exhausted for today")
 
 def count_source_frames(cfg: dict[str, Any]) -> int | None:
     try:
@@ -391,7 +445,6 @@ def _publish_main_artifact_set(
         staging, main_id, expected_frames=expected_frames,
         generation_id=generation_id,
     )
-    destination.mkdir(parents=True, exist_ok=True)
     publish_order = (
         f"{main_id}_main_target.npz",
         f"{main_id}_main.npz",
@@ -399,13 +452,32 @@ def _publish_main_artifact_set(
         f"{main_id}_main.pkl",
         f"{main_id}_main_viewer.bin",
     )
-    for name in publish_order:
-        (staging / name).replace(destination / name)
-    _validate_main_artifact_set(
-        destination, main_id, expected_frames=expected_frames,
-        generation_id=generation_id,
-    )
+    _replace_result_directory(staging, destination, generation_id)
     return destination, list(publish_order)
+
+
+def _replace_result_directory(
+    staging: Path, destination: Path, generation_id: str,
+) -> None:
+    """Publish one complete result directory without exposing a mixed file set."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    backup = destination.parent / f".{destination.name}.{generation_id}.previous"
+    if backup.exists():
+        raise RuntimeError(f"Main publish backup already exists: {backup.name}")
+    moved_previous = False
+    try:
+        if destination.exists():
+            destination.replace(backup)
+            moved_previous = True
+        staging.replace(destination)
+    except Exception:
+        if moved_previous and backup.exists() and not destination.exists():
+            backup.replace(destination)
+        raise
+    if moved_previous:
+        # The new complete set is already live. A locked old file on Windows
+        # must not turn that successful publish into a failed job.
+        shutil.rmtree(backup, ignore_errors=True)
 
 def _publish_main_failure_artifacts(
     staging: Path, destination: Path, main_id: str, log_lines: list[str],
@@ -421,17 +493,19 @@ def _publish_main_failure_artifacts(
             "Main retarget failed.\n\n" + "\n".join(log_lines[-120:]) + "\n",
             encoding="utf-8",
         )
-    destination.mkdir(parents=True, exist_ok=True)
-    # A retry of the same Main ID must never leave a previously successful
-    # NPZ/PKL set beside the new failed status.
-    for name in (*_main_artifact_names(main_id), error_name):
-        (destination / name).unlink(missing_ok=True)
     publish_order = [config_name]
     if (staging / viewer_name).exists():
         publish_order.append(viewer_name)
     publish_order.append(error_name)
-    for name in publish_order:
-        (staging / name).replace(destination / name)
+    keep = set(publish_order)
+    for path in staging.iterdir():
+        if path.name in keep:
+            continue
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    _replace_result_directory(staging, destination, uuid.uuid4().hex)
     return destination, publish_order
 
 def _publish_primary_failure_artifacts(
@@ -487,6 +561,8 @@ def run_config_path(
     run_id: str,
     user_id: str = "local_user",
 ) -> Path:
+    if not RUN_RE.fullmatch(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id")
     run = robot_dir(capsule_id, robot_variant, user_id) / run_id
 
     preferred = run / f"{run_id}_primary_config.json"

@@ -122,7 +122,9 @@ def main(config_path: Path) -> None:
     cfg = load_json(config_path)
     repo_root = find_repo_root(config_path)
 
-    csv_path = resolve_repo_path(repo_root, cfg["source"]["file"])
+    source_cfg = cfg["source"]
+    csv_value = source_cfg.get("original_file") or source_cfg["file"]
+    csv_path = resolve_repo_path(repo_root, csv_value)
     xml_path = resolve_repo_path(repo_root, cfg["robot"]["mjcf"])
 
     if not csv_path.exists():

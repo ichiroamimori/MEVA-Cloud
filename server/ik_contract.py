@@ -12,6 +12,9 @@ from typing import Any, BinaryIO, Iterable
 
 CONTRACT_VERSION = "1.0"
 MANIFEST_NAME = "request.json"
+RESULT_MANIFEST_NAME = "result.json"
+RESULT_FORMAT = "meva_ik_result_zip_v2"
+MANIFEST_JSON_HASH = "canonical-json-sha256-v1"
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 ALLOWED_STAGES = {"primary", "main"}
 ALLOWED_BACKENDS = {"remote_python", "remote_native", "local_native"}
@@ -60,6 +63,14 @@ class IKRequest:
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise IKContractError(f"Invalid robot {key}")
             normalized_robot[key] = digest
+        manifest_json_sha256 = str(robot.get("manifest_json_sha256") or "").lower()
+        if manifest_json_sha256:
+            if not re.fullmatch(r"[0-9a-f]{64}", manifest_json_sha256):
+                raise IKContractError("Invalid robot manifest_json_sha256")
+            if robot.get("manifest_hash_algorithm") != MANIFEST_JSON_HASH:
+                raise IKContractError("Unsupported robot manifest_hash_algorithm")
+            normalized_robot["manifest_json_sha256"] = manifest_json_sha256
+            normalized_robot["manifest_hash_algorithm"] = MANIFEST_JSON_HASH
         config_path = _safe_archive_path(str(raw.get("config_path") or ""))
         raw_files = raw.get("files")
         if not isinstance(raw_files, list) or not raw_files:
@@ -122,6 +133,35 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def canonical_json_sha256(path: Path) -> str:
+    """Hash JSON values rather than formatting or checkout line endings."""
+    try:
+        value = json.loads(
+            path.read_text(encoding="utf-8-sig"),
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"non-standard JSON constant: {token}")
+            ),
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise IKContractError(f"Could not canonicalize JSON manifest: {exc}") from exc
+    canonical = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def robot_manifest_matches(path: Path, identity: dict[str, str]) -> bool:
+    """Compare a robot manifest using the newest hash understood by both peers."""
+    semantic_digest = identity.get("manifest_json_sha256")
+    if semantic_digest:
+        return canonical_json_sha256(path) == semantic_digest
+    return sha256_file(path) == identity.get("manifest_sha256")
 
 
 def mujoco_asset_fingerprint(model_path: Path, asset_root: Path) -> str:
@@ -255,3 +295,224 @@ def stream_to_file(stream: BinaryIO, destination: Path, *, max_bytes: int) -> in
                 raise IKContractError("IK request archive exceeds the configured size limit")
             output.write(chunk)
     return size
+
+
+def _result_artifact_id(stage: str, names: list[str]) -> str:
+    suffix = "_primary_config.json" if stage == "primary" else "_main_config.json"
+    candidates = [name[:-len(suffix)] for name in names if name.endswith(suffix)]
+    pattern = re.compile(r"^\d{10}$") if stage == "primary" else re.compile(r"^\d{10}-\d{2}$")
+    if len(candidates) != 1 or not pattern.fullmatch(candidates[0]):
+        raise IKContractError(f"Remote {stage} result must contain one valid config snapshot")
+    return candidates[0]
+
+
+def _required_result_names(stage: str, artifact_id: str) -> set[str]:
+    if stage == "primary":
+        return {
+            f"{artifact_id}_primary.npz",
+            f"{artifact_id}_primary_config.json",
+            f"{artifact_id}_primary_target.npz",
+            f"{artifact_id}_primary_viewer.bin",
+        }
+    return {
+        f"{artifact_id}_main.npz",
+        f"{artifact_id}_main_config.json",
+        f"{artifact_id}_main_target.npz",
+        f"{artifact_id}_main.pkl",
+        f"{artifact_id}_main_viewer.bin",
+    }
+
+
+def _allowed_result_names(stage: str, artifact_id: str) -> set[str]:
+    validation_prefix = f"{artifact_id}_{stage}_validation"
+    validation = {
+        f"{validation_prefix}.json",
+        f"{validation_prefix}_joint_limit_severity.csv",
+        f"{validation_prefix}_joint_limit_actual_rad.csv",
+        f"{validation_prefix}_joint_limit_margin_rad.csv",
+        f"{validation_prefix}_self_collision_severity.csv",
+        f"{validation_prefix}_self_collision_signed_distance_m.csv",
+        f"{validation_prefix}_foot_geom_z_m.csv",
+    }
+    common = _required_result_names(stage, artifact_id) | validation | {
+        f"{artifact_id}_error.log",
+    }
+    if stage == "primary":
+        return common | {
+            "diagnostics.csv",
+            "orientation_residuals.csv",
+            "iteration_orientation_residual_summary.csv",
+            "iteration_joint_delta_summary.csv",
+            "iteration_joint_delta_by_frame.csv",
+            "iteration_acceleration_soft_limit.csv",
+            "analytic_joint_targets.csv",
+            f"{artifact_id}_primary_post.csv",
+        }
+    if stage == "main":
+        return common | {
+            f"{artifact_id}_main_diagnostics.csv",
+            f"{artifact_id}_main_targets.csv",
+        }
+    raise IKContractError(f"Invalid Remote result stage: {stage}")
+
+
+def _validate_result_file_names(
+    stage: str, status: str, artifact_id: str, names: set[str],
+) -> None:
+    allowed = _allowed_result_names(stage, artifact_id)
+    for name in names:
+        safe = _safe_archive_path(name)
+        path = PurePosixPath(safe)
+        if len(path.parts) != 1:
+            raise IKContractError("Remote result files must use a flat layout")
+        if name not in allowed:
+            raise IKContractError(f"Unexpected Remote result file: {name}")
+    if status == "completed":
+        missing = _required_result_names(stage, artifact_id) - names
+        if missing:
+            raise IKContractError(
+                f"Remote {stage} result is incomplete: {', '.join(sorted(missing))}"
+            )
+
+
+def write_result_archive(
+    source: Path,
+    destination: Path,
+    request: IKRequest,
+    *,
+    status: str,
+) -> list[str]:
+    if status not in {"completed", "failed"}:
+        raise IKContractError(f"Invalid Remote result status: {status}")
+    paths = sorted(path for path in source.rglob("*") if path.is_file())
+    if not paths or len(paths) > 64:
+        raise IKContractError("Remote result has an invalid number of files")
+    names = [path.relative_to(source).as_posix() for path in paths]
+    artifact_id = _result_artifact_id(request.stage, names)
+    _validate_result_file_names(request.stage, status, artifact_id, set(names))
+    descriptors = [
+        {
+            "path": name,
+            "size": path.stat().st_size,
+            "sha256": sha256_file(path),
+        }
+        for name, path in zip(names, paths, strict=True)
+    ]
+    manifest = {
+        "schema_version": CONTRACT_VERSION,
+        "format": RESULT_FORMAT,
+        "stage": request.stage,
+        "status": status,
+        "client_job_id": request.client_job_id,
+        "artifact_id": artifact_id,
+        "files": descriptors,
+    }
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            RESULT_MANIFEST_NAME,
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        )
+        for name, path in zip(names, paths, strict=True):
+            archive.write(path, name)
+    return names
+
+
+def extract_result_archive(
+    archive_path: Path,
+    destination: Path,
+    *,
+    expected_stage: str,
+    expected_client_job_id: str,
+    expected_artifact_id: str,
+    max_uncompressed_bytes: int,
+    expected_status: str | None = None,
+    skip_pickle: bool = True,
+) -> list[str]:
+    if destination.exists():
+        raise IKContractError(f"Result staging path already exists: {destination}")
+    destination.mkdir(parents=True, exist_ok=False)
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            infos = [info for info in archive.infolist() if not info.is_dir()]
+            members = {info.filename: info for info in infos}
+            if len(members) != len(infos):
+                raise IKContractError("Remote result contains duplicate file names")
+            try:
+                manifest_info = members[RESULT_MANIFEST_NAME]
+            except KeyError as exc:
+                raise IKContractError("Remote result manifest is missing") from exc
+            if manifest_info.file_size > 1024 * 1024:
+                raise IKContractError("Remote result manifest exceeds 1 MiB")
+            try:
+                manifest = json.loads(archive.read(manifest_info).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise IKContractError("Remote result manifest is invalid JSON") from exc
+            if not isinstance(manifest, dict):
+                raise IKContractError("Remote result manifest must be an object")
+            if (
+                manifest.get("schema_version") != CONTRACT_VERSION
+                or manifest.get("format") != RESULT_FORMAT
+                or manifest.get("stage") != expected_stage
+                or manifest.get("client_job_id") != expected_client_job_id
+                or manifest.get("artifact_id") != expected_artifact_id
+            ):
+                raise IKContractError("Remote result identity does not match the submitted job")
+            status = str(manifest.get("status") or "")
+            if status not in {"completed", "failed"}:
+                raise IKContractError("Remote result has an invalid status")
+            if expected_status is not None and status != expected_status:
+                raise IKContractError("Remote result status does not match the Remote job")
+            raw_files = manifest.get("files")
+            if not isinstance(raw_files, list) or not raw_files or len(raw_files) > 64:
+                raise IKContractError("Remote result has an invalid file list")
+            declared: dict[str, dict[str, Any]] = {}
+            for item in raw_files:
+                if not isinstance(item, dict):
+                    raise IKContractError("Remote result has an invalid file descriptor")
+                name = _safe_archive_path(str(item.get("path") or ""))
+                size = item.get("size")
+                digest = str(item.get("sha256") or "").lower()
+                if (
+                    name in declared
+                    or not isinstance(size, int)
+                    or isinstance(size, bool)
+                    or size < 0
+                    or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                ):
+                    raise IKContractError(f"Invalid Remote result descriptor: {name}")
+                declared[name] = {"size": size, "sha256": digest}
+            _validate_result_file_names(
+                expected_stage, status, expected_artifact_id, set(declared),
+            )
+            actual_names = set(members) - {RESULT_MANIFEST_NAME}
+            if actual_names != set(declared):
+                raise IKContractError("Remote result file set does not match its manifest")
+            total = 0
+            for name, descriptor in declared.items():
+                info = members[name]
+                total += info.file_size
+                if info.file_size != descriptor["size"] or total > max_uncompressed_bytes:
+                    raise IKContractError(f"Invalid or oversized Remote result file: {name}")
+                digest = hashlib.sha256()
+                target = destination.joinpath(*PurePosixPath(name).parts)
+                output = None if skip_pickle and target.suffix.lower() == ".pkl" else target.open("wb")
+                try:
+                    with archive.open(info) as source:
+                        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                            digest.update(chunk)
+                            if output is not None:
+                                output.write(chunk)
+                finally:
+                    if output is not None:
+                        output.close()
+                if digest.hexdigest() != descriptor["sha256"]:
+                    raise IKContractError(f"Remote result checksum mismatch: {name}")
+            return sorted(declared)
+    except (zipfile.BadZipFile, OSError) as exc:
+        import shutil
+        shutil.rmtree(destination, ignore_errors=True)
+        raise IKContractError(f"Could not read Remote result archive: {exc}") from exc
+    except Exception:
+        import shutil
+        shutil.rmtree(destination, ignore_errors=True)
+        raise

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from main_diagnostics import write_main_diagnostics_csv
+from server.retarget.main_diagnostics import write_main_diagnostics_csv
 
 
 class MainDiagnosticsTest(unittest.TestCase):

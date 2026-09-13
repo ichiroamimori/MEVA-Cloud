@@ -3,21 +3,25 @@ from __future__ import annotations
 import http.client
 import json
 import os
-import shutil
 import ssl
 import tempfile
+import threading
 import time
-import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from server.ik_contract import (
     CONTRACT_VERSION,
+    IKContractError,
+    MANIFEST_JSON_HASH,
+    canonical_json_sha256,
+    extract_result_archive as extract_verified_result_archive,
     file_descriptor,
     mujoco_asset_fingerprint,
     sha256_file,
     write_request_archive,
+    RESULT_FORMAT,
 )
 from server.robot_registry import resolve_variant
 
@@ -29,8 +33,12 @@ class RemoteIKError(RuntimeError):
         self.remote_job_id = remote_job_id
 
 
-def configured_backend() -> str:
-    backend = os.environ.get("MEVA_IK_BACKEND", "local_python").strip().lower()
+def configured_backend(requested: str | None = None) -> str:
+    backend = (
+        requested
+        if requested is not None
+        else os.environ.get("MEVA_IK_BACKEND", "local_python")
+    ).strip().lower()
     if backend not in {"local_python", "remote_python"}:
         raise RuntimeError(
             f"Unsupported MEVA_IK_BACKEND={backend!r}; this release supports local_python and remote_python"
@@ -57,6 +65,8 @@ def _robot_identity(config: dict[str, Any], repository_root: Path) -> dict[str, 
     except Exception as exc:
         raise RemoteIKError("robot_model_load_failure", str(exc)) from exc
     identity["manifest_sha256"] = sha256_file(record.manifest_path)
+    identity["manifest_json_sha256"] = canonical_json_sha256(record.manifest_path)
+    identity["manifest_hash_algorithm"] = MANIFEST_JSON_HASH
     identity["model_sha256"] = sha256_file(record.model_path)
     identity["asset_bundle_sha256"] = mujoco_asset_fingerprint(
         record.model_path, record.robot_directory,
@@ -87,6 +97,10 @@ def build_request_archive(
         source = (repository_root / raw_source).resolve()
         if not source.is_file():
             raise RemoteIKError("input_load_failure", f"MEVA input file not found: {raw_source}")
+        if source.suffix.lower() != ".bin":
+            raise RemoteIKError(
+                "config_error", "Remote Primary requires the versioned MEVA BIN input",
+            )
         payload_sources.append(("source", f"inputs/source{source.suffix.lower()}", source))
     elif stage == "main":
         if primary_directory is None:
@@ -132,7 +146,7 @@ def build_request_archive(
             "config_path": "inputs/config.json",
             "iteration_diagnostics": bool(iteration_diagnostics),
             "files": descriptors,
-            "result": {"format": "meva_ik_result_zip_v1"},
+            "result": {"format": RESULT_FORMAT},
         }
         write_request_archive(
             destination,
@@ -217,6 +231,24 @@ class RemoteIKClient:
         finally:
             connection.close()
 
+    def cancel(self, job_id: str) -> dict[str, Any]:
+        connection = self._connection()
+        try:
+            connection.request(
+                "POST",
+                self._path(f"/api/v1/ik/jobs/{job_id}/cancel"),
+                headers=self._headers(),
+            )
+            return self._json_response(connection)
+        except (OSError, http.client.HTTPException) as exc:
+            raise RemoteIKError(
+                "cancel_failure",
+                f"Could not cancel Remote IK job: {exc}",
+                remote_job_id=job_id,
+            ) from exc
+        finally:
+            connection.close()
+
     def download_result(self, job_id: str, destination: Path) -> None:
         connection = self._connection()
         try:
@@ -227,40 +259,49 @@ class RemoteIKClient:
             if response.status >= 400:
                 body = response.read().decode("utf-8", errors="replace")
                 raise RemoteIKError("result_download_failure", f"Remote result HTTP {response.status}: {body}")
+            limit = int(os.environ.get("MEVA_IK_MAX_RESULT_ARCHIVE_BYTES", str(2 * 1024**3)))
+            content_length = response.getheader("Content-Length")
+            if content_length and int(content_length) > limit:
+                raise RemoteIKError("result_download_failure", "Remote result archive is too large")
+            size = 0
             with destination.open("wb") as output:
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
+                    size += len(chunk)
+                    if size > limit:
+                        raise RemoteIKError("result_download_failure", "Remote result archive is too large")
                     output.write(chunk)
-        except (OSError, http.client.HTTPException) as exc:
+        except (OSError, ValueError, http.client.HTTPException) as exc:
             raise RemoteIKError("result_download_failure", f"Could not download Remote IK result: {exc}") from exc
         finally:
             connection.close()
 
 
-def extract_result_archive(archive_path: Path, destination: Path) -> list[str]:
-    if destination.exists():
-        raise RemoteIKError("output_write_failure", f"Result staging path already exists: {destination}")
-    destination.mkdir(parents=True, exist_ok=False)
-    names: list[str] = []
+def extract_result_archive(
+    archive_path: Path,
+    destination: Path,
+    *,
+    stage: str,
+    client_job_id: str,
+    artifact_id: str,
+    status: str | None = None,
+) -> list[str]:
     try:
-        with zipfile.ZipFile(archive_path) as archive:
-            for info in archive.infolist():
-                if info.is_dir():
-                    continue
-                path = PurePosixPath(info.filename)
-                if path.is_absolute() or ".." in path.parts:
-                    raise RemoteIKError("output_write_failure", "Remote result contains an unsafe path")
-                target = destination.joinpath(*path.parts)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(info) as source, target.open("wb") as output:
-                    shutil.copyfileobj(source, output, length=1024 * 1024)
-                names.append(path.as_posix())
-    except Exception:
-        shutil.rmtree(destination, ignore_errors=True)
-        raise
-    return sorted(names)
+        return extract_verified_result_archive(
+            archive_path,
+            destination,
+            expected_stage=stage,
+            expected_client_job_id=client_job_id,
+            expected_artifact_id=artifact_id,
+            expected_status=status,
+            max_uncompressed_bytes=int(
+                os.environ.get("MEVA_IK_MAX_RESULT_UNCOMPRESSED_BYTES", str(4 * 1024**3))
+            ),
+        )
+    except (IKContractError, ValueError) as exc:
+        raise RemoteIKError("output_write_failure", str(exc)) from exc
 
 
 def execute_remote_job(
@@ -273,7 +314,21 @@ def execute_remote_job(
     primary_directory: Path | None = None,
     iteration_diagnostics: bool = False,
     status_callback: Callable[[dict[str, Any]], None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
+    if cancel_event is not None and cancel_event.is_set():
+        raise RemoteIKError("cancelled", "Remote IK job was cancelled")
+    try:
+        local_config = json.loads(config_path.read_text(encoding="utf-8"))
+        artifact_id = str(
+            local_config.get("output", {}).get("run_id")
+            if stage == "primary"
+            else local_config.get("main_id")
+        )
+        if not artifact_id or artifact_id == "None":
+            raise ValueError("Remote result artifact ID is missing")
+    except (OSError, json.JSONDecodeError, AttributeError, TypeError, ValueError) as exc:
+        raise RemoteIKError("config_error", f"Could not identify Remote result: {exc}") from exc
     transfer_root = repository_root / "workspace" / ".ik_transfer"
     transfer_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"{client_job_id}-", dir=transfer_root) as temp_name:
@@ -293,23 +348,43 @@ def execute_remote_job(
         remote_job_id = str(remote.get("job_id") or "")
         if not remote_job_id:
             raise RemoteIKError("remote_protocol_error", "Remote IK did not return job_id")
+        if status_callback is not None:
+            status_callback(remote)
         poll_seconds = max(0.2, float(os.environ.get("MEVA_REMOTE_IK_POLL_SEC", "2")))
-        while remote.get("status") in {"queued", "running"}:
+        cancel_sent = False
+        while remote.get("status") in {"queued", "running", "cancelling"}:
+            if cancel_event is not None and cancel_event.is_set() and not cancel_sent:
+                remote = client.cancel(remote_job_id)
+                cancel_sent = True
             if status_callback is not None:
                 status_callback(remote)
-            time.sleep(poll_seconds)
+            if remote.get("status") not in {"queued", "running", "cancelling"}:
+                break
+            cancel_event.wait(poll_seconds) if cancel_event is not None else time.sleep(poll_seconds)
             remote = client.status(remote_job_id)
         if remote.get("result_available"):
             result_archive = temp / "result.zip"
             client.download_result(remote_job_id, result_archive)
-            extract_result_archive(result_archive, result_staging)
+            extract_result_archive(
+                result_archive,
+                result_staging,
+                stage=stage,
+                client_job_id=client_job_id,
+                artifact_id=artifact_id,
+                status=str(remote.get("status") or ""),
+            )
         if status_callback is not None:
             status_callback(remote)
         if remote.get("status") != "completed":
             error = remote.get("error") if isinstance(remote.get("error"), dict) else {}
             raise RemoteIKError(
-                str(error.get("code") or "ik_solver_failure"),
-                str(error.get("message") or "Remote IK failed"),
+                str(error.get("code") or (
+                    "cancelled" if remote.get("status") == "cancelled" else "ik_solver_failure"
+                )),
+                str(error.get("message") or (
+                    "Remote IK job was cancelled"
+                    if remote.get("status") == "cancelled" else "Remote IK failed"
+                )),
                 remote_job_id=remote_job_id,
             )
         return remote

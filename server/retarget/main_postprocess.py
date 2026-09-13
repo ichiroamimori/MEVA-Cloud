@@ -13,7 +13,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from support_state import SupportState, main_support_side
+from server.retarget.support_state import SupportState, main_support_side
 
 
 @dataclass(frozen=True)

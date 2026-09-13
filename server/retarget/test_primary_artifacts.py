@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from check_offsets import (
+from server.retarget.check_offsets import (
     BVH_DISTAL_JOINT,
     normalize,
     offset_fingerprint,
@@ -18,9 +18,9 @@ from check_offsets import (
     source_long_axis_canonical,
 )
 from meva_canonical_geometry import CANONICAL_GEOMETRY_VERSION
-from mapping_tasks import axis_angle_rad, quat_rotate_vec
-from motion_io import save_gmr_pickle, save_motion_npz, trajectory_derivatives
-from viewer_data import MAGIC, write_viewer_bin
+from server.retarget.mapping_tasks import axis_angle_rad, quat_rotate_vec
+from server.retarget.motion_io import save_gmr_pickle, save_motion_npz, trajectory_derivatives
+from server.retarget.viewer_data import MAGIC, write_viewer_bin
 
 
 class CanonicalOffsetTests(unittest.TestCase):
@@ -183,7 +183,7 @@ class MotionArtifactTests(unittest.TestCase):
         robot = root / "server" / "robots" / "unitree" / "g1" / "g1_29dof.xml"
         if source is None or not standard.exists() or not robot.exists():
             self.skipTest("Primary integration fixtures are unavailable")
-        from primary_retarget import main as run_primary
+        from server.retarget.primary_retarget import main as run_primary
 
         with tempfile.TemporaryDirectory() as directory:
             temporary_root = Path(directory)
@@ -340,7 +340,7 @@ class MotionArtifactTests(unittest.TestCase):
 
             # Main must consume the canonical Primary NPZ and create the only
             # new GMR-compatible pickle in the pipeline.
-            from main_retarget import run_main
+            from server.retarget.main_retarget import run_main
 
             main_standard = (
                 root / "server" / "retarget_assets" / "configs" / "meva"

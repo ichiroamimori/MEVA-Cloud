@@ -15,7 +15,7 @@ RETARGET = ROOT / "server" / "retarget"
 if str(RETARGET) not in sys.path:
     sys.path.insert(0, str(RETARGET))
 
-from analytic_joint_target import (
+from server.retarget.analytic_joint_target import (
     _rotation,
     _three_axis_candidates,
     build_analytic_joint_target_profile,

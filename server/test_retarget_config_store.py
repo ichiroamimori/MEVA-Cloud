@@ -9,10 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from server.retarget_config_store import (
-    ConfigNameCollision,
     ConfigStoreError,
+    archive_config,
     list_configs,
     load_config,
+    publish_to_workspace,
+    replace_xenoma_standard,
     runtime_config,
     save_user_config,
 )
@@ -20,9 +22,11 @@ from server.api.retarget_config_api import (
     SharedConfigSaveRequest,
     get_shared_config,
     get_shared_configs,
+    replace_standard_config,
     save_shared_config,
 )
 from server.api.retarget_run_api import RunRequest, _prepare_run
+from server.api.retarget_artifact_api import release_id_reservation
 from fastapi import HTTPException
 
 
@@ -129,7 +133,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
             source_type="meva", manufacturer="unitree", robot_variant="g1_29dof"
         )
         self.assertEqual([(item.scope, item.name) for item in records], [
-            ("xenoma", "Primary Standard"), ("user", "Walking Test")
+            ("xenoma_standard", "Primary Standard"), ("personal", "Walking Test")
         ])
         self.assertTrue(records[1].legacy)
         _, loaded = load_config(
@@ -149,6 +153,11 @@ class RetargetConfigStoreTests(unittest.TestCase):
             "sampling": {"rate_fps": 60.0},
             "offsets": {"file": "offsets.json"},
             "output": {"run_id": "2608250001", "pkl_name": "run.pkl", "root_rot_order": "xyzw"},
+            "artifact_generation_id": "2608250001-01",
+            "primary_motion_file": "2608250001_primary.npz",
+            "primary_target_npz": "2608250001_primary_target.npz",
+            "main_target_npz": "2608250001-01_main_target.npz",
+            "main_runtime_context": {"primary_run_id": "2608250001"},
         })
         record, saved = save_user_config(
             runtime, name="Factory Picking", source_type="meva",
@@ -158,11 +167,17 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertEqual(saved["name"], "Factory Picking")
         self.assertIn("mappings", saved)
         self.assertNotIn("mjcf", saved["robot"])
+        for field in ("capsule_id", "source", "frame_range", "sampling", "offsets", "note"):
+            self.assertNotIn(field, saved)
         for field in (
-            "capsule_id", "source", "frame_range", "sampling", "offsets",
-            "config_id", "note",
+            "artifact_generation_id", "primary_motion_file", "primary_target_npz",
+            "main_target_npz", "main_runtime_context",
         ):
             self.assertNotIn(field, saved)
+        self.assertRegex(saved["config_id"], r"^cfg_[0-9a-f]{32}$")
+        self.assertEqual(saved["scope"], "personal")
+        self.assertEqual(saved["owner_id"], "Xenoma_Admin_01")
+        self.assertEqual(saved["target_robot"]["variant"], "g1_29dof")
         self.assertEqual(saved["output"], {"root_rot_order": "xyzw"})
 
         runtime["solver"]["max_iterations_per_frame"] = 30
@@ -178,21 +193,26 @@ class RetargetConfigStoreTests(unittest.TestCase):
             manufacturer="unitree", robot_variant="g1_29dof",
             selected_scope="user", selected_filename=record.filename,
         )
-        self.assertNotEqual(copied.filename, record.filename)
+        self.assertEqual(copied.filename, record.filename)
         self.assertEqual(len([item for item in list_configs(
             source_type="meva", manufacturer="unitree", robot_variant="g1_29dof"
-        ) if item.scope == "user"]), 2)
+        ) if item.scope == "personal"]), 1)
 
-    def test_xenoma_name_is_read_only_and_paths_are_safe(self) -> None:
-        with self.assertRaises(ConfigNameCollision):
-            save_user_config(
-                BASE_CONFIG, name="Primary Standard", source_type="meva",
-                manufacturer="unitree", robot_variant="g1_29dof",
-            )
+    def test_same_display_name_is_allowed_and_paths_are_safe(self) -> None:
+        record, _ = save_user_config(
+            BASE_CONFIG, name="Primary Standard", source_type="meva",
+            manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        self.assertEqual(record.scope, "personal")
         with self.assertRaises(ConfigStoreError):
             load_config(
                 scope="xenoma", filename="../primary_standard.json",
                 source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+            )
+        with self.assertRaisesRegex(ConfigStoreError, "target_robot"):
+            save_user_config(
+                BASE_CONFIG, name="Wrong Robot", source_type="meva",
+                manufacturer="booster", robot_variant="k1_22dof",
             )
 
     def test_runtime_merge_uses_current_capsule_source(self) -> None:
@@ -211,9 +231,99 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertEqual(first["sampling"]["rate_fps"], 60.0)
         self.assertEqual(second["sampling"]["rate_fps"], 30.0)
 
+    def test_publish_copies_personal_and_archive_hides_workspace_config(self) -> None:
+        personal_record, personal = save_user_config(
+            BASE_CONFIG, name="Shared Walk", source_type="meva",
+            manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        workspace_record, workspace = publish_to_workspace(
+            personal, name="Shared Walk", source_type="meva",
+            manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        self.assertNotEqual(personal_record.config_id, workspace_record.config_id)
+        self.assertEqual(workspace["source_config_id"], personal_record.config_id)
+        self.assertEqual(workspace_record.scope, "workspace")
+        self.assertTrue(any(item.config_id == personal_record.config_id for item in list_configs(
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )))
+
+        edited_record, edited = save_user_config(
+            workspace, name="Shared Walk Updated", source_type="meva",
+            manufacturer="unitree", robot_variant="g1_29dof",
+            selected_scope="workspace", selected_filename=workspace_record.filename,
+        )
+        self.assertEqual(edited_record.config_id, workspace_record.config_id)
+        self.assertEqual(edited_record.scope, "workspace")
+        self.assertEqual(edited["version"], workspace["version"] + 1)
+
+        archived = archive_config(
+            scope="workspace", filename=edited_record.filename,
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        self.assertEqual(archived.status, "archived")
+        active_ids = {item.config_id for item in list_configs(
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )}
+        all_ids = {item.config_id for item in list_configs(
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+            include_archived=True,
+        )}
+        self.assertNotIn(workspace_record.config_id, active_ids)
+        self.assertIn(workspace_record.config_id, all_ids)
+
+        personal_archived = archive_config(
+            scope="personal", filename=personal_record.filename,
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        self.assertEqual(personal_archived.status, "archived")
+        self.assertNotIn(personal_record.config_id, {
+            item.config_id for item in list_configs(
+                source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+            )
+        })
+
+    def test_replace_standard_creates_new_generation_and_archives_old(self) -> None:
+        old_record, old = load_config(
+            scope="xenoma_standard", filename="primary_standard.json",
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        replacement_config = deepcopy(old)
+        replacement_config["solver"]["max_iterations_per_frame"] = 44
+        new_record, replacement, archived_record = replace_xenoma_standard(
+            replacement_config,
+            name="Primary Standard",
+            filename="primary_standard.json",
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        )
+        self.assertNotEqual(new_record.config_id, old_record.config_id)
+        self.assertEqual(replacement["source_config_id"], old_record.config_id)
+        self.assertEqual(replacement["version"], old_record.version + 1)
+        self.assertEqual(new_record.status, "active")
+        self.assertEqual(archived_record.config_id, old_record.config_id)
+        self.assertEqual(archived_record.status, "archived")
+        self.assertEqual(new_record.standard_key, archived_record.standard_key)
+        active_standard = [item for item in list_configs(
+            source_type="meva", manufacturer="unitree", robot_variant="g1_29dof",
+        ) if item.scope == "xenoma_standard"]
+        self.assertEqual([item.config_id for item in active_standard], [new_record.config_id])
+
+    def test_replace_standard_api_checks_server_side_role(self) -> None:
+        request = SharedConfigSaveRequest(
+            capsule_id="2608250001",
+            name="Primary Standard",
+            selected_scope="xenoma_standard",
+            selected_filename="primary_standard.json",
+            config=BASE_CONFIG,
+        )
+        with patch(
+            "server.api.retarget_config_api.can_replace_standard", return_value=False,
+        ), self.assertRaises(HTTPException) as raised:
+            replace_standard_config(request)
+        self.assertEqual(raised.exception.status_code, 403)
+
     def test_api_list_load_save_and_xenoma_rejection(self) -> None:
         listed = get_shared_configs()
-        self.assertEqual(listed["configs"][0]["scope"], "xenoma")
+        self.assertEqual(listed["configs"][0]["scope"], "xenoma_standard")
         self.assertFalse(listed["configs"][0]["writable"])
         loaded = get_shared_config(
             capsule_id="2608250002", scope="xenoma",
@@ -230,7 +340,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
             config=loaded["config"],
         )
         saved = save_shared_config(payload)
-        self.assertEqual(saved["selection"]["scope"], "user")
+        self.assertEqual(saved["selection"]["scope"], "personal")
         runtime_path = (
             self.workspace / "users" / "local_user" / "capsules" / "2608250002"
             / "retarget" / "g1_29dof" / "config.json"
@@ -240,9 +350,8 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn("2608250002", snapshot["source"]["file"])
 
         payload.name = "Primary Standard"
-        with self.assertRaises(HTTPException) as raised:
-            save_shared_config(payload)
-        self.assertEqual(raised.exception.status_code, 409)
+        same_name = save_shared_config(payload)
+        self.assertEqual(same_name["selection"]["scope"], "personal")
 
     def test_primary_request_remains_a_complete_runtime_snapshot(self) -> None:
         loaded = get_shared_config(
@@ -254,16 +363,25 @@ class RetargetConfigStoreTests(unittest.TestCase):
             config=loaded["config"],
             note="Primary review note",
         )
-        run_id, _, _, request_path, _ = _prepare_run(request)
+        fake_bin = self.workspace / "users" / "local_user" / "capsules" / "2608250001" / "meva" / "2608250001_meva_viewer.bin"
+        fake_bin.write_bytes(b"bin")
+        with patch("server.api.retarget_run_api.generate_meva_viewer_bin", return_value=fake_bin), patch(
+            "server.api.retarget_run_api.read_viewer_bin", return_value=({"capsule_id": "2608250001"}, {})
+        ):
+            run_id, _, _, request_path, _, reservation = _prepare_run(request, "test-job-1")
         snapshot = json.loads(request_path.read_text(encoding="utf-8"))
         self.assertEqual(snapshot["name"], "Primary Standard")
         self.assertEqual(snapshot["capsule_id"], "2608250001")
         self.assertEqual(snapshot["note"], "Primary review note")
-        self.assertIn("2608250001", snapshot["source"]["file"])
+        self.assertTrue(snapshot["source"]["file"].endswith("_meva_viewer.bin"))
+        self.assertIn("2608250001", snapshot["source"]["original_file"])
+        self.assertEqual(snapshot["retarget_job"]["capsule_id"], "2608250001")
         self.assertEqual(snapshot["mappings"], BASE_CONFIG["mappings"])
         self.assertEqual(snapshot["output"]["run_id"], run_id)
         self.assertNotIn("pkl_name", snapshot["output"])
         self.assertFalse(snapshot["output"]["save_diagnostics_csv"])
+        request_path.unlink()
+        release_id_reservation(reservation, "test-job-1")
 
     def test_primary_request_refreshes_robot_metadata_from_manifest(self) -> None:
         config = deepcopy(BASE_CONFIG)
@@ -276,7 +394,12 @@ class RetargetConfigStoreTests(unittest.TestCase):
             config=config,
         )
 
-        _, _, _, request_path, _ = _prepare_run(request)
+        fake_bin = self.workspace / "users" / "local_user" / "capsules" / "2608250001" / "meva" / "2608250001_meva_viewer.bin"
+        fake_bin.write_bytes(b"bin")
+        with patch("server.api.retarget_run_api.generate_meva_viewer_bin", return_value=fake_bin), patch(
+            "server.api.retarget_run_api.read_viewer_bin", return_value=({"capsule_id": "2608250001"}, {})
+        ):
+            _, _, _, request_path, _, reservation = _prepare_run(request, "test-job-2")
         snapshot = json.loads(request_path.read_text(encoding="utf-8"))
 
         self.assertEqual(snapshot["robot"]["variant"], "k1_22dof")
@@ -290,6 +413,8 @@ class RetargetConfigStoreTests(unittest.TestCase):
             set(hand_parts), {"left_hand_link", "right_hand_link"}
         )
         self.assertEqual(snapshot["mappings"], BASE_CONFIG["mappings"])
+        request_path.unlink()
+        release_id_reservation(reservation, "test-job-2")
 
     def test_main_configs_are_stage_separated_loadable_and_saveable(self) -> None:
         primary_records = get_shared_configs(stage="primary")["configs"]
@@ -321,7 +446,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
             config=loaded["config"],
         )
         saved = save_shared_config(payload)
-        self.assertEqual(saved["selection"]["scope"], "user")
+        self.assertEqual(saved["selection"]["scope"], "personal")
         self.assertEqual(saved["selection"]["stage"], "main")
         self.assertEqual(saved["shared_config"]["retarget_stage"], "main")
         for field in (
@@ -339,9 +464,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn("2608250001", runtime["source"]["file"])
 
         payload.name = "Main Standard"
-        with self.assertRaises(HTTPException) as raised:
-            save_shared_config(payload)
-        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(save_shared_config(payload)["selection"]["scope"], "personal")
 
     def test_primary_and_main_config_ui_use_shared_dropdown_and_save_modal(self) -> None:
         html = (Path(__file__).resolve().parents[1] / "app" / "retarget" / "index.html").read_text(
@@ -353,8 +476,12 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn('<select class="config-name" id="mainConfigNameBottom"', html)
         self.assertNotIn('id="configName" type="text"', html)
         self.assertNotIn('id="mainConfigName" type="text"', html)
-        self.assertIn('group.label = scope === "xenoma" ? "Xenoma" : "User"', html)
+        self.assertIn('xenoma_standard: "Xenoma Standard"', html)
+        self.assertIn('personal: "Personal"', html)
+        self.assertIn('workspace: "Workspace"', html)
         self.assertIn('id="saveConfigModal"', html)
+        self.assertIn('id="replaceStandardBtn"', html)
+        self.assertIn('/api/retarget/configs/replace-standard', html)
         self.assertIn('id="saveConfigName" type="text"', html)
         self.assertIn('saveConfigName.value = stage === "main"', html)
         self.assertIn('id="configDirtyIndicator"', html)
@@ -409,7 +536,7 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertIn('cfg.note = String(mainRunNote?.value || "").trim()', html)
         self.assertIn('Primary Standard', html)
         self.assertIn('Main Standard', html)
-        self.assertNotIn('Xenoma Standard', html)
+        self.assertIn('Xenoma Standard', html)
         self.assertNotIn('Robot Standard', html)
 
 

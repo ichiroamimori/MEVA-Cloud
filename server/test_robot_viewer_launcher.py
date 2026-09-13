@@ -137,6 +137,9 @@ class RobotViewerLauncherTest(unittest.TestCase):
                 "server.api.retarget_artifact_api.resolve_main_result_dir",
                 return_value=result,
             ), patch(
+                "server.api.retarget_artifact_api.robot_dir",
+                return_value=result.parent,
+            ), patch(
                 "server.robot_viewer_launcher.launch_robot_viewer", return_value=42,
             ) as launch:
                 response = launch_registered_robot_viewer(

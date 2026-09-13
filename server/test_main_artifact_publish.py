@@ -93,6 +93,9 @@ class MainArtifactPublishTests(unittest.TestCase):
             staging = root / ".failed.staging"
             self.write_set(destination, 501, "old-generation")
             staging.mkdir()
+            stale_runtime = staging / ".remote-result"
+            stale_runtime.mkdir()
+            (stale_runtime / "partial.bin").write_bytes(b"partial")
             (staging / f"{self.MAIN_ID}_main_config.json").write_text(
                 json.dumps({"main_id": self.MAIN_ID, "run_status": "partial"}),
                 encoding="utf-8",

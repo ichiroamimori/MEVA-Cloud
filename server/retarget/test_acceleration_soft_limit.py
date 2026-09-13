@@ -4,7 +4,7 @@ import unittest
 
 import mujoco
 
-from ik_solver import (
+from server.retarget.ik_solver import (
     acceleration_soft_weight,
     resolve_joint_acceleration_limit,
 )

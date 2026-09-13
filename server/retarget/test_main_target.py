@@ -9,10 +9,10 @@ from pathlib import Path
 import numpy as np
 import mujoco
 
-from main_calibration import _free_joint_qpos_addr, _hinge_joints, _qpos_from_primary_frame
-from foot_support import load_foot_support_definition, support_point_world_positions
-from main_prepare import GeomZTask, prepare_main_ik_from_target
-from main_target import _target_z, build_main_target, load_main_target
+from server.retarget.main_calibration import _free_joint_qpos_addr, _hinge_joints, _qpos_from_primary_frame
+from server.retarget.foot_support import load_foot_support_definition, support_point_world_positions
+from server.retarget.main_prepare import GeomZTask, prepare_main_ik_from_target
+from server.retarget.main_target import _target_z, build_main_target, load_main_target
 from server.retarget.robot_runtime_definition import (
     load_robot_runtime_definition_for_config,
 )

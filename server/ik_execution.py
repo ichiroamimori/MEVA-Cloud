@@ -1,18 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from server.ik_contract import IKRequest, mujoco_asset_fingerprint, sha256_file
+from server.ik_contract import (
+    IKRequest,
+    mujoco_asset_fingerprint,
+    robot_manifest_matches,
+    sha256_file,
+)
+from server.managed_process import (
+    ManagedProcessCancelled,
+    ManagedProcessTimeout,
+    run_managed_process,
+)
 from server.robot_registry import apply_variant_to_runtime_config, resolve_variant
+from server.retarget.viewer_data import FORMAT_VERSION, read_viewer_bin
 
 
 PROGRESS_RE = re.compile(r"^\[(\d+)/(\d+)\] frame (\d+)")
+RUN_ID_RE = re.compile(r"^\d{10}$")
+MAIN_ID_RE = re.compile(r"^(\d{10})-(\d{2})$")
 
 
 class IKExecutionError(RuntimeError):
@@ -49,12 +63,31 @@ def _load_config(path: Path) -> dict:
     return value
 
 
+def _validated_output_ids(request: IKRequest, cfg: dict) -> tuple[str, str | None]:
+    if request.stage == "primary":
+        run_id = str(cfg.get("output", {}).get("run_id") or "")
+        if not RUN_ID_RE.fullmatch(run_id):
+            raise IKExecutionError("config_error", "Invalid Primary output.run_id")
+        return run_id, None
+    primary_run_id = str(cfg.get("primary_run_id") or "")
+    main_id = str(cfg.get("main_id") or "")
+    match = MAIN_ID_RE.fullmatch(main_id)
+    if (
+        not RUN_ID_RE.fullmatch(primary_run_id)
+        or not match
+        or match.group(1) != primary_run_id
+    ):
+        raise IKExecutionError("config_error", "Invalid Main primary_run_id or main_id")
+    return primary_run_id, main_id
+
+
 def _prepare_config(
     request: IKRequest, package_directory: Path, execution_directory: Path,
     repository_root: Path,
 ) -> tuple[Path, Path]:
     source_config = package_directory / request.config_path
     cfg = _load_config(source_config)
+    primary_run_id, validated_main_id = _validated_output_ids(request, cfg)
     try:
         record = resolve_variant(
             request.robot["variant"],
@@ -62,10 +95,10 @@ def _prepare_config(
             robot_id=request.robot["robot_id"],
             root=repository_root,
         )
-        if sha256_file(record.manifest_path) != request.robot["manifest_sha256"]:
+        if not robot_manifest_matches(record.manifest_path, request.robot):
             raise IKExecutionError(
                 "robot_model_load_failure",
-                "Remote robot manifest differs from the MEVA Cloud manifest",
+                "Remote robot manifest content differs from the MEVA Cloud manifest",
             )
         if sha256_file(record.model_path) != request.robot["model_sha256"]:
             raise IKExecutionError(
@@ -88,19 +121,44 @@ def _prepare_config(
 
     if request.stage == "primary":
         source = package_directory / request.file_for_role("source")["path"]
+        if source.suffix.lower() != ".bin":
+            raise IKExecutionError(
+                "input_load_failure", "Remote Primary requires a MEVA BIN input",
+            )
+        try:
+            bin_header, bin_arrays = read_viewer_bin(source)
+        except (OSError, ValueError, KeyError) as exc:
+            raise IKExecutionError(
+                "input_load_failure", f"Could not load MEVA BIN: {exc}",
+            ) from exc
+        if (
+            bin_header.get("kind") != "meva"
+            or int(bin_header.get("format_version", 0)) < FORMAT_VERSION
+        ):
+            raise IKExecutionError("input_load_failure", "Unsupported MEVA BIN format")
+        capsule_id = str(bin_header.get("capsule_id") or "")
+        if not RUN_ID_RE.fullmatch(capsule_id):
+            raise IKExecutionError("input_load_failure", "MEVA BIN has an invalid Capsule ID")
+        cfg["capsule_id"] = capsule_id
+        job = cfg.setdefault("retarget_job", {})
+        if isinstance(job, dict):
+            job["capsule_id"] = capsule_id
+        bvh_bytes = bin_arrays.get("bvh_bytes")
+        bvh_filename = Path(str(bin_header.get("bvh_filename") or "source.bvh")).name
+        if bvh_bytes is None or not bvh_filename.lower().endswith(".bvh"):
+            raise IKExecutionError("input_load_failure", "MEVA BIN has no valid paired BVH")
+        bvh_path = package_directory / "inputs" / bvh_filename
+        bvh_path.write_bytes(bytes(bvh_bytes))
         cfg.setdefault("source", {})["file"] = _relative_to_repository(source, repository_root)
-        run_id = str(cfg.get("output", {}).get("run_id") or "")
-        if not run_id:
-            raise IKExecutionError("config_error", "Primary output.run_id is required")
+        cfg["source"]["bvh"] = _relative_to_repository(bvh_path, repository_root)
+        run_id = primary_run_id
         cfg.setdefault("output", {})["overwrite_existing"] = False
         config_directory = execution_directory
         output_directory = execution_directory / run_id
         config_name = f".{run_id}_request_config.json"
     else:
-        primary_run_id = str(cfg.get("primary_run_id") or "")
-        main_id = str(cfg.get("main_id") or "")
-        if not primary_run_id or not main_id:
-            raise IKExecutionError("config_error", "Main primary_run_id and main_id are required")
+        main_id = validated_main_id
+        assert main_id is not None
         primary_directory = execution_directory / primary_run_id
         primary_directory.mkdir(parents=True, exist_ok=False)
         for role in ("primary_motion", "primary_target"):
@@ -127,44 +185,54 @@ def run_python_ik(
     execution_directory: Path,
     repository_root: Path,
     progress_callback: Callable[[int, int, int], None] | None = None,
+    cancel_event: threading.Event | None = None,
+    timeout_sec: float | None = None,
 ) -> IKExecutionResult:
     """Run one existing Primary or Main CLI without changing solver behavior."""
     execution_directory.mkdir(parents=True, exist_ok=False)
     config_path, output_directory = _prepare_config(
         request, package_directory, execution_directory, repository_root,
     )
-    script = repository_root / "server" / "retarget" / (
-        "primary_retarget.py" if request.stage == "primary" else "main_retarget.py"
+    module = (
+        "server.retarget.primary_retarget"
+        if request.stage == "primary"
+        else "server.retarget.main_retarget"
     )
-    command = [sys.executable, "-u", str(script), str(config_path)]
+    command = [sys.executable, "-u", "-m", module, str(config_path)]
     if request.stage == "primary" and request.iteration_diagnostics:
         command.append("--iteration-diagnostics")
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=str(repository_root),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
-    except OSError as exc:
-        raise IKExecutionError("ik_solver_failure", f"Could not start IK process: {exc}") from exc
-
     logs: list[str] = []
-    assert process.stdout is not None
-    for raw_line in process.stdout:
-        line = raw_line.rstrip()
-        if line:
-            logs.append(line)
-            if len(logs) > 1000:
-                logs = logs[-1000:]
+
+    def process_line(line: str) -> None:
         match = PROGRESS_RE.match(line.strip())
         if match and progress_callback is not None:
             progress_callback(*(int(value) for value in match.groups()))
-    return_code = process.wait()
+
+    try:
+        return_code, logs = run_managed_process(
+            command,
+            cwd=repository_root,
+            cancel_event=cancel_event,
+            timeout_sec=(
+                timeout_sec
+                if timeout_sec is not None
+                else float(os.environ.get("MEVA_IK_JOB_TIMEOUT_SEC", "7200"))
+            ),
+            line_callback=process_line,
+            log_limit=1000,
+        )
+    except ManagedProcessCancelled as exc:
+        raise IKExecutionError(
+            "cancelled", str(exc), logs=logs, output_directory=output_directory,
+        ) from exc
+    except ManagedProcessTimeout as exc:
+        raise IKExecutionError(
+            "timeout", str(exc), logs=logs, output_directory=output_directory,
+        ) from exc
+    except OSError as exc:
+        raise IKExecutionError(
+            "ik_solver_failure", f"Could not start IK process: {exc}"
+        ) from exc
     if return_code != 0:
         joined = "\n".join(logs[-120:]).lower()
         if any(value in joined for value in ("xml error", "could not open file", "mesh", "mjmodel")):

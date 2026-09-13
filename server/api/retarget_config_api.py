@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
@@ -10,15 +9,21 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from server.capsule_identity import CAPSULE_ID_RE
+
 from server.retarget_config_store import (
+    archive_config,
     ConfigNameCollision,
     ConfigStoreError,
     list_configs as list_shared_configs,
     load_config as load_shared_config,
+    publish_to_workspace,
+    replace_xenoma_standard,
     runtime_config as merge_runtime_config,
     save_user_config,
     workspace_root,
 )
+from server.service_context import DEVELOPMENT_USER, can_replace_standard
 from server.api.retarget_artifact_api import (
     MAIN_ID_RE,
     RUN_RE,
@@ -53,7 +58,6 @@ from server.api.retarget_robot_api import (
 
 
 router = APIRouter()
-CAPSULE_RE = re.compile(r"^\d{10}$")
 
 
 class DefaultConfigRequest(BaseModel):
@@ -71,10 +75,22 @@ class SharedConfigSaveRequest(BaseModel):
     user_id: str = "local_user"
     stage: Literal["primary", "main"] = "primary"
     run_id: str | None = None
-    selected_scope: Literal["xenoma", "user"] | None = None
+    selected_scope: Literal[
+        "xenoma_standard", "personal", "workspace", "xenoma", "user"
+    ] | None = None
     selected_filename: str | None = None
     overwrite: bool = False
     config: dict[str, Any]
+
+
+class ConfigArchiveRequest(BaseModel):
+    scope: Literal["personal", "workspace"]
+    filename: str
+    source_type: str = "meva"
+    manufacturer: str = "unitree"
+    robot_variant: str = "g1_29dof"
+    user_id: str = "local_user"
+    stage: Literal["primary", "main"] = "primary"
 
 
 class AnalyticJointDetectionRequest(BaseModel):
@@ -127,7 +143,7 @@ def _capsule_runtime_context(
     user_id: str = "local_user",
 ) -> dict[str, Any]:
     """Build only the Capsule-specific fields merged into a Shared Config."""
-    if not CAPSULE_RE.fullmatch(capsule_id) or user_id != "local_user":
+    if not CAPSULE_ID_RE.fullmatch(capsule_id) or user_id != "local_user":
         raise HTTPException(status_code=404, detail="Capsule not found")
     capsules = (workspace_root() / "users" / user_id / "capsules").resolve()
     capsule = (capsules / capsule_id).resolve()
@@ -155,7 +171,13 @@ def _capsule_runtime_context(
     relative_path = Path(source_relative)
     if not source_relative or relative_path.is_absolute() or ".." in relative_path.parts:
         raise HTTPException(status_code=409, detail="Capsule MEVA source is unavailable")
-    source_file = capsule / relative_path
+    source_file = (capsule / relative_path).resolve()
+    try:
+        source_file.relative_to(capsule)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409, detail="Capsule MEVA source is unavailable"
+        ) from exc
     if not source_file.is_file():
         raise HTTPException(status_code=409, detail="Capsule MEVA source is unavailable")
 
@@ -196,7 +218,14 @@ def _capsule_runtime_context(
     if bvh_relative:
         bvh_path = Path(str(bvh_relative).replace("\\", "/").strip("/"))
         if not bvh_path.is_absolute() and ".." not in bvh_path.parts:
-            source["bvh"] = (logical_prefix / bvh_path).as_posix()
+            resolved_bvh = (capsule / bvh_path).resolve()
+            try:
+                resolved_bvh.relative_to(capsule)
+            except ValueError:
+                pass
+            else:
+                if resolved_bvh.is_file():
+                    source["bvh"] = (logical_prefix / bvh_path).as_posix()
     return {
         "capsule_id": capsule_id,
         "source": source,
@@ -293,6 +322,7 @@ def get_shared_configs(
     robot_variant: str = "g1_29dof",
     user_id: str = "local_user",
     stage: Literal["primary", "main"] = "primary",
+    include_archived: bool = False,
 ):
     _registered_variant(robot_variant, manufacturer=manufacturer)
     try:
@@ -302,6 +332,7 @@ def get_shared_configs(
             robot_variant=robot_variant,
             user_id=user_id,
             stage=stage,
+            include_archived=include_archived,
         )
     except ConfigStoreError as exc:
         raise _shared_error(exc) from exc
@@ -310,7 +341,9 @@ def get_shared_configs(
 @router.get("/configs/load")
 def get_shared_config(
     capsule_id: str,
-    scope: Literal["xenoma", "user"],
+    scope: Literal[
+        "xenoma_standard", "personal", "workspace", "xenoma", "user"
+    ],
     filename: str,
     source_type: str = "meva",
     manufacturer: str = "unitree",
@@ -321,7 +354,7 @@ def get_shared_config(
 ):
     variant = _registered_variant(robot_variant, manufacturer=manufacturer)
     if stage == "main":
-        if not CAPSULE_RE.fullmatch(capsule_id) or user_id != "local_user":
+        if not CAPSULE_ID_RE.fullmatch(capsule_id) or user_id != "local_user":
             raise HTTPException(status_code=404, detail="Capsule not found")
         if not run_id or not RUN_RE.fullmatch(run_id):
             raise HTTPException(status_code=400, detail="A Primary run_id is required for Main config")
@@ -366,7 +399,7 @@ def save_shared_config(req: SharedConfigSaveRequest):
     try:
         primary: dict[str, Any] | None = None
         if req.stage == "main":
-            if not CAPSULE_RE.fullmatch(req.capsule_id) or req.user_id != "local_user":
+            if not CAPSULE_ID_RE.fullmatch(req.capsule_id) or req.user_id != "local_user":
                 raise HTTPException(status_code=404, detail="Capsule not found")
             if not req.run_id or not RUN_RE.fullmatch(req.run_id):
                 raise HTTPException(
@@ -438,6 +471,79 @@ def save_shared_config(req: SharedConfigSaveRequest):
         "shared_config": shared,
         "selection": record.as_dict(),
     }
+
+
+@router.post("/configs/publish-workspace")
+def publish_shared_config_to_workspace(req: SharedConfigSaveRequest):
+    variant = _registered_variant(req.robot_variant, manufacturer=req.manufacturer)
+    _assert_config_robot(req.config, variant)
+    _validate_retarget_config_or_http(variant, req.config)
+    try:
+        record, shared = publish_to_workspace(
+            req.config,
+            name=req.name,
+            source_type=req.source_type,
+            manufacturer=req.manufacturer,
+            robot_variant=req.robot_variant,
+            user_id=req.user_id,
+            stage=req.stage,
+        )
+    except ConfigStoreError as exc:
+        raise _shared_error(exc) from exc
+    return {
+        "ok": True,
+        "shared_config": shared,
+        "selection": record.as_dict(),
+    }
+
+
+@router.post("/configs/archive")
+def archive_shared_config(req: ConfigArchiveRequest):
+    _registered_variant(req.robot_variant, manufacturer=req.manufacturer)
+    try:
+        record = archive_config(
+            scope=req.scope,
+            filename=req.filename,
+            source_type=req.source_type,
+            manufacturer=req.manufacturer,
+            robot_variant=req.robot_variant,
+            user_id=req.user_id,
+            stage=req.stage,
+        )
+    except ConfigStoreError as exc:
+        raise _shared_error(exc) from exc
+    return {"ok": True, "selection": record.as_dict()}
+
+
+@router.post("/configs/replace-standard")
+def replace_standard_config(req: SharedConfigSaveRequest):
+    if not can_replace_standard(DEVELOPMENT_USER.role):
+        raise HTTPException(status_code=403, detail="Replacing Xenoma Standard is not allowed")
+    if req.selected_scope not in {"xenoma_standard", "xenoma"} or not req.selected_filename:
+        raise HTTPException(status_code=400, detail="An active Xenoma Standard must be selected")
+    variant = _registered_variant(req.robot_variant, manufacturer=req.manufacturer)
+    _assert_config_robot(req.config, variant)
+    _validate_retarget_config_or_http(variant, req.config)
+    try:
+        record, shared, archived_record = replace_xenoma_standard(
+            req.config,
+            name=req.name,
+            filename=req.selected_filename,
+            source_type=req.source_type,
+            manufacturer=req.manufacturer,
+            robot_variant=req.robot_variant,
+            user_id=req.user_id,
+            stage=req.stage,
+        )
+    except ConfigStoreError as exc:
+        raise _shared_error(exc) from exc
+    return {
+        "ok": True,
+        "shared_config": shared,
+        "selection": record.as_dict(),
+        "archived_selection": archived_record.as_dict(),
+    }
+
 
 @router.get("/context")
 def get_context(

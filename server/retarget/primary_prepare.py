@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,25 +11,25 @@ import mujoco
 import mink
 import numpy as np
 
-from analytic_joint_target import (
+from server.retarget.analytic_joint_target import (
     AnalyticJointTargetProfile,
     build_analytic_joint_target_profile,
 )
-from ik_solver import (
+from server.retarget.ik_solver import (
     IKFrameSpec,
     PreparedIKFrame,
     SolverSettings,
     build_solver_settings,
     limit_start_ratio,
 )
-from mapping_tasks import (
+from server.retarget.mapping_tasks import (
     MappingTaskSet,
     RelativeDirectionTask,
     normalize_vec,
     quat_rotate_vec,
     required_quaternion_columns,
 )
-from primary_target import load_primary_target
+from server.retarget.primary_target import load_primary_target
 try:
     from server.retarget.robot_runtime_definition import (
         load_robot_runtime_definition_for_config,
@@ -131,14 +130,11 @@ def prepare_primary(
         (repo_root / cfg["source"]["bvh"]).resolve()
         if cfg["source"].get("bvh") else csv_path.with_suffix(".bvh")
     )
-    print("CSV    :", csv_path)
+    print("SOURCE :", csv_path)
     print("BVH    :", bvh_path)
     print("MJCF   :", xml_path)
 
-    tools_dir = Path(__file__).resolve().parent
-    if str(tools_dir) not in sys.path:
-        sys.path.insert(0, str(tools_dir))
-    from check_offsets import compute_offsets
+    from server.retarget.check_offsets import compute_offsets
     mapping_offsets, offset_path, offsets_generated = compute_offsets(
         config_path,
         force=bool(cfg.get("offsets", {}).get("force_recompute", False)),

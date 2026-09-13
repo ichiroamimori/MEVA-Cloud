@@ -14,11 +14,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from server.capsule_identity import CAPSULE_ID_RE, is_public_capsule
+
 
 router = APIRouter(prefix="/api/capsules", tags=["capsules"])
 
 UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
-CAPSULE_ID_RE = re.compile(r"^\d{10}$")
 INVALID_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 RESERVED_FILENAMES = {
     "CON",
@@ -144,6 +145,8 @@ def next_capsule_id(now: datetime) -> str:
     root = capsules_root()
     root.mkdir(parents=True, exist_ok=True)
     prefix = now.strftime("%y%m%d")
+    if prefix == "000000":
+        raise HTTPException(status_code=409, detail="Public Capsule prefix is reserved")
     existing = {
         path.name
         for path in root.iterdir()
@@ -230,6 +233,7 @@ def capsule_summary(capsule_dir: Path) -> dict[str, Any]:
 
     return {
         "id": capsule_dir.name,
+        "is_public": is_public_capsule(capsule_dir.name),
         "title": metadata.get("title") or capsule_dir.name,
         "note": metadata.get("note", ""),
         "created_at": metadata.get("created_at", ""),

@@ -6,13 +6,13 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from foot_support import (
+from server.retarget.foot_support import (
     load_foot_support_definition,
     support_point_jacobian,
     support_point_world_positions,
 )
 from server.robot_registry import apply_variant_to_runtime_config, resolve_variant
-from robot_model_info import (
+from server.retarget.robot_model_info import (
     bodies_are_directly_adjacent, collision_pair_descriptors,
 )
 

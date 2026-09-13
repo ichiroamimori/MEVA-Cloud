@@ -9,8 +9,7 @@ import shutil
 import threading
 import time
 import uuid
-import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from server.ik_contract import (
     IKRequest,
     extract_request_archive,
     read_request_manifest,
+    write_result_archive,
 )
 from server.ik_execution import IKExecutionError, run_python_ik
 
@@ -32,6 +32,8 @@ MAX_ARCHIVE_BYTES = int(os.environ.get("MEVA_IK_MAX_ARCHIVE_BYTES", str(2 * 1024
 MAX_UNCOMPRESSED_BYTES = int(
     os.environ.get("MEVA_IK_MAX_UNCOMPRESSED_BYTES", str(4 * 1024**3))
 )
+JOB_TIMEOUT_SEC = float(os.environ.get("MEVA_IK_JOB_TIMEOUT_SEC", "7200"))
+JOB_TTL_SEC = float(os.environ.get("MEVA_IK_JOB_TTL_SEC", str(7 * 24 * 3600)))
 LOGGER = logging.getLogger("meva.remote_ik")
 
 
@@ -45,12 +47,10 @@ def _write_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _zip_output(source: Path, destination: Path) -> list[str]:
-    files = sorted(path for path in source.rglob("*") if path.is_file())
-    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in files:
-            archive.write(path, path.relative_to(source).as_posix())
-    return [path.relative_to(source).as_posix() for path in files]
+def _zip_output(
+    source: Path, destination: Path, request: IKRequest, *, status: str,
+) -> list[str]:
+    return write_result_archive(source, destination, request, status=status)
 
 
 class RemoteIKService:
@@ -62,9 +62,75 @@ class RemoteIKService:
         self.jobs_root.mkdir(parents=True, exist_ok=True)
         self.jobs: dict[str, dict[str, Any]] = {}
         self.lock = threading.Lock()
+        self.cancel_events: dict[str, threading.Event] = {}
         self.pending: queue.Queue[str] = queue.Queue()
+        recovered = self._restore_jobs()
+        self._cleanup_expired_jobs()
         self.thread = threading.Thread(target=self._worker_loop, daemon=True, name="remote-ik-worker")
         self.thread.start()
+        for job_id in recovered:
+            self.pending.put(job_id)
+
+    def _restore_jobs(self) -> list[str]:
+        recovered: list[str] = []
+        for job_dir in self.jobs_root.iterdir():
+            status_path = job_dir / "status.json"
+            if not job_dir.is_dir() or not status_path.is_file():
+                continue
+            try:
+                job = json.loads(status_path.read_text(encoding="utf-8"))
+                if not isinstance(job, dict) or job.get("job_id") != job_dir.name:
+                    continue
+                status = str(job.get("status") or "failed")
+                if status == "queued" and (job_dir / "request.zip").is_file():
+                    recovered.append(job_dir.name)
+                elif status in {"running", "cancelling"}:
+                    job.update({
+                        "status": "failed",
+                        "message": "Worker restarted during IK execution",
+                        "finished_at": _utc_now(),
+                        "result_available": False,
+                        "error": {
+                            "code": "worker_restarted",
+                            "message": "Worker restarted during IK execution",
+                        },
+                    })
+                    _write_json(status_path, job)
+                elif status == "completed" and not (job_dir / "result.zip").is_file():
+                    job.update({
+                        "status": "failed",
+                        "message": "Stored result is missing",
+                        "result_available": False,
+                        "error": {
+                            "code": "result_missing",
+                            "message": "Stored result archive is missing",
+                        },
+                    })
+                    _write_json(status_path, job)
+                self.jobs[job_dir.name] = job
+                self.cancel_events[job_dir.name] = threading.Event()
+            except (OSError, json.JSONDecodeError):
+                LOGGER.exception("Could not restore Remote IK job %s", job_dir.name)
+        return recovered
+
+    def _cleanup_expired_jobs(self) -> None:
+        if JOB_TTL_SEC <= 0:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=JOB_TTL_SEC)
+        for job_id, job in list(self.jobs.items()):
+            if job.get("status") not in {"completed", "failed", "cancelled"}:
+                continue
+            try:
+                finished = datetime.fromisoformat(str(job.get("finished_at") or ""))
+            except ValueError:
+                continue
+            if finished.tzinfo is None:
+                finished = finished.replace(tzinfo=timezone.utc)
+            if finished >= cutoff:
+                continue
+            shutil.rmtree(self.jobs_root / job_id, ignore_errors=True)
+            self.jobs.pop(job_id, None)
+            self.cancel_events.pop(job_id, None)
 
     def submit(self, archive_path: Path, request: IKRequest) -> dict[str, Any]:
         job_id = uuid.uuid4().hex
@@ -105,6 +171,7 @@ class RemoteIKService:
         }
         with self.lock:
             self.jobs[job_id] = job
+            self.cancel_events[job_id] = threading.Event()
             self._persist(job_id)
         LOGGER.info(
             "job_id=%s status=queued client_job_id=%s stage=%s robot=%s/%s/%s",
@@ -112,6 +179,8 @@ class RemoteIKService:
             request.robot["manufacturer"], request.robot["robot_id"], request.robot["variant"],
         )
         self.pending.put(job_id)
+        with self.lock:
+            self._cleanup_expired_jobs()
         return dict(job)
 
     def status(self, job_id: str) -> dict[str, Any] | None:
@@ -123,6 +192,32 @@ class RemoteIKService:
         job = self.status(job_id)
         path = self.jobs_root / job_id / "result.zip"
         return path if job and job["result_available"] and path.is_file() else None
+
+    def cancel(self, job_id: str) -> dict[str, Any] | None:
+        cleanup_now = False
+        with self.lock:
+            job = self.jobs.get(job_id)
+            if job is None:
+                return None
+            if job.get("status") in {"completed", "failed", "cancelled"}:
+                return dict(job)
+            event = self.cancel_events.setdefault(job_id, threading.Event())
+            event.set()
+            if job.get("status") == "queued":
+                cleanup_now = True
+                job.update({
+                    "status": "cancelled",
+                    "message": "Cancelled",
+                    "finished_at": _utc_now(),
+                    "error": None,
+                })
+            else:
+                job.update({"status": "cancelling", "message": "Cancelling..."})
+            self._persist(job_id)
+            result = dict(job)
+        if cleanup_now:
+            self._cleanup_execution_files(self.jobs_root / job_id)
+        return result
 
     def _persist(self, job_id: str) -> None:
         _write_json(self.jobs_root / job_id / "status.json", self.jobs[job_id])
@@ -150,6 +245,7 @@ class RemoteIKService:
                             "message": f"{type(exc).__name__}: {exc}",
                         },
                     )
+                    self._cleanup_execution_files(self.jobs_root / job_id)
                 except Exception:
                     LOGGER.exception("job_id=%s could not persist worker-loop failure", job_id)
             finally:
@@ -157,6 +253,10 @@ class RemoteIKService:
 
     def _run(self, job_id: str) -> None:
         job_dir = self.jobs_root / job_id
+        current = self.status(job_id)
+        if current is None or current.get("status") == "cancelled":
+            self._cleanup_execution_files(job_dir)
+            return
         request = read_request_manifest(job_dir / "request.zip")
         started = time.monotonic()
         self._update(
@@ -185,14 +285,16 @@ class RemoteIKService:
                 job_dir / "execution",
                 REPOSITORY_ROOT,
                 progress,
+                cancel_event=self.cancel_events[job_id],
+                timeout_sec=JOB_TIMEOUT_SEC,
             )
             output_directory = result.output_directory
             logs = list(result.logs)
         except IKExecutionError as exc:
-            status = "failed"
-            error = {"code": exc.code, "message": str(exc)}
+            status = "cancelled" if exc.code == "cancelled" else "failed"
+            error = None if status == "cancelled" else {"code": exc.code, "message": str(exc)}
             logs = exc.logs
-            output_directory = exc.output_directory
+            output_directory = None if status == "cancelled" else exc.output_directory
         except Exception as exc:
             status = "failed"
             error = {"code": "unexpected_exception", "message": f"{type(exc).__name__}: {exc}"}
@@ -203,7 +305,9 @@ class RemoteIKService:
         result_available = False
         if output_directory is not None and output_directory.is_dir():
             try:
-                files = _zip_output(output_directory, job_dir / "result.zip")
+                files = _zip_output(
+                    output_directory, job_dir / "result.zip", request, status=status,
+                )
                 result_available = True
             except Exception as exc:
                 status = "failed"
@@ -213,7 +317,12 @@ class RemoteIKService:
             job_id,
             status=status,
             progress=1.0 if status == "completed" else self.status(job_id)["progress"],
-            message="Completed" if status == "completed" else "IK failed",
+            message=(
+                "Completed" if status == "completed"
+                else "Cancelled" if status == "cancelled"
+                else "IK timed out" if error and error.get("code") == "timeout"
+                else "IK failed"
+            ),
             finished_at=_utc_now(),
             elapsed_sec=elapsed,
             result_available=result_available,
@@ -224,6 +333,15 @@ class RemoteIKService:
             "job_id=%s status=%s elapsed_sec=%.3f files=%d error=%s",
             job_id, status, elapsed, len(files), error,
         )
+        self._cleanup_execution_files(job_dir)
+        with self.lock:
+            self._cleanup_expired_jobs()
+
+    @staticmethod
+    def _cleanup_execution_files(job_dir: Path) -> None:
+        (job_dir / "request.zip").unlink(missing_ok=True)
+        shutil.rmtree(job_dir / "package", ignore_errors=True)
+        shutil.rmtree(job_dir / "execution", ignore_errors=True)
 
 
 service = RemoteIKService()
@@ -273,6 +391,15 @@ async def submit_job(request: Request, authorization: str | None = Header(defaul
 def get_job(job_id: str, authorization: str | None = Header(default=None)):
     _authorize(authorization)
     job = service.status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.post("/api/v1/ik/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, authorization: str | None = Header(default=None)):
+    _authorize(authorization)
+    job = service.cancel(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job

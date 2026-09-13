@@ -13,14 +13,17 @@ import numpy as np
 
 try:
     from .foot_support import load_foot_support_definition, support_point_world_positions
+    from .meva_schema import MEVA_GCP_COLUMN_INDICES
     from .motion_io import load_motion
 except ImportError:
     from foot_support import load_foot_support_definition, support_point_world_positions
+    from meva_schema import MEVA_GCP_COLUMN_INDICES
     from motion_io import load_motion
+from server.capsule_identity import is_valid_capsule_id
 
 LEGACY_MAGIC = b"MEVAVW01"
 MAGIC = b"MEVAVW02"
-FORMAT_VERSION = 5
+FORMAT_VERSION = 6
 
 MEVA_SEGMENTS = [
     "Pelvis", "LumbarSpine", "Thoracic2", "Head",
@@ -61,7 +64,7 @@ def _is_current(path: Path, kind: str) -> bool:
     if not path.exists():
         return False
     h = _read_header(path)
-    minimum_version = 4 if kind == "meva" else FORMAT_VERSION
+    minimum_version = FORMAT_VERSION
     if not (
         h
         and int(h.get("format_version", 0)) >= minimum_version
@@ -70,9 +73,68 @@ def _is_current(path: Path, kind: str) -> bool:
         return False
     if kind == "meva":
         block_names = {b.get("name") for b in h.get("blocks", [])}
-        if "joint_pos" not in block_names or not h.get("joint_names"):
+        if (
+            "joint_pos" not in block_names
+            or "gcp" not in block_names
+            or "bvh_bytes" not in block_names
+            or not h.get("joint_names")
+            or not is_valid_capsule_id(str(h.get("capsule_id") or ""))
+        ):
             return False
     return True
+
+
+def read_viewer_bin(path: Path) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
+    """Read legacy/current viewer containers with strict block bounds."""
+    raw = path.read_bytes()
+    if len(raw) < 12:
+        raise ValueError("Viewer binary is truncated")
+    magic = raw[:8]
+    if magic == MAGIC:
+        if len(raw) < 16:
+            raise ValueError("Viewer binary is truncated")
+        fixed_version, header_length = struct.unpack("<II", raw[8:16])
+        payload_start = 16 + header_length
+    elif magic == LEGACY_MAGIC:
+        fixed_version = None
+        header_length = struct.unpack("<I", raw[8:12])[0]
+        payload_start = 12 + header_length
+    else:
+        raise ValueError("Unsupported viewer binary magic")
+    if payload_start > len(raw) or header_length > 16 * 1024 * 1024:
+        raise ValueError("Viewer binary header is invalid")
+    header_start = payload_start - header_length
+    header = json.loads(raw[header_start:payload_start].decode("utf-8"))
+    if not isinstance(header, dict):
+        raise ValueError("Viewer binary header must be an object")
+    if fixed_version is not None and int(header.get("format_version", -1)) != fixed_version:
+        raise ValueError("Viewer binary format version mismatch")
+    dtype_by_name = {
+        "float32": np.dtype("<f4"),
+        "int32": np.dtype("<i4"),
+        "uint8": np.dtype("u1"),
+    }
+    arrays: dict[str, np.ndarray] = {}
+    for block in header.get("blocks", []):
+        if not isinstance(block, dict):
+            raise ValueError("Viewer binary block descriptor is invalid")
+        name = str(block.get("name") or "")
+        dtype = dtype_by_name.get(str(block.get("dtype") or ""))
+        shape = tuple(int(value) for value in block.get("shape", []))
+        offset = int(block.get("offset", -1))
+        nbytes = int(block.get("nbytes", -1))
+        if (
+            not name or name in arrays or dtype is None or offset < 0 or nbytes < 0
+            or any(value < 0 for value in shape)
+        ):
+            raise ValueError("Viewer binary block descriptor is invalid")
+        expected = int(np.prod(shape, dtype=np.int64)) * dtype.itemsize
+        start = payload_start + offset
+        stop = start + nbytes
+        if expected != nbytes or start < payload_start or stop > len(raw):
+            raise ValueError(f"Viewer binary block is invalid: {name}")
+        arrays[name] = np.frombuffer(raw, dtype=dtype, count=expected // dtype.itemsize, offset=start).reshape(shape).copy()
+    return header, arrays
 
 
 def _serialize_bin(metadata: dict[str, Any], arrays: dict[str, np.ndarray]) -> bytes:
@@ -445,8 +507,20 @@ def generate_meva_viewer_bin(
     pos = np.empty((n, len(segments), 3), dtype=np.float32)
     quat = np.empty((n, len(segments), 4), dtype=np.float32)
     joint_pos = np.empty((n, len(joints), 3), dtype=np.float32)
+    gcp = np.empty((n, len(MEVA_GCP_COLUMN_INDICES)), dtype=np.float32)
+    max_gcp_index = max(MEVA_GCP_COLUMN_INDICES.values())
+    bvh_value = config["source"].get("bvh")
+    bvh_path = (
+        (repo_root / bvh_value).resolve()
+        if bvh_value else csv_path.with_suffix(".bvh")
+    )
+    if not bvh_path.is_file():
+        raise FileNotFoundError(f"Paired BVH not found: {bvh_path}")
+    bvh_bytes = np.frombuffer(bvh_path.read_bytes(), dtype=np.uint8).copy()
 
     for fi, row in enumerate(rows):
+        if len(row) <= max_gcp_index:
+            raise ValueError(f"MEVA frame {fi} is shorter than required schema")
         for si, seg in enumerate(segments):
             pos[fi, si] = [
                 float(row[col[f"{seg}_g_x"]]),
@@ -465,6 +539,8 @@ def generate_meva_viewer_bin(
                 float(row[col[f"{joint}_g_y"]]),
                 float(row[col[f"{joint}_g_z"]]),
             ]
+        for gi, column_index in enumerate(MEVA_GCP_COLUMN_INDICES.values()):
+            gcp[fi, gi] = float(row[column_index])
 
     _write_bin(
         out_path,
@@ -479,6 +555,8 @@ def generate_meva_viewer_bin(
             "segment_names": segments,
             "joint_names": joints,
             "quaternion_order": "wxyz",
+            "gcp_names": list(MEVA_GCP_COLUMN_INDICES),
+            "bvh_filename": bvh_path.name,
             "rendering": {
                 "type": "joint_skeleton_plus_segment_pose",
                 "plot_pose_available": True,
@@ -489,6 +567,8 @@ def generate_meva_viewer_bin(
             "segment_pos": pos,
             "segment_quat": quat,
             "joint_pos": joint_pos,
+            "gcp": gcp,
+            "bvh_bytes": bvh_bytes,
         },
     )
     return out_path

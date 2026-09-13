@@ -66,21 +66,32 @@
     card.className = "capsule-card";
     card.tabIndex = 0;
 
-    card.innerHTML = `
-      <div class="card-top">
-        <div>
-          <div class="card-kicker">${capsule.id}</div>
-          <div class="card-title">${capsule.title}</div>
-        </div>
-        <div class="card-meta">${capsule.date}</div>
-      </div>
-      <div class="card-meta">${capsule.description}</div>
-      <div class="card-footer">
-        ${capsule.modalities
-          .map((m) => `<span class="badge">${m}</span>`)
-          .join("")}
-      </div>
-    `;
+    const top = document.createElement("div");
+    top.className = "card-top";
+    const heading = document.createElement("div");
+    const kicker = document.createElement("div");
+    kicker.className = "card-kicker";
+    kicker.textContent = capsule.id;
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = capsule.title;
+    heading.append(kicker, title);
+    const date = document.createElement("div");
+    date.className = "card-meta";
+    date.textContent = capsule.date;
+    top.append(heading, date);
+    const description = document.createElement("div");
+    description.className = "card-meta";
+    description.textContent = capsule.description;
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    for (const modality of capsule.modalities) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = modality;
+      footer.appendChild(badge);
+    }
+    card.append(top, description, footer);
 
     const open = () => {
       const url = new URL("capsule/", window.location.href);
@@ -107,18 +118,27 @@
     const card = document.createElement("article");
     card.className = "capsule-card";
 
-    card.innerHTML = `
-      <div class="card-top">
-        <div>
-          <div class="card-kicker">${capsuleId}</div>
-          <div class="card-title">Capsuleを読み込めません</div>
-        </div>
-      </div>
-      <div class="card-meta">${error.message}</div>
-      <div class="card-footer">
-        <span class="badge badge-gray">ERROR</span>
-      </div>
-    `;
+    const top = document.createElement("div");
+    top.className = "card-top";
+    const heading = document.createElement("div");
+    const kicker = document.createElement("div");
+    kicker.className = "card-kicker";
+    kicker.textContent = capsuleId;
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = "Capsuleを読み込めません";
+    heading.append(kicker, title);
+    top.appendChild(heading);
+    const detail = document.createElement("div");
+    detail.className = "card-meta";
+    detail.textContent = String(error?.message || error || "Unknown error");
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const badge = document.createElement("span");
+    badge.className = "badge badge-gray";
+    badge.textContent = "ERROR";
+    footer.appendChild(badge);
+    card.append(top, detail, footer);
 
     return card;
   }

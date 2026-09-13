@@ -10,18 +10,18 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from main_calibration import (
+from server.retarget.main_calibration import (
     _free_joint_qpos_addr,
     _hinge_joints,
     _qpos_from_primary_frame,
     preprocess_gcp,
 )
-from primary_target import load_primary_target
+from server.retarget.primary_target import load_primary_target
 try:
     from server.retarget.robot_runtime_definition import BodyPointDefinition
 except ModuleNotFoundError:  # Direct execution from server/retarget.
     from robot_runtime_definition import BodyPointDefinition
-from mapping_tasks import quat_rotate_vec
+from server.retarget.mapping_tasks import quat_rotate_vec
 
 
 SCHEMA_VERSION = "1.2"

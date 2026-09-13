@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from main_calibration import CalibrationSettings, analyze_main_calibration
+from server.retarget.main_calibration import CalibrationSettings, analyze_main_calibration
 
 
 PRIMARY_POST_FIELDS = [

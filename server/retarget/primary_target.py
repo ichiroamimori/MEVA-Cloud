@@ -51,46 +51,89 @@ def build_primary_target(*, cfg: dict, repo_root: Path, output_path: Path) -> Pa
 
     # The MEVA CSV is large. Extract only target-builder columns in a single
     # streaming pass instead of materializing every string field twice.
-    source_quaternions: list[list[list[float]]] = []
-    source_indices: list[int] = []
-    source_xyz = {name: [] for name in MEVA_POSITION_COLUMN_INDICES}
-    source_gcp = {name: [] for name in MEVA_GCP_COLUMN_INDICES}
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
-        reader = csv.reader(stream)
-        for _ in range(header_row - 1):
-            next(reader, None)
-        fields = [value.strip() for value in (next(reader, None) or [])]
-        field_index = {name: index for index, name in enumerate(fields)}
-        missing = [key for keys in quaternion_keys for key in keys if key not in field_index]
-        if missing:
-            raise KeyError(f"Missing MEVA quaternion columns: {missing}")
-        quaternion_indices = [[field_index[key] for key in keys] for keys in quaternion_keys]
-        max_fixed_index = max(
-            [index for indices in MEVA_POSITION_COLUMN_INDICES.values() for index in indices]
-            + list(MEVA_GCP_COLUMN_INDICES.values())
-        )
-        interpolation_start = max(0, start - 1)
-        interpolation_stop = None if requested_stop is None else requested_stop + 1
-        for source_frame, row in enumerate(reader):
-            if source_frame < interpolation_start:
-                continue
-            if interpolation_stop is not None and source_frame >= interpolation_stop:
-                break
-            if len(row) <= max_fixed_index:
-                raise ValueError(f"MEVA frame {source_frame} is shorter than required schema")
-            source_quaternions.append([
-                [float(row[index]) for index in indices]
-                for indices in quaternion_indices
-            ])
-            source_indices.append(source_frame)
-            for name, indices in MEVA_POSITION_COLUMN_INDICES.items():
-                source_xyz[name].append([float(row[index]) for index in indices])
-            for name, index in MEVA_GCP_COLUMN_INDICES.items():
-                source_gcp[name].append(float(row[index]))
-
-    source_quaternions_array = np.asarray(source_quaternions, dtype=np.float64)
-    xyz_arrays = {name: np.asarray(values, dtype=np.float64) for name, values in source_xyz.items()}
-    gcp_arrays = {name: np.asarray(values, dtype=np.float64) for name, values in source_gcp.items()}
+    interpolation_start = max(0, start - 1)
+    interpolation_stop = None if requested_stop is None else requested_stop + 1
+    if csv_path.suffix.lower() == ".bin":
+        try:
+            from .viewer_data import FORMAT_VERSION, read_viewer_bin
+        except ImportError:
+            from viewer_data import FORMAT_VERSION, read_viewer_bin
+        header, arrays = read_viewer_bin(csv_path)
+        if header.get("kind") != "meva" or int(header.get("format_version", 0)) < FORMAT_VERSION:
+            raise ValueError("Compute requires a current MEVA binary")
+        source_fps = float(header.get("fps") or source_fps)
+        quaternion_order = str(header.get("quaternion_order") or "wxyz")
+        if sorted(quaternion_order) != sorted("wxyz"):
+            raise ValueError(f"Unsupported MEVA binary quaternion order: {quaternion_order}")
+        capsule_id = str(header.get("capsule_id") or "")
+        if not capsule_id or capsule_id != str(cfg.get("capsule_id") or ""):
+            raise ValueError("MEVA binary Capsule ID does not match the Retarget Job")
+        available_segments = [str(value) for value in header.get("segment_names", [])]
+        segment_index = {name: index for index, name in enumerate(available_segments)}
+        missing_segments = [name for name in physical_segments if name not in segment_index]
+        if missing_segments:
+            raise KeyError(f"Missing MEVA binary segments: {missing_segments}")
+        all_frames = np.asarray(arrays["source_frame"], dtype=np.int32)
+        mask = all_frames >= interpolation_start
+        if interpolation_stop is not None:
+            mask &= all_frames < interpolation_stop
+        source_indices = all_frames[mask].astype(int).tolist()
+        source_quaternions_array = np.asarray(arrays["segment_quat"], dtype=np.float64)[
+            mask
+        ][:, [segment_index[name] for name in physical_segments], :]
+        source_positions = np.asarray(arrays["segment_pos"], dtype=np.float64)[mask]
+        xyz_arrays = {
+            name: source_positions[:, segment_index[name], :]
+            for name in MEVA_POSITION_COLUMN_INDICES
+        }
+        gcp_names = [str(value) for value in header.get("gcp_names", [])]
+        gcp_index = {name: index for index, name in enumerate(gcp_names)}
+        missing_gcp = [name for name in MEVA_GCP_COLUMN_INDICES if name not in gcp_index]
+        if missing_gcp:
+            raise KeyError(f"Missing MEVA binary GCP channels: {missing_gcp}")
+        source_gcp_array = np.asarray(arrays["gcp"], dtype=np.float64)[mask]
+        gcp_arrays = {
+            name: source_gcp_array[:, gcp_index[name]]
+            for name in MEVA_GCP_COLUMN_INDICES
+        }
+    else:
+        source_quaternions: list[list[list[float]]] = []
+        source_indices = []
+        source_xyz = {name: [] for name in MEVA_POSITION_COLUMN_INDICES}
+        source_gcp = {name: [] for name in MEVA_GCP_COLUMN_INDICES}
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as stream:
+            reader = csv.reader(stream)
+            for _ in range(header_row - 1):
+                next(reader, None)
+            fields = [value.strip() for value in (next(reader, None) or [])]
+            field_index = {name: index for index, name in enumerate(fields)}
+            missing = [key for keys in quaternion_keys for key in keys if key not in field_index]
+            if missing:
+                raise KeyError(f"Missing MEVA quaternion columns: {missing}")
+            quaternion_indices = [[field_index[key] for key in keys] for keys in quaternion_keys]
+            max_fixed_index = max(
+                [index for indices in MEVA_POSITION_COLUMN_INDICES.values() for index in indices]
+                + list(MEVA_GCP_COLUMN_INDICES.values())
+            )
+            for source_frame, row in enumerate(reader):
+                if source_frame < interpolation_start:
+                    continue
+                if interpolation_stop is not None and source_frame >= interpolation_stop:
+                    break
+                if len(row) <= max_fixed_index:
+                    raise ValueError(f"MEVA frame {source_frame} is shorter than required schema")
+                source_quaternions.append([
+                    [float(row[index]) for index in indices]
+                    for indices in quaternion_indices
+                ])
+                source_indices.append(source_frame)
+                for name, indices in MEVA_POSITION_COLUMN_INDICES.items():
+                    source_xyz[name].append([float(row[index]) for index in indices])
+                for name, index in MEVA_GCP_COLUMN_INDICES.items():
+                    source_gcp[name].append(float(row[index]))
+        source_quaternions_array = np.asarray(source_quaternions, dtype=np.float64)
+        xyz_arrays = {name: np.asarray(values, dtype=np.float64) for name, values in source_xyz.items()}
+        gcp_arrays = {name: np.asarray(values, dtype=np.float64) for name, values in source_gcp.items()}
     selected_source_count = len(source_quaternions_array)
     if selected_source_count == 0:
         raise ValueError("MEVA source has no data rows")

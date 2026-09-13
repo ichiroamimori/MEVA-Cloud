@@ -6,7 +6,7 @@ import mink
 import mujoco
 import numpy as np
 
-from ik_solver import (
+from server.retarget.ik_solver import (
     IKFrameSpec,
     PreparedIKFrame,
     SelfCollisionDampingTask,

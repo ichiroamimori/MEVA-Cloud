@@ -14,17 +14,17 @@ from pathlib import Path
 
 import numpy as np
 
-from ik_solver import IKSequenceFailure, extract_output, hinge_info, solve_ik_sequence
-from main_calibration import CalibrationSettings
-from main_input_diagnostics import (
+from server.retarget.ik_solver import IKSequenceFailure, extract_output, hinge_info, solve_ik_sequence
+from server.retarget.main_calibration import CalibrationSettings
+from server.retarget.main_input_diagnostics import (
     build_primary_post_diagnostics,
     write_primary_post_diagnostics,
 )
-from motion_io import canonical_motion, save_motion_npz
-from primary_prepare import prepare_primary
-from primary_target import build_primary_target, load_primary_target
-from primary_viewer import write_primary_viewer
-from validation_data import write_stage_validation_artifacts
+from server.retarget.motion_io import canonical_motion, save_motion_npz
+from server.retarget.primary_prepare import prepare_primary
+from server.retarget.primary_target import build_primary_target, load_primary_target
+from server.retarget.primary_viewer import write_primary_viewer
+from server.retarget.validation_data import write_stage_validation_artifacts
 
 
 def load_json(path: Path):

@@ -13,7 +13,7 @@ import numpy as np
 import mujoco
 import mink
 
-from ik_solver import (
+from server.retarget.ik_solver import (
     IKDiagnosticTarget,
     IKFrameSpec,
     IKSequenceResult,
@@ -22,7 +22,7 @@ from ik_solver import (
     build_solver_settings,
     extract_output,
 )
-from mapping_tasks import (
+from server.retarget.mapping_tasks import (
     MappingTaskSet,
     RelativeDirectionTask,
     axis_angle_deg,
@@ -30,7 +30,7 @@ from mapping_tasks import (
     quat_rotate_vec,
     required_quaternion_columns,
 )
-from main_calibration import (
+from server.retarget.main_calibration import (
     CalibrationSettings,
     _free_joint_qpos_addr,
     _hinge_joints,
@@ -38,10 +38,10 @@ from main_calibration import (
     analyze_main_calibration,
     preprocess_gcp,
 )
-from check_offsets import compute_offsets
-from support_state import SupportState
-from main_target import load_main_target
-from motion_io import load_motion
+from server.retarget.check_offsets import compute_offsets
+from server.retarget.support_state import SupportState
+from server.retarget.main_target import load_main_target
+from server.retarget.motion_io import load_motion
 try:
     from server.retarget.robot_runtime_definition import (
         BodyPointDefinition,
@@ -68,7 +68,7 @@ def _body_point_from_configuration(
         + transform.rotation().as_matrix()
         @ np.asarray(point.local_position, dtype=np.float64)
     )
-from foot_support import (
+from server.retarget.foot_support import (
     FootSupportSide,
     load_foot_support_definition,
     support_point_jacobian,

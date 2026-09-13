@@ -16,7 +16,30 @@ body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;c
 header{height:76px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
 .brand{font-size:21px;font-weight:800;display:flex;gap:11px;align-items:center}
 .brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#21b9b4,#087976)}
-.user{color:var(--muted);font-size:14px}
+.user-menu-wrap{position:relative}
+.user-menu-trigger{
+  appearance:none;border:0;background:transparent;color:var(--muted);font:inherit;font-size:14px;
+  display:inline-flex;align-items:center;gap:6px;padding:8px 9px;border-radius:8px;cursor:pointer
+}
+.user-menu-trigger:hover,.user-menu-trigger[aria-expanded="true"]{background:#f3f7f8;color:var(--ink)}
+.user-menu-chevron{font-size:10px;line-height:1;transition:transform .15s ease}
+.user-menu-trigger[aria-expanded="true"] .user-menu-chevron{transform:rotate(180deg)}
+.user-menu{
+  position:absolute;right:0;top:calc(100% + 8px);z-index:100;width:250px;padding:10px;
+  background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,65,70,.14)
+}
+.user-menu[hidden]{display:none}
+.user-menu-head{padding:7px 8px 10px;border-bottom:1px solid #edf2f3;margin-bottom:7px}
+.user-menu-name{font-size:13px;font-weight:800;color:var(--ink)}
+.user-menu-role,.user-menu-workspace{font-size:10px;color:var(--muted);margin-top:2px}
+.user-menu-section{padding:7px 8px 5px}
+.user-menu-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800;margin-bottom:5px}
+.compute-option{
+  display:flex;align-items:center;gap:9px;margin:0;padding:8px;border-radius:8px;cursor:pointer;
+  color:var(--ink);font-size:13px;font-weight:650
+}
+.compute-option:hover{background:#f7fbfb}
+.compute-option input{margin:0;width:15px;height:15px;accent-color:var(--brand2)}
 .shell{max-width:1450px;margin:auto;padding:26px 32px 56px}
 .crumb{font-size:13px;color:var(--muted);margin-bottom:12px}
 h1{font-size:34px;margin:0 0 5px}
@@ -718,6 +741,17 @@ select{min-width:215px}
 .run-status{
   min-height:16px;
 }
+.run-status-row{display:flex;align-items:center;justify-content:center;gap:10px;min-height:16px;width:100%;white-space:nowrap}
+.run-status-row .run-status{margin:0;min-width:0}
+.run-cancel{
+  border:0;background:transparent;padding:0;color:var(--muted);
+  font:inherit;font-size:11px;font-weight:400;cursor:pointer;white-space:nowrap;
+}
+.run-cancel:hover{color:#b34545;text-decoration:underline}
+.run-cancel:disabled{opacity:.55;cursor:wait;text-decoration:none}
+.retarget-execution-locked :is(button,input,select,textarea):disabled:not(.run-cancel){
+  opacity:.42 !important;filter:saturate(.55);cursor:not-allowed;
+}
 
 
 /* ===== UI refinement: compact operation row ===== */
@@ -743,6 +777,8 @@ select{min-width:215px}
   min-width:248px !important;
   width:248px !important;
 }
+.retarget-actions > .run-action-block{margin-left:8px}
+.frame-range-control label{width:100%;text-align:center}
 
 
 /* ===== UI refinement 2026-08-14 morning ===== */
@@ -1420,13 +1456,38 @@ input[type="checkbox"]{
 .foot-geom-row{display:grid;grid-template-columns:180px 1fr 70px;gap:8px;align-items:center;font-size:10px;margin:4px 0}
 .foot-geom-spark{height:16px;background:#eef3f8;position:relative}
 .foot-geom-dot{position:absolute;width:5px;height:16px;background:#d97706;top:0}
+.config-metadata-row{display:flex;align-items:center;gap:8px;padding:7px 0 0;font-size:10px;color:var(--muted);min-height:30px;box-sizing:border-box;flex-wrap:wrap}
+.config-metadata-row strong{color:var(--ink)}
+.config-metadata-row .btn{padding:4px 8px;font-size:9px}
 
 </style>
 </head>
 <body>
 <header>
   <div class="brand"><span class="brand-mark"></span><span>MEVA Cloud</span><span class="product-context">Retargeting</span></div>
-  <div class="user">Local user</div>
+  <div class="user-menu-wrap" id="userMenuWrap">
+    <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-haspopup="menu" aria-expanded="false">
+      <span id="userMenuTriggerName">Zenosuke Miyamoto</span><span class="user-menu-chevron" aria-hidden="true">▾</span>
+    </button>
+    <div class="user-menu" id="userMenu" role="menu" hidden>
+      <div class="user-menu-head">
+        <div class="user-menu-name" id="userMenuName">Zenosuke Miyamoto</div>
+        <div class="user-menu-role" id="userMenuRole">System Admin</div>
+        <div class="user-menu-workspace" id="userMenuWorkspace">MEVA Cloud Development</div>
+      </div>
+      <div class="user-menu-section">
+        <div class="user-menu-label">Compute</div>
+        <label class="compute-option">
+          <input type="radio" name="computeBackend" value="local_python">
+          <span>Your PC</span>
+        </label>
+        <label class="compute-option">
+          <input type="radio" name="computeBackend" value="remote_python">
+          <span>Compute PC</span>
+        </label>
+      </div>
+    </div>
+  </div>
 </header>
 
 <main class="shell">
@@ -1490,9 +1551,9 @@ input[type="checkbox"]{
             <label for="samplingRate">SAMPLING RATE (fps)</label>
             <input id="samplingRate" type="number" min="0.1" step="0.1" value="30">
           </div>
-          <div class="run-action-block">
-            <div class="run-status" id="runStatus">Ready</div>
-            <button class="btn retarget-now" type="button" id="retargetNowBtn">RETARGET NOW</button>
+            <div class="run-action-block">
+              <div class="run-status-row"><div class="run-status" id="runStatus">Ready</div><button class="run-cancel" id="primaryCancelBtn" type="button" hidden>[ESC] Cancel</button></div>
+          <button class="btn retarget-now" type="button" id="retargetNowBtn" disabled>RETARGET NOW</button>
             <div class="progress-track" id="progressTrack" hidden>
               <div class="progress-fill" id="progressFill"></div>
             </div>
@@ -1503,6 +1564,7 @@ input[type="checkbox"]{
         <label for="primaryRunNote">Note</label>
         <textarea id="primaryRunNote" maxlength="2000" placeholder="Primary result note"></textarea>
       </div>
+      <div class="config-metadata-row" id="primaryConfigMetadata"></div>
 
       <div class="section-title">Ground Contact Setting</div>
       <div class="ik-condition-wrap primary-ground-setting">
@@ -1866,7 +1928,7 @@ input[type="checkbox"]{
               <select class="config-name" id="configNameBottom" aria-label="Config name"></select>
             </div>
             <button class="btn" type="button" id="resetBottomBtn">Reset</button>
-            <button class="btn primary" type="button" id="changeDefaultBottomBtn">SAVE CONFIG</button>
+              <button class="btn primary" type="button" id="changeDefaultBottomBtn">SAVE CONFIG</button>
           </div>
           <div class="retarget-actions">
             <div class="frame-range-control">
@@ -1882,8 +1944,8 @@ input[type="checkbox"]{
               <input id="samplingRateBottom" type="number" min="0.1" step="0.1" value="30">
             </div>
             <div class="run-action-block">
-              <div class="run-status" id="runStatusBottom">Ready</div>
-              <button class="btn retarget-now" type="button" id="retargetNowBottomBtn">RETARGET NOW</button>
+              <div class="run-status-row"><div class="run-status" id="runStatusBottom">Ready</div><button class="run-cancel" id="primaryCancelBottomBtn" type="button" hidden>[ESC] Cancel</button></div>
+          <button class="btn retarget-now" type="button" id="retargetNowBottomBtn" disabled>RETARGET NOW</button>
             </div>
           </div>
         </div>
@@ -1940,7 +2002,7 @@ input[type="checkbox"]{
               <input id="mainSamplingRate" type="number" readonly disabled>
             </div>
             <div class="run-action-block">
-              <div class="run-status" id="mainRunStatus">Primary結果を選択してください。</div>
+              <div class="run-status-row"><div class="run-status" id="mainRunStatus">Primary結果を選択してください。</div><button class="run-cancel" id="mainCancelBtn" type="button" hidden>[ESC] Cancel</button></div>
               <button class="btn retarget-now" id="mainRetargetBtn" type="button" disabled>RETARGET NOW</button>
             </div>
           </div>
@@ -1949,6 +2011,7 @@ input[type="checkbox"]{
           <label for="mainRunNote">Note</label>
           <textarea id="mainRunNote" maxlength="2000" placeholder="Main result note"></textarea>
         </div>
+        <div class="config-metadata-row" id="mainConfigMetadata"></div>
 
         <div class="section-title" style="margin-top:18px">Ground Contact Setting</div>
         <div class="ik-condition-wrap">
@@ -2058,7 +2121,7 @@ input[type="checkbox"]{
                 <input id="mainSamplingRateBottom" type="number" readonly disabled>
               </div>
               <div class="run-action-block">
-                <div class="run-status" id="mainRunStatusBottom">Primary結果を選択してください。</div>
+                <div class="run-status-row"><div class="run-status" id="mainRunStatusBottom">Primary結果を選択してください。</div><button class="run-cancel" id="mainCancelBottomBtn" type="button" hidden>[ESC] Cancel</button></div>
                 <button class="btn retarget-now" id="mainRetargetBottomBtn" type="button" disabled>RETARGET NOW</button>
               </div>
             </div>
@@ -2273,6 +2336,7 @@ input[type="checkbox"]{
       <div class="save-config-error" id="saveConfigError" role="alert"></div>
     </div>
     <div class="save-config-footer">
+      <button class="btn" id="replaceStandardBtn" type="button" hidden>REPLACE STANDARD</button>
       <button class="btn" id="saveConfigCancelBtn" type="button">CANCEL</button>
       <button class="btn primary" id="saveConfigSubmitBtn" type="button">SAVE</button>
     </div>
@@ -2281,6 +2345,76 @@ input[type="checkbox"]{
 <script src="../assets/js/robot-viewer.js"></script>
 <script>
 (() => {
+  const userMenuWrap = document.getElementById("userMenuWrap");
+  const userMenuTrigger = document.getElementById("userMenuTrigger");
+  const userMenu = document.getElementById("userMenu");
+  const userMenuTriggerName = document.getElementById("userMenuTriggerName");
+  const userMenuName = document.getElementById("userMenuName");
+  const userMenuRole = document.getElementById("userMenuRole");
+  const userMenuWorkspace = document.getElementById("userMenuWorkspace");
+  const computeBackendInputs = [...document.querySelectorAll('input[name="computeBackend"]')];
+  const COMPUTE_BACKEND_STORAGE_KEY = "mevaCloud.computeBackend";
+  let computeBackend = null;
+  let canReplaceStandard = false;
+
+  fetch("/api/service-context")
+    .then(response=>response.ok ? response.json() : Promise.reject(new Error("service context unavailable")))
+    .then(data=>{
+      const user = data.user || {};
+      const workspace = data.workspace || {};
+      if(userMenuTriggerName) userMenuTriggerName.textContent = user.display_name || "Zenosuke Miyamoto";
+      if(userMenuName) userMenuName.textContent = user.display_name || "Zenosuke Miyamoto";
+      if(userMenuRole) userMenuRole.textContent = user.role_label || "System Admin";
+      canReplaceStandard = Boolean(user.can_replace_standard);
+      if(userMenuWorkspace){
+        const plan = workspace.plan_label ? ` / ${workspace.plan_label}` : "";
+        userMenuWorkspace.textContent = `${workspace.display_name || "MEVA Cloud Development"}${plan}`;
+      }
+    })
+    .catch(()=>{});
+
+  function setUserMenuOpen(open){
+    if(!userMenu || !userMenuTrigger) return;
+    userMenu.hidden = !open;
+    userMenuTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function applyComputeBackend(backend){
+    if(backend !== "local_python" && backend !== "remote_python") return;
+    computeBackend = backend;
+    for(const input of computeBackendInputs) input.checked = input.value === backend;
+  }
+
+  userMenuTrigger?.addEventListener("click", event=>{
+    event.stopPropagation();
+    setUserMenuOpen(userMenu?.hidden ?? true);
+  });
+  userMenu?.addEventListener("click", event=>event.stopPropagation());
+  document.addEventListener("click", event=>{
+    if(userMenuWrap && !userMenuWrap.contains(event.target)) setUserMenuOpen(false);
+  });
+  document.addEventListener("keydown", event=>{
+    if(event.key === "Escape") setUserMenuOpen(false);
+  });
+  for(const input of computeBackendInputs){
+    input.addEventListener("change", ()=>{
+      if(!input.checked) return;
+      applyComputeBackend(input.value);
+      try{ localStorage.setItem(COMPUTE_BACKEND_STORAGE_KEY, input.value); }catch(_err){}
+    });
+  }
+
+  let savedComputeBackend = null;
+  try{ savedComputeBackend = localStorage.getItem(COMPUTE_BACKEND_STORAGE_KEY); }catch(_err){}
+  if(savedComputeBackend === "local_python" || savedComputeBackend === "remote_python"){
+    applyComputeBackend(savedComputeBackend);
+  }else{
+    fetch("/api/retarget/compute-backend")
+      .then(response=>response.ok ? response.json() : Promise.reject(new Error("backend unavailable")))
+      .then(data=>applyComputeBackend(data.default_backend))
+      .catch(()=>applyComputeBackend("local_python"));
+  }
+
   const MEVA_SEGMENTS = [
     "Pelvis","LumbarSpine","Thoracic2","Thoracic2+LumberSpine","Head",
     "LeftScapula","LeftUpperArm","LeftForearm","LeftHand",
@@ -2289,9 +2423,10 @@ input[type="checkbox"]{
     "RightUpperLeg","RightLowerLeg","RightFoot"
   ];
 
-  const EMBEDDED_CONFIG = {"schema_version": "1.0", "capsule_id": "2606050001", "robot": {"manufacturer": "unitree", "model": "g1", "variant": "g1_29dof", "mjcf": "server/robots/unitree/g1/g1_29dof.xml", "initial_keyframe": "home"}, "source": {"type": "meva_csv", "file": "workspace/users/local_user/capsules/2606050001/meva/sequence_hanya_nakahara_050626_205421.csv", "header_row_1based": 8, "sampling_rate_hz": 100, "quaternion_order": "wxyz", "quaternion_columns": "{segment}_q_gs_{component}"}, "frame_range": {"start": 3000, "stop": 4000, "step": 1}, "root": {"position_mode": "keep_robot_initial", "position_cost": 100}, "world_alignment": {"offset_quaternion_wxyz": [1, 0, 0, 0]}, "mappings": [{"source_segment": "Thoracic2", "target_link": "torso_link", "orientation_weight": 0.9, "position_weight": 0, "orientation_mode": "full"}, {"source_segment": "Pelvis", "target_link": "pelvis", "orientation_weight": 1, "position_weight": 0, "orientation_mode": "full"}, {"source_segment": "LeftUpperArm", "target_link": "left_shoulder_yaw_link", "orientation_weight": 0.8, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "LeftForearm", "target_link": "left_elbow_link", "orientation_weight": 0.2, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "LeftHand", "target_link": "left_wrist_yaw_link", "orientation_weight": 1, "position_weight": 0, "orientation_mode": "full"}, {"source_segment": "RightUpperArm", "target_link": "right_shoulder_yaw_link", "orientation_weight": 0.8, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "RightForearm", "target_link": "right_elbow_link", "orientation_weight": 0.2, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "RightHand", "target_link": "right_wrist_yaw_link", "orientation_weight": 1, "position_weight": 0, "orientation_mode": "full"}, {"source_segment": "LeftUpperLeg", "target_link": "left_hip_yaw_link", "orientation_weight": 0.5, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "LeftLowerLeg", "target_link": "left_knee_link", "orientation_weight": 0.1, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "LeftFoot", "target_link": "left_ankle_roll_link", "orientation_weight": 1, "position_weight": 0, "orientation_mode": "full"}, {"source_segment": "RightUpperLeg", "target_link": "right_hip_yaw_link", "orientation_weight": 0.5, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "RightLowerLeg", "target_link": "right_knee_link", "orientation_weight": 0.1, "position_weight": 0, "orientation_mode": "axis"}, {"source_segment": "RightFoot", "target_link": "right_ankle_roll_link", "orientation_weight": 1, "position_weight": 0, "orientation_mode": "full"}], "joint_limit_avoidance": {"enabled": true, "enforce_hard_xml_limits": true, "default": {"limit_zone_percent": 10, "base_cost": 0.01, "max_cost": 0.2, "exponent": 2}, "overrides": {}}, "solver": {"name": "daqp", "dt_s": 0.02, "global_damping": 1e-08, "task_lm_damping": 1e-06, "max_iterations_per_frame": 20, "convergence_joint_delta_deg": 0.01, "convergence_consecutive_iterations": 2}, "output": {"run_id": "auto", "pkl_name": "primary.pkl", "config_snapshot_name": "config.json", "root_rot_order": "xyzw", "save_diagnostics_csv": true}, "temporal_regularization": {"enabled": true, "cost": 0.01}, "interframe_joint_velocity_limit": {"enabled": true, "default_rad_s": 9.42477796076938, "overrides": {}}, "config_name": "G1 Standard Mapping", "spatial_constraints": {"pelvis_foot_direction": {"enabled": false, "left_cost": 0.1, "right_cost": 0.1}}};
+  const EMBEDDED_CONFIG = {};
   let loadedConfig = structuredClone(EMBEDDED_CONFIG);
   let workingConfig = structuredClone(EMBEDDED_CONFIG);
+  let contextReady = false;
   let baselineByLink = new Map();
   let robotModelMetadata = {joints:[],joint_symmetry:{},body_symmetry:{},collision_pairs:[]};
   let analyticDetectionTimer = null;
@@ -2304,6 +2439,8 @@ input[type="checkbox"]{
   const retargetedDataSelect = document.getElementById("retargetedDataSelect");
   const retargetNowBtn = document.getElementById("retargetNowBtn");
   const retargetNowBottomBtn = document.getElementById("retargetNowBottomBtn");
+  const primaryCancelBtn = document.getElementById("primaryCancelBtn");
+  const primaryCancelBottomBtn = document.getElementById("primaryCancelBottomBtn");
   const runStatus = document.getElementById("runStatus");
   const configNameBottom = document.getElementById("configNameBottom");
   const configDirtyIndicator = document.getElementById("configDirtyIndicator");
@@ -2315,6 +2452,7 @@ input[type="checkbox"]{
   const samplingRateBottom = document.getElementById("samplingRateBottom");
   const runStatusBottom = document.getElementById("runStatusBottom");
   const frameCount = document.getElementById("frameCount");
+  const primaryConfigMetadata = document.getElementById("primaryConfigMetadata");
   const capsuleSummary = document.getElementById("capsuleSummary");
   const mainCapsuleSummary = document.getElementById("mainCapsuleSummary");
   const targetRobotSelect = document.getElementById("targetRobotSelect");
@@ -2360,6 +2498,7 @@ input[type="checkbox"]{
   const saveConfigName = document.getElementById("saveConfigName");
   const saveConfigError = document.getElementById("saveConfigError");
   const saveConfigSubmitBtn = document.getElementById("saveConfigSubmitBtn");
+  const replaceStandardBtn = document.getElementById("replaceStandardBtn");
   const saveConfigCancelBtn = document.getElementById("saveConfigCancelBtn");
   const saveConfigCloseBtn = document.getElementById("saveConfigCloseBtn");
   let configCatalog = [];
@@ -2412,6 +2551,8 @@ input[type="checkbox"]{
   const mainRunStatusBottom = document.getElementById("mainRunStatusBottom");
   const mainRetargetBtn = document.getElementById("mainRetargetBtn");
   const mainRetargetBottomBtn = document.getElementById("mainRetargetBottomBtn");
+  const mainCancelBtn = document.getElementById("mainCancelBtn");
+  const mainCancelBottomBtn = document.getElementById("mainCancelBottomBtn");
   const mainInheritedSnapshot = document.getElementById("mainInheritedSnapshot");
   const mainConfigName = document.getElementById("mainConfigName");
   const mainRunNote = document.getElementById("mainRunNote");
@@ -2431,6 +2572,7 @@ input[type="checkbox"]{
   const mainEndFrameBottom = document.getElementById("mainEndFrameBottom");
   const mainSamplingRateBottom = document.getElementById("mainSamplingRateBottom");
   const mainFrameCount = document.getElementById("mainFrameCount");
+  const mainConfigMetadata = document.getElementById("mainConfigMetadata");
   const mainRetargetedDataSelect = document.getElementById("mainRetargetedDataSelect");
   const mainResultSelect = document.getElementById("mainResultSelect");
   let selectedSettingRunStage = {primaryDone:false, mainDone:false, mainCsvExists:false};
@@ -2454,6 +2596,9 @@ input[type="checkbox"]{
       "artifact_generation_id", "main_runtime_context", "note",
       "primary_motion_file", "primary_target_npz", "main_target_npz",
       "primary_post_csv", "main_input_csv", "main_calibration", "main_target_analysis"
+      ,"config_id", "display_name", "scope", "owner_id", "target_robot",
+      "version", "created_by", "source_config_id", "created_at", "updated_at", "status",
+      "standard_key"
     ]){
       delete shared[key];
     }
@@ -2483,6 +2628,40 @@ input[type="checkbox"]{
     return record ? `${record.scope}|${record.filename}` : "";
   }
 
+  const CONFIG_SCOPE_LABELS = {
+    xenoma_standard: "Xenoma Standard",
+    personal: "Personal",
+    workspace: "Workspace",
+  };
+
+  function renderConfigMetadata(container, record, stage){
+    if(!container) return;
+    container.replaceChildren();
+    if(!record) return;
+    const robot = record.target_robot?.variant || "—";
+    const updated = record.updated_at ? new Date(record.updated_at).toLocaleString() : "—";
+    const summary = document.createElement("span");
+    summary.textContent = `${CONFIG_SCOPE_LABELS[record.scope] || record.scope} · Robot ${robot} · v${record.version || 1} · ${record.created_by || "—"} · ${updated} · ${record.status || "active"}`;
+    summary.title = record.config_id || "";
+    container.appendChild(summary);
+    if(record.scope === "personal"){
+      const publish = document.createElement("button");
+      publish.className = "btn";
+      publish.type = "button";
+      publish.textContent = "PUBLISH TO WORKSPACE";
+      publish.addEventListener("click", ()=>publishConfigToWorkspace(stage));
+      container.appendChild(publish);
+    }
+    if(record.scope === "personal" || record.scope === "workspace"){
+      const archive = document.createElement("button");
+      archive.className = "btn";
+      archive.type = "button";
+      archive.textContent = "ARCHIVE";
+      archive.addEventListener("click", ()=>archiveWorkspaceConfig(stage));
+      container.appendChild(archive);
+    }
+  }
+
   function selectedConfigDisplayName(){
     return selectedSharedConfig?.name || workingConfig?.name || workingConfig?.config_name || "Primary Standard";
   }
@@ -2492,17 +2671,18 @@ input[type="checkbox"]{
     const value = selectionValue(record);
     if(configName) configName.value = value;
     if(configNameBottom) configNameBottom.value = value;
+    renderConfigMetadata(primaryConfigMetadata, selectedSharedConfig, "primary");
   }
 
   function renderConfigCatalog(preferredName=""){
     for(const select of [configName, configNameBottom]){
       if(!select) continue;
       select.innerHTML = "";
-      for(const scope of ["xenoma", "user"]){
+      for(const scope of ["xenoma_standard", "personal", "workspace"]){
         const records = configCatalog.filter(item => item.scope === scope);
         if(!records.length) continue;
         const group = document.createElement("optgroup");
-        group.label = scope === "xenoma" ? "Xenoma" : "User";
+        group.label = CONFIG_SCOPE_LABELS[scope];
         for(const record of records){
           const option = document.createElement("option");
           option.value = selectionValue(record);
@@ -2513,7 +2693,7 @@ input[type="checkbox"]{
       }
     }
     const preferred = configCatalog.find(item => item.name === preferredName)
-      || configCatalog.find(item => item.scope === "xenoma" && item.name === "Primary Standard")
+      || configCatalog.find(item => item.scope === "xenoma_standard" && item.name === "Primary Standard")
       || configCatalog[0]
       || null;
     selectSharedRecord(preferred);
@@ -2549,13 +2729,15 @@ input[type="checkbox"]{
     const response = await fetch(`/api/retarget/configs/load?${query}`);
     const data = await response.json();
     if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    const preservedStart = startFrame?.value;
+    const preservedEnd = endFrame?.value;
     loadedConfig = deepClone(data.config);
     workingConfig = deepClone(data.config);
     selectSharedRecord(data.selection);
     await refreshAnalyticJointDetection(data.config, true);
     applyConfig(data.config, {updateBaseline:true});
-    if(startFrame) startFrame.value = 0;
-    if(endFrame) endFrame.value = sourceMaxFrame ?? "";
+    if(startFrame && preservedStart != null) startFrame.value = preservedStart;
+    if(endFrame && preservedEnd != null) endFrame.value = preservedEnd;
     syncTopToBottom();
     refreshSourceSummary();
   }
@@ -2569,17 +2751,18 @@ input[type="checkbox"]{
     const value = selectionValue(record);
     if(mainConfigName) mainConfigName.value = value;
     if(mainConfigNameBottom) mainConfigNameBottom.value = value;
+    renderConfigMetadata(mainConfigMetadata, selectedMainSharedConfig, "main");
   }
 
   function renderMainConfigCatalog(preferredName=""){
     for(const select of [mainConfigName, mainConfigNameBottom]){
       if(!select) continue;
       select.innerHTML = "";
-      for(const scope of ["xenoma", "user"]){
+      for(const scope of ["xenoma_standard", "personal", "workspace"]){
         const records = mainConfigCatalog.filter(item => item.scope === scope);
         if(!records.length) continue;
         const group = document.createElement("optgroup");
-        group.label = scope === "xenoma" ? "Xenoma" : "User";
+        group.label = CONFIG_SCOPE_LABELS[scope];
         for(const record of records){
           const option = document.createElement("option");
           option.value = selectionValue(record);
@@ -2590,7 +2773,7 @@ input[type="checkbox"]{
       }
     }
     const preferred = mainConfigCatalog.find(item => item.name === preferredName)
-      || mainConfigCatalog.find(item => item.scope === "xenoma" && item.name === "Main Standard")
+      || mainConfigCatalog.find(item => item.scope === "xenoma_standard" && item.name === "Main Standard")
       || mainConfigCatalog[0]
       || null;
     selectMainSharedRecord(preferred);
@@ -2628,10 +2811,16 @@ input[type="checkbox"]{
     const response = await fetch(`/api/retarget/configs/load?${query}`);
     const data = await response.json();
     if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    const preservedStart = mainStartFrame?.value;
+    const preservedEnd = mainEndFrame?.value;
     mainLoadedConfig = deepClone(data.config);
     mainWorkingConfig = deepClone(data.config);
     selectMainSharedRecord(data.selection);
     applyMainConfig(data.config, {updateBaseline:true});
+    if(mainStartFrame && preservedStart != null) mainStartFrame.value = preservedStart;
+    if(mainEndFrame && preservedEnd != null) mainEndFrame.value = preservedEnd;
+    if(mainStartFrameBottom && mainStartFrame) mainStartFrameBottom.value = mainStartFrame.value;
+    if(mainEndFrameBottom && mainEndFrame) mainEndFrameBottom.value = mainEndFrame.value;
   }
 
   function mapByLink(cfg){
@@ -3448,6 +3637,12 @@ input[type="checkbox"]{
         : selectedConfigDisplayName();
     }
     if(saveConfigError) saveConfigError.textContent = "";
+    const selected = stage === "main" ? selectedMainSharedConfig : selectedSharedConfig;
+    if(replaceStandardBtn){
+      replaceStandardBtn.hidden = !(
+        canReplaceStandard && selected?.scope === "xenoma_standard"
+      );
+    }
     saveConfigModal?.classList.add("open");
     saveConfigModal?.setAttribute("aria-hidden", "false");
     requestAnimationFrame(() => saveConfigName?.focus());
@@ -3517,7 +3712,119 @@ input[type="checkbox"]{
       : saveDefaultConfig(overwrite);
   }
 
+  async function publishConfigToWorkspace(stage){
+    const isMain = stage === "main";
+    const selected = isMain ? selectedMainSharedConfig : selectedSharedConfig;
+    const cfg = isMain ? collectMainConfig() : collectConfig();
+    if(!selected || selected.scope !== "personal") return;
+    try{
+      const response = await fetch("/api/retarget/configs/publish-workspace", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          capsule_id: capsuleId,
+          name: selected.display_name || selected.name,
+          source_type: "meva",
+          manufacturer: cfg.robot?.manufacturer || "unitree",
+          robot_variant: cfg.robot?.variant || "g1_29dof",
+          selected_scope: selected.scope,
+          selected_filename: selected.filename,
+          stage,
+          config: cfg,
+        }),
+      });
+      const data = await response.json();
+      if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+      if(isMain){
+        await loadMainConfigCatalog(data.selection.display_name, cfg.robot);
+        selectMainSharedRecord(data.selection);
+      }else{
+        await loadConfigCatalog(data.selection.display_name);
+        selectSharedRecord(data.selection);
+      }
+    }catch(err){
+      alert("WorkspaceへPublishできませんでした: " + err.message);
+    }
+  }
+
+  async function archiveWorkspaceConfig(stage){
+    const isMain = stage === "main";
+    const selected = isMain ? selectedMainSharedConfig : selectedSharedConfig;
+    const cfg = isMain ? collectMainConfig() : collectConfig();
+    if(!selected || !["personal", "workspace"].includes(selected.scope)) return;
+    try{
+      const response = await fetch("/api/retarget/configs/archive", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          scope: selected.scope,
+          filename: selected.filename,
+          source_type: "meva",
+          manufacturer: cfg.robot?.manufacturer || "unitree",
+          robot_variant: cfg.robot?.variant || "g1_29dof",
+          stage,
+        }),
+      });
+      const data = await response.json();
+      if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+      if(isMain){
+        const preferred = await loadMainConfigCatalog("", cfg.robot);
+        if(preferred) await loadSelectedMainSharedConfig(mainRetargetedDataSelect?.value || "");
+      }else{
+        const preferred = await loadConfigCatalog("");
+        if(preferred) await loadSelectedSharedConfig();
+      }
+    }catch(err){
+      alert("ConfigをArchiveできませんでした: " + err.message);
+    }
+  }
+
+  async function replaceSelectedStandard(){
+    const stage = saveConfigStage;
+    const isMain = stage === "main";
+    const selected = isMain ? selectedMainSharedConfig : selectedSharedConfig;
+    const cfg = isMain ? collectMainConfig() : collectConfig();
+    const name = (saveConfigName?.value || "").trim();
+    if(!canReplaceStandard || selected?.scope !== "xenoma_standard" || !name) return;
+    try{
+      replaceStandardBtn.disabled = true;
+      const response = await fetch("/api/retarget/configs/replace-standard", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          capsule_id: capsuleId,
+          name,
+          source_type: "meva",
+          manufacturer: cfg.robot?.manufacturer || "unitree",
+          robot_variant: cfg.robot?.variant || "g1_29dof",
+          selected_scope: selected.scope,
+          selected_filename: selected.filename,
+          stage,
+          run_id: isMain ? (mainRetargetedDataSelect?.value || null) : null,
+          config: cfg,
+        }),
+      });
+      const data = await response.json();
+      if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+      if(isMain){
+        await loadMainConfigCatalog(data.selection.display_name, cfg.robot);
+        selectMainSharedRecord(data.selection);
+        await loadSelectedMainSharedConfig(mainRetargetedDataSelect?.value || "");
+      }else{
+        await loadConfigCatalog(data.selection.display_name);
+        selectSharedRecord(data.selection);
+        await loadSelectedSharedConfig();
+      }
+      closeSaveConfigModal();
+    }catch(err){
+      if(saveConfigError) saveConfigError.textContent = err.message;
+    }finally{
+      replaceStandardBtn.disabled = false;
+    }
+  }
+
   saveConfigSubmitBtn?.addEventListener("click", () => saveActiveConfig(false));
+  replaceStandardBtn?.addEventListener("click", replaceSelectedStandard);
   saveConfigCancelBtn?.addEventListener("click", closeSaveConfigModal);
   saveConfigCloseBtn?.addEventListener("click", closeSaveConfigModal);
   saveConfigModal?.addEventListener("click", event => {
@@ -3589,7 +3896,7 @@ input[type="checkbox"]{
   function setRunBusy(busy, text){
     for(const btn of [retargetNowBtn, retargetNowBottomBtn]){
       if(!btn) continue;
-      btn.disabled = busy;
+      btn.disabled = busy || !contextReady;
       btn.classList.toggle("running", busy);
       if(!busy){
         btn.style.setProperty("--run-progress", "0%");
@@ -3600,6 +3907,69 @@ input[type="checkbox"]{
     if(runStatus) runStatus.textContent = statusText;
     if(runStatusBottom) runStatusBottom.textContent = statusText;
   }
+
+  let activeRetargetJob = null;
+  let lockedControlStates = null;
+
+  function setRetargetControlsLocked(locked){
+    document.querySelector("main")?.classList.toggle("retarget-execution-locked", locked);
+    const controls = [...document.querySelectorAll("main button, main input, main select, main textarea")]
+      .filter(control => !control.classList.contains("run-cancel"));
+    if(locked){
+      if(lockedControlStates) return;
+      lockedControlStates = new Map(controls.map(control => [control, control.disabled]));
+      controls.forEach(control => { control.disabled = true; });
+      return;
+    }
+    if(!lockedControlStates) return;
+    for(const [control, wasDisabled] of lockedControlStates){
+      if(control.isConnected) control.disabled = wasDisabled;
+    }
+    lockedControlStates = null;
+    updateStageUi();
+  }
+
+  function setCancelControls(stage, visible, cancelling=false){
+    const controls = stage === "main"
+      ? [mainCancelBtn, mainCancelBottomBtn]
+      : [primaryCancelBtn, primaryCancelBottomBtn];
+    for(const control of controls){
+      if(!control) continue;
+      control.hidden = !visible;
+      control.disabled = cancelling;
+      control.textContent = cancelling ? "CANCELLING..." : "[ESC] Cancel";
+    }
+  }
+
+  async function cancelActiveRetarget(){
+    const active = activeRetargetJob;
+    if(!active || active.cancelRequested) return;
+    active.cancelRequested = true;
+    setCancelControls(active.stage, true, true);
+    const buttons = active.stage === "main"
+      ? [mainRetargetBtn, mainRetargetBottomBtn]
+      : [retargetNowBtn, retargetNowBottomBtn];
+    buttons.forEach(button => { if(button) button.textContent = "CANCELLING..."; });
+    try{
+      const response = await fetch(`/api/retarget/job/${encodeURIComponent(active.jobId)}/cancel`, {method:"POST"});
+      const data = await response.json();
+      if(!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    }catch(error){
+      active.cancelRequested = false;
+      setCancelControls(active.stage, true, false);
+      alert("Retargetingをキャンセルできませんでした: " + error.message);
+    }
+  }
+
+  for(const button of [primaryCancelBtn, primaryCancelBottomBtn, mainCancelBtn, mainCancelBottomBtn]){
+    button?.addEventListener("click", cancelActiveRetarget);
+  }
+  document.addEventListener("keydown", event => {
+    if(event.key !== "Escape" || !activeRetargetJob) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    cancelActiveRetarget();
+  }, true);
 
   function sanitizeMainSnapshot(root){
     if(!root) return;
@@ -4121,7 +4491,7 @@ input[type="checkbox"]{
     }
     for(const btn of [mainRetargetBtn, mainRetargetBottomBtn]){
       if(!btn || btn.classList.contains("running")) continue;
-      btn.disabled = !hasPrimary || legacyReadOnly;
+      btn.disabled = !contextReady || !hasPrimary || legacyReadOnly;
       btn.textContent = buttonLabel;
     }
   }
@@ -4137,7 +4507,10 @@ input[type="checkbox"]{
       if(runStatusBottom) runStatusBottom.textContent = label;
     }
     for(const btn of [retargetNowBtn, retargetNowBottomBtn]){
-      if(btn && !btn.classList.contains("running")) btn.textContent = settingRunLabel();
+      if(btn && !btn.classList.contains("running")){
+        btn.disabled = !contextReady;
+        btn.textContent = settingRunLabel();
+      }
     }
   }
 
@@ -4306,6 +4679,9 @@ input[type="checkbox"]{
   }
 
   async function loadRetargetContext({preserveWorkingConfig=false}={}){
+    contextReady = false;
+    updateStageUi();
+    updateMainStageUi();
     try{
       const previousSettingRun = retargetedDataSelect?.value || "new";
       const previousMainRun = mainRetargetedDataSelect?.value || "";
@@ -4397,6 +4773,7 @@ input[type="checkbox"]{
         const preferredConfig = await loadConfigCatalog(preferredConfigName);
         if(preferredConfig) await loadSelectedSharedConfig();
       }
+      contextReady = true;
       updateStageUi();
       if(mainRetargetedDataSelect?.value){
         await loadMainRetargetedData();
@@ -4405,6 +4782,9 @@ input[type="checkbox"]{
         updateMainStageUi();
       }
     }catch(err){
+      contextReady = false;
+      updateStageUi();
+      updateMainStageUi();
       console.warn("API context not loaded:", err);
       if(runStatus) runStatus.textContent = "API not connected";
     }
@@ -4507,11 +4887,11 @@ input[type="checkbox"]{
       for(const btn of [retargetNowBtn, retargetNowBottomBtn]){
         if(!btn) continue;
         btn.style.setProperty("--run-progress", `${pct}%`);
-        btn.textContent = `RETARGETING ${pct}%`;
+        btn.textContent = activeRetargetJob?.cancelRequested ? "CANCELLING..." : `RETARGETING ${pct}%`;
       }
 
       const statusText = (
-        job.status === "running" || job.status === "queued"
+        job.status === "running" || job.status === "queued" || job.status === "cancelling"
       )
         ? `${job.message || "Running"} (${pct}%)${job.source_frame == null ? "" : ` · frame ${job.source_frame}`}`
         : (job.message || job.status);
@@ -4519,6 +4899,11 @@ input[type="checkbox"]{
       if(runStatusBottom) runStatusBottom.textContent = statusText;
 
       if(job.status === "done") return job;
+      if(job.status === "cancelled"){
+        const error = new Error("Retargeting was cancelled");
+        error.cancelled = true;
+        throw error;
+      }
       if(job.status === "failed"){
         throw new Error(job.error || "Retarget failed");
       }
@@ -4526,6 +4911,10 @@ input[type="checkbox"]{
   }
 
   async function retargetNow(){
+    if(!contextReady){
+      alert("CapsuleとRobotのContextを読み込んでから実行してください。");
+      return;
+    }
     const source = retargetedDataSelect?.value || "new";
     let overwrite = false;
 
@@ -4564,6 +4953,7 @@ input[type="checkbox"]{
       cfg.frame_range.step = 1;
 
       setRunBusy(true, source === "new" ? "Creating new run..." : `Overwriting ${source}...`);
+      setRetargetControlsLocked(true);
 
       const res = await fetch("/api/retarget/run-start", {
         method: "POST",
@@ -4575,7 +4965,8 @@ input[type="checkbox"]{
           overwrite,
           config: cfg,
           note: cfg.note || "",
-          iteration_diagnostics: false
+          iteration_diagnostics: false,
+          backend: computeBackend
         })
       });
 
@@ -4588,6 +4979,9 @@ input[type="checkbox"]{
             : (detail?.message || JSON.stringify(detail))
         );
       }
+
+      activeRetargetJob = {jobId:data.job_id, stage:"primary", cancelRequested:false};
+      setCancelControls("primary", true, false);
 
       const job = await waitForRetargetJob(data.job_id, data);
 
@@ -4623,9 +5017,12 @@ input[type="checkbox"]{
       }
       await activateStageTab("primary");
     }catch(err){
-      setRunBusy(false, "Failed");
-      alert("Retargetingに失敗しました: " + err.message);
+      setRunBusy(false, err.cancelled ? "Cancelled" : "Failed");
+      if(!err.cancelled) alert("Retargetingに失敗しました: " + err.message);
     }finally{
+      setCancelControls("primary", false);
+      activeRetargetJob = null;
+      setRetargetControlsLocked(false);
       if(viewResultBtn) viewResultBtn.disabled = false;
     }
   }
@@ -4655,20 +5052,29 @@ input[type="checkbox"]{
       for(const btn of [mainRetargetBtn, mainRetargetBottomBtn]){
         if(!btn) continue;
         btn.style.setProperty("--run-progress", `${pct}%`);
-        btn.textContent = `RETARGETING ${pct}%`;
+        btn.textContent = activeRetargetJob?.cancelRequested ? "CANCELLING..." : `RETARGETING ${pct}%`;
       }
-      const statusText = (job.status === "running" || job.status === "queued")
+      const statusText = (job.status === "running" || job.status === "queued" || job.status === "cancelling")
         ? `${job.message || "Running"} (${pct}%)${job.source_frame == null ? "" : ` · frame ${job.source_frame}`}`
         : (job.message || job.status);
       for(const status of [mainRunStatus, mainRunStatusBottom]){
         if(status) status.textContent = statusText;
       }
       if(job.status === "done") return job;
+      if(job.status === "cancelled"){
+        const error = new Error("Main Retargeting was cancelled");
+        error.cancelled = true;
+        throw error;
+      }
       if(job.status === "failed") throw new Error(job.error || "Main retarget failed");
     }
   }
 
   async function runMainRetarget(){
+    if(!contextReady){
+      alert("CapsuleとRobotのContextを読み込んでから実行してください。");
+      return;
+    }
     const runId = mainRetargetedDataSelect?.value || "";
     const mainId = mainResultSelect?.value || "new";
     if(!runId || !selectedMainRunStage.primaryDone){
@@ -4722,6 +5128,7 @@ input[type="checkbox"]{
       }
 
       const robotVariant = cfg.robot?.variant || "g1_29dof";
+      setRetargetControlsLocked(true);
       const res = await fetch("/api/retarget/main/run-start", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
@@ -4732,6 +5139,7 @@ input[type="checkbox"]{
           main_id: mainId,
           config: cfg,
           note: cfg.note || "",
+          backend: computeBackend,
         })
       });
       const data = await res.json();
@@ -4739,6 +5147,8 @@ input[type="checkbox"]{
         const detail = data.detail;
         throw new Error(typeof detail === "string" ? detail : (detail?.message || JSON.stringify(detail)));
       }
+      activeRetargetJob = {jobId:data.job_id, stage:"main", cancelRequested:false};
+      setCancelControls("main", true, false);
       const job = await waitForMainJob(data.job_id, data);
       // A retry keeps the same Main ID but publishes a new five-file set.
       // Discard every in-memory Viewer/validation reference to the old set.
@@ -4754,11 +5164,14 @@ input[type="checkbox"]{
       }
       await loadMainRetargetedData();
     }catch(err){
-      alert("Main Retargetingに失敗しました: " + err.message);
+      if(!err.cancelled) alert("Main Retargetingに失敗しました: " + err.message);
       for(const status of [mainRunStatus, mainRunStatusBottom]){
-        if(status) status.textContent = `Failed: ${runId}`;
+        if(status) status.textContent = err.cancelled ? "Cancelled" : `Failed: ${runId}`;
       }
     }finally{
+      setCancelControls("main", false);
+      activeRetargetJob = null;
+      setRetargetControlsLocked(false);
       if(viewResultBtn) viewResultBtn.disabled = false;
       for(const btn of [mainRetargetBtn, mainRetargetBottomBtn]){
         if(!btn) continue;
@@ -4888,7 +5301,7 @@ input[type="checkbox"]{
   });
 
   const params = new URLSearchParams(location.search);
-  const capsuleId = params.get("capsule") || EMBEDDED_CONFIG.capsule_id || "2606050001";
+  const capsuleId = params.get("capsule") || "";
   let capsuleTitle = params.get("title") || capsuleId;
   const dataListBtn = document.getElementById("dataListBtn");
   const dataManagementModal = document.getElementById("dataManagementModal");
@@ -5335,6 +5748,10 @@ input[type="checkbox"]{
     const payloadStart = fixedHeaderBytes + headerLen;
     const arrays = {};
     for(const b of header.blocks){
+      // The paired BVH is carried for the Python compute boundary. Result
+      // comparison does not use it, so avoid copying a potentially large text
+      // payload into another browser ArrayBuffer.
+      if(b.name === "bvh_bytes") continue;
       const byteOffset = payloadStart + b.offset;
       const length = b.dtype === "uint8" ? b.nbytes : b.nbytes / 4;
       // TypedArray byteOffset must be aligned to 4 bytes. viewer.bin has a
@@ -7348,7 +7765,6 @@ input[type="checkbox"]{
   });
 
   async function initializeRetargetPage(){
-    applyConfig(loadedConfig);
     try{
       await loadRobotCatalog();
       await loadRetargetContext();

@@ -1,6 +1,5 @@
-# MEVA Cloud runtime dependencies
-# Python: 3.13
-# Keep this list limited to packages imported/used directly by this project.
+# Remote IK Worker runtime (Windows, Python 3.13)
+# Keep the solver stack pinned so Remote results match the reference environment.
 fastapi==0.141.1
 uvicorn[standard]==0.48.0
 pydantic==2.13.4

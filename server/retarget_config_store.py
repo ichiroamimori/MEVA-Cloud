@@ -4,16 +4,26 @@ import hashlib
 import json
 import os
 import re
+import threading
 import unicodedata
+import uuid
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from server.service_context import (
+    DEVELOPMENT_STORAGE_USER_ID,
+    DEVELOPMENT_USER,
+    DEVELOPMENT_WORKSPACE,
+)
+
 
 CONFIG_SCHEMA_VERSION = "1.0"
-SCOPE = Literal["xenoma", "user"]
+SCOPE = Literal["xenoma_standard", "personal", "workspace", "xenoma", "user"]
 CONFIG_STAGE = Literal["primary", "main"]
+CONFIG_WRITE_LOCK = threading.Lock()
 SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 INVALID_WINDOWS_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 RESERVED_WINDOWS_NAMES = {
@@ -42,6 +52,17 @@ class ConfigRecord:
     legacy: bool
     schema_version: str
     stage: CONFIG_STAGE
+    config_id: str
+    display_name: str
+    owner_id: str | None
+    target_robot: dict[str, str]
+    version: int
+    created_by: str
+    source_config_id: str | None
+    created_at: str
+    updated_at: str
+    status: Literal["active", "archived"]
+    standard_key: str | None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -52,7 +73,26 @@ class ConfigRecord:
             "legacy": self.legacy,
             "schema_version": self.schema_version,
             "stage": self.stage,
+            "config_id": self.config_id,
+            "display_name": self.display_name,
+            "owner_id": self.owner_id,
+            "target_robot": self.target_robot,
+            "version": self.version,
+            "created_by": self.created_by,
+            "source_config_id": self.source_config_id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "status": self.status,
+            "standard_key": self.standard_key,
         }
+
+
+def canonical_scope(scope: SCOPE | str) -> Literal["xenoma_standard", "personal", "workspace"]:
+    aliases = {"xenoma": "xenoma_standard", "user": "personal"}
+    value = aliases.get(str(scope), str(scope))
+    if value not in {"xenoma_standard", "personal", "workspace"}:
+        raise ConfigStoreError("Invalid config scope")
+    return value  # type: ignore[return-value]
 
 
 def repo_root() -> Path:
@@ -90,14 +130,18 @@ def config_directory(
     source_type = _safe_component(source_type, "source_type")
     manufacturer = _safe_component(manufacturer, "manufacturer")
     robot_variant = _safe_component(robot_variant, "robot_variant")
-    if user_id != "local_user":
-        raise ConfigStoreError("Only local_user configs are supported")
-    if scope == "xenoma":
+    if user_id != DEVELOPMENT_STORAGE_USER_ID:
+        raise ConfigStoreError("Only the development storage user is supported")
+    normalized_scope = canonical_scope(scope)
+    if normalized_scope == "xenoma_standard":
         base = xenoma_assets_root() / "configs"
-    elif scope == "user":
+    elif normalized_scope == "personal":
         base = workspace_root() / "users" / user_id / "retarget_assets" / "configs"
     else:
-        raise ConfigStoreError("Invalid config scope")
+        base = (
+            workspace_root() / "workspaces" / DEVELOPMENT_WORKSPACE.workspace_id
+            / "retarget_assets" / "configs"
+        )
     return base / source_type / manufacturer / robot_variant
 
 
@@ -151,6 +195,144 @@ def inferred_stage(config: dict[str, Any]) -> CONFIG_STAGE:
     return "main" if isinstance(config.get("main"), dict) else "primary"
 
 
+def _target_robot(config: dict[str, Any], robot_variant: str) -> dict[str, str]:
+    value = config.get("target_robot")
+    if not isinstance(value, dict):
+        value = config.get("robot") if isinstance(config.get("robot"), dict) else {}
+    target = {
+        "manufacturer": str(value.get("manufacturer") or ""),
+        "robot_id": str(value.get("robot_id") or value.get("model") or ""),
+        "variant": str(value.get("variant") or robot_variant),
+    }
+    if target["variant"] != robot_variant:
+        raise ConfigStoreError(
+            f"Config target_robot {target['variant']!r} does not match {robot_variant!r}"
+        )
+    return target
+
+
+def _legacy_config_id(scope: str, path: Path) -> str:
+    # Keep generated IDs stable across repository roots and Windows machines.
+    logical_tail = "/".join(path.parts[-5:]).lower()
+    identity = f"{scope}:{logical_tail}"
+    return "cfg_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+
+
+def _metadata_values(
+    config: dict[str, Any], *, scope: str, path: Path, robot_variant: str,
+) -> dict[str, Any]:
+    normalized_scope = canonical_scope(scope)
+    display_name = str(
+        config.get("display_name") or inferred_name(config, path.name)
+    ).strip()
+    status = str(config.get("status") or "active").lower()
+    if status not in {"active", "archived"}:
+        status = "active"
+    try:
+        version = max(1, int(config.get("version") or 1))
+    except (TypeError, ValueError):
+        version = 1
+    fallback_time = datetime.fromtimestamp(
+        path.stat().st_mtime if path.exists() else 0, tz=timezone.utc
+    ).isoformat()
+    if normalized_scope == "personal":
+        owner_id: str | None = DEVELOPMENT_USER.user_id
+        default_creator = DEVELOPMENT_USER.user_id
+    elif normalized_scope == "workspace":
+        owner_id = DEVELOPMENT_WORKSPACE.workspace_id
+        default_creator = DEVELOPMENT_USER.user_id
+    else:
+        owner_id = None
+        default_creator = "system"
+    return {
+        "config_id": str(config.get("config_id") or _legacy_config_id(normalized_scope, path)),
+        "display_name": display_name,
+        "scope": normalized_scope,
+        "owner_id": config.get("owner_id", owner_id),
+        "target_robot": _target_robot(config, robot_variant),
+        "version": version,
+        "created_by": str(config.get("created_by") or default_creator),
+        "source_config_id": config.get("source_config_id"),
+        "created_at": str(config.get("created_at") or fallback_time),
+        "updated_at": str(config.get("updated_at") or fallback_time),
+        "status": status,
+        "standard_key": (
+            str(config.get("standard_key") or "") or None
+            if normalized_scope == "xenoma_standard" else None
+        ),
+    }
+
+
+def _record(
+    config: dict[str, Any], *, scope: str, path: Path,
+    robot_variant: str, stage: CONFIG_STAGE,
+) -> ConfigRecord:
+    metadata = _metadata_values(
+        config, scope=scope, path=path, robot_variant=robot_variant,
+    )
+    return ConfigRecord(
+        name=metadata["display_name"],
+        scope=metadata["scope"],  # type: ignore[arg-type]
+        filename=path.name,
+        writable=metadata["scope"] in {"personal", "workspace"},
+        legacy=any(key not in config for key in (
+            "config_id", "display_name", "scope", "target_robot", "version",
+            "created_by", "created_at", "updated_at", "status",
+        )),
+        schema_version=str(config.get("schema_version") or CONFIG_SCHEMA_VERSION),
+        stage=stage,
+        config_id=metadata["config_id"],
+        display_name=metadata["display_name"],
+        owner_id=metadata["owner_id"],
+        target_robot=metadata["target_robot"],
+        version=metadata["version"],
+        created_by=metadata["created_by"],
+        source_config_id=metadata["source_config_id"],
+        created_at=metadata["created_at"],
+        updated_at=metadata["updated_at"],
+        status=metadata["status"],
+        standard_key=metadata["standard_key"],
+    )
+
+
+def _with_metadata(
+    config: dict[str, Any], *, name: str, stage: CONFIG_STAGE, scope: str,
+    robot_variant: str, existing: dict[str, Any] | None = None,
+    source_config_id: str | None = None,
+) -> dict[str, Any]:
+    document = normalized_shared_config(config, name=name, stage=stage)
+    now = datetime.now(timezone.utc).isoformat()
+    old = existing or {}
+    normalized_scope = canonical_scope(scope)
+    if normalized_scope == "personal":
+        owner_id: str | None = DEVELOPMENT_USER.user_id
+    elif normalized_scope == "workspace":
+        owner_id = DEVELOPMENT_WORKSPACE.workspace_id
+    else:
+        owner_id = None
+    document.update({
+        "config_id": str(old.get("config_id") or f"cfg_{uuid.uuid4().hex}"),
+        "display_name": name.strip(),
+        "scope": normalized_scope,
+        "owner_id": owner_id,
+        "target_robot": _target_robot(config, robot_variant),
+        "version": int(old.get("version") or 0) + 1,
+        "created_by": str(old.get("created_by") or DEVELOPMENT_USER.user_id),
+        "source_config_id": (
+            source_config_id if source_config_id is not None
+            else old.get("source_config_id")
+        ),
+        "created_at": str(old.get("created_at") or now),
+        "updated_at": now,
+        "status": str(old.get("status") or "active"),
+        "standard_key": (
+            str(old.get("standard_key") or config.get("standard_key") or "") or None
+            if normalized_scope == "xenoma_standard" else None
+        ),
+    })
+    return document
+
+
 def normalized_shared_config(
     config: dict[str, Any],
     *,
@@ -183,12 +365,15 @@ def normalized_shared_config(
         ):
             robot.pop(key, None)
     for key in (
-        "capsule_id", "source", "frame_range", "sampling", "offsets", "note"
+        "capsule_id", "source", "frame_range", "sampling", "offsets", "note",
+        "retarget_job",
     ):
         shared.pop(key, None)
     for key in (
         "primary_run_id", "main_id", "primary_post_csv", "main_input_csv",
-        "main_calibration", "main_target_analysis",
+        "main_calibration", "main_target_analysis", "artifact_generation_id",
+        "primary_motion_file", "primary_target_npz", "main_target_npz",
+        "main_runtime_context",
     ):
         shared.pop(key, None)
 
@@ -240,9 +425,10 @@ def list_configs(
     robot_variant: str,
     user_id: str = "local_user",
     stage: CONFIG_STAGE = "primary",
+    include_archived: bool = False,
 ) -> list[ConfigRecord]:
     records: list[ConfigRecord] = []
-    for scope in ("xenoma", "user"):
+    for scope in ("xenoma_standard", "personal", "workspace"):
         directory = config_directory(
             scope,
             source_type=source_type,
@@ -260,16 +446,14 @@ def list_configs(
             config_stage = inferred_stage(config)
             if config_stage != stage:
                 continue
-            records.append(ConfigRecord(
-                name=inferred_name(config, path.name),
-                scope=scope,
-                filename=path.name,
-                writable=scope == "user",
-                legacy="schema_version" not in config or "name" not in config,
-                schema_version=str(config.get("schema_version") or CONFIG_SCHEMA_VERSION),
-                stage=config_stage,
-            ))
-    records.sort(key=lambda item: (0 if item.scope == "xenoma" else 1, item.name.casefold()))
+            record = _record(
+                config, scope=scope, path=path,
+                robot_variant=robot_variant, stage=config_stage,
+            )
+            if include_archived or record.status == "active":
+                records.append(record)
+    order = {"xenoma_standard": 0, "personal": 1, "workspace": 2}
+    records.sort(key=lambda item: (order[item.scope], item.name.casefold()))
     return records
 
 
@@ -295,19 +479,23 @@ def load_config(
     config_stage = inferred_stage(config)
     if config_stage != stage:
         raise ConfigStoreError("Config not found for this retarget stage")
-    record = ConfigRecord(
-        name=inferred_name(config, path.name),
-        scope=scope,
-        filename=path.name,
-        writable=scope == "user",
-        legacy="schema_version" not in config or "name" not in config,
-        schema_version=str(config.get("schema_version") or CONFIG_SCHEMA_VERSION),
-        stage=config_stage,
+    record = _record(
+        config, scope=scope, path=path,
+        robot_variant=robot_variant, stage=config_stage,
     )
     normalized = deepcopy(config)
     normalized.setdefault("schema_version", CONFIG_SCHEMA_VERSION)
     normalized.setdefault("name", record.name)
     normalized.setdefault("retarget_stage", config_stage)
+    normalized.update({
+        key: value for key, value in record.as_dict().items()
+        if key in {
+            "config_id", "display_name", "scope", "owner_id", "target_robot",
+            "version", "created_by", "source_config_id", "created_at",
+            "updated_at", "status",
+            "standard_key",
+        }
+    })
     return record, normalized
 
 
@@ -338,61 +526,36 @@ def save_user_config(
     stage: CONFIG_STAGE = "primary",
 ) -> tuple[ConfigRecord, dict[str, Any]]:
     display_name = name.strip()
-    shared = normalized_shared_config(config, name=display_name, stage=stage)
-    records = list_configs(
-        source_type=source_type,
-        manufacturer=manufacturer,
-        robot_variant=robot_variant,
-        user_id=user_id,
-        stage=stage,
-    )
-    same_name = [item for item in records if item.name.casefold() == display_name.casefold()]
-    xenoma_match = next((item for item in same_name if item.scope == "xenoma"), None)
-    if xenoma_match:
-        raise ConfigNameCollision(
-            "Xenoma-provided config cannot be overwritten. Please save with a different name.",
-            filename=xenoma_match.filename,
-        )
-
-    user_directory = config_directory(
-        "user",
+    selected_normalized = canonical_scope(selected_scope) if selected_scope else None
+    destination_scope = "workspace" if selected_normalized == "workspace" else "personal"
+    destination_directory = config_directory(
+        destination_scope,
         source_type=source_type,
         manufacturer=manufacturer,
         robot_variant=robot_variant,
         user_id=user_id,
     )
     current_path: Path | None = None
-    if selected_scope == "user" and selected_filename:
-        current_path = _config_path(user_directory, selected_filename)
-
-    user_match = next((item for item in same_name if item.scope == "user"), None)
-    if user_match:
-        matched_path = _config_path(user_directory, user_match.filename)
-        same_selected_file = current_path is not None and matched_path == current_path
-        if not same_selected_file and not overwrite:
-            raise ConfigNameCollision(
-                "A User config with this name already exists.",
-                filename=user_match.filename,
-            )
-        destination = matched_path
-    elif current_path is not None:
-        try:
-            current = read_json(current_path)
-            same_current_name = inferred_name(current, current_path.name).casefold() == display_name.casefold()
-        except ConfigStoreError:
-            same_current_name = False
-        destination = current_path if same_current_name else _unique_path(user_directory, display_name)
-    else:
-        destination = _unique_path(user_directory, display_name)
-
-    atomic_write_json(destination, shared)
-    record = ConfigRecord(
+    if selected_normalized == destination_scope and selected_filename:
+        current_path = _config_path(destination_directory, selected_filename)
+    existing = read_json(current_path) if current_path and current_path.exists() else None
+    destination = current_path or _unique_path(destination_directory, display_name)
+    source_config_id = None if existing else config.get("config_id")
+    shared = _with_metadata(
+        config,
         name=display_name,
-        scope="user",
-        filename=destination.name,
-        writable=True,
-        legacy=False,
-        schema_version=CONFIG_SCHEMA_VERSION,
+        stage=stage,
+        scope=destination_scope,
+        robot_variant=robot_variant,
+        existing=existing,
+        source_config_id=str(source_config_id) if source_config_id else None,
+    )
+    atomic_write_json(destination, shared)
+    record = _record(
+        shared,
+        scope=destination_scope,
+        path=destination,
+        robot_variant=robot_variant,
         stage=stage,
     )
     return record, shared
@@ -411,3 +574,162 @@ def _unique_path(directory: Path, name: str) -> Path:
         destination = _config_path(directory, f"{stem}_{suffix}.json")
         suffix += 1
     return destination
+
+
+def publish_to_workspace(
+    config: dict[str, Any],
+    *,
+    name: str,
+    source_type: str,
+    manufacturer: str,
+    robot_variant: str,
+    user_id: str = "local_user",
+    stage: CONFIG_STAGE = "primary",
+) -> tuple[ConfigRecord, dict[str, Any]]:
+    directory = config_directory(
+        "workspace",
+        source_type=source_type,
+        manufacturer=manufacturer,
+        robot_variant=robot_variant,
+        user_id=user_id,
+    )
+    destination = _unique_path(directory, name)
+    shared = _with_metadata(
+        config,
+        name=name,
+        stage=stage,
+        scope="workspace",
+        robot_variant=robot_variant,
+        source_config_id=str(config.get("config_id") or "") or None,
+    )
+    atomic_write_json(destination, shared)
+    record = _record(
+        shared,
+        scope="workspace",
+        path=destination,
+        robot_variant=robot_variant,
+        stage=stage,
+    )
+    return record, shared
+
+
+def archive_config(
+    *,
+    scope: SCOPE,
+    filename: str,
+    source_type: str,
+    manufacturer: str,
+    robot_variant: str,
+    user_id: str = "local_user",
+    stage: CONFIG_STAGE = "primary",
+) -> ConfigRecord:
+    normalized_scope = canonical_scope(scope)
+    if normalized_scope not in {"personal", "workspace"}:
+        raise ConfigStoreError("Only Personal or Workspace configs can be archived")
+    directory = config_directory(
+        normalized_scope,
+        source_type=source_type,
+        manufacturer=manufacturer,
+        robot_variant=robot_variant,
+        user_id=user_id,
+    )
+    path = _config_path(directory, filename)
+    config = read_json(path)
+    if inferred_stage(config) != stage:
+        raise ConfigStoreError("Config not found for this retarget stage")
+    config["status"] = "archived"
+    config["version"] = max(1, int(config.get("version") or 1)) + 1
+    config["updated_at"] = datetime.now(timezone.utc).isoformat()
+    atomic_write_json(path, config)
+    return _record(
+        config,
+        scope=normalized_scope,
+        path=path,
+        robot_variant=robot_variant,
+        stage=stage,
+    )
+
+
+def replace_xenoma_standard(
+    config: dict[str, Any],
+    *,
+    name: str,
+    filename: str,
+    source_type: str,
+    manufacturer: str,
+    robot_variant: str,
+    user_id: str = "local_user",
+    stage: CONFIG_STAGE = "primary",
+) -> tuple[ConfigRecord, dict[str, Any], ConfigRecord]:
+    """Create a new active Standard and retain the selected generation archived."""
+    directory = config_directory(
+        "xenoma_standard",
+        source_type=source_type,
+        manufacturer=manufacturer,
+        robot_variant=robot_variant,
+        user_id=user_id,
+    )
+    active_path = _config_path(directory, filename)
+    with CONFIG_WRITE_LOCK:
+        previous = read_json(active_path)
+        if inferred_stage(previous) != stage:
+            raise ConfigStoreError("Config not found for this retarget stage")
+        previous_record = _record(
+            previous, scope="xenoma_standard", path=active_path,
+            robot_variant=robot_variant, stage=stage,
+        )
+        if previous_record.status != "active":
+            raise ConfigStoreError("Only an active Xenoma Standard can be replaced")
+
+        now = datetime.now(timezone.utc).isoformat()
+        archived = deepcopy(previous)
+        archived.update({
+            "config_id": previous_record.config_id,
+            "display_name": previous_record.display_name,
+            "scope": "xenoma_standard",
+            "owner_id": previous_record.owner_id,
+            "target_robot": previous_record.target_robot,
+            "version": previous_record.version,
+            "created_by": previous_record.created_by,
+            "source_config_id": previous_record.source_config_id,
+            "created_at": previous_record.created_at,
+            "status": "archived",
+            "updated_at": now,
+            "standard_key": previous_record.standard_key or (
+                f"{manufacturer}_{robot_variant}_{stage}"
+            ),
+        })
+        archive_path = _unique_path(
+            directory, f"archived_{previous_record.config_id}"
+        )
+        atomic_write_json(archive_path, archived)
+
+        replacement = _with_metadata(
+            config,
+            name=name,
+            stage=stage,
+            scope="xenoma_standard",
+            robot_variant=robot_variant,
+            source_config_id=previous_record.config_id,
+        )
+        replacement.update({
+            "version": previous_record.version + 1,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": DEVELOPMENT_USER.user_id,
+            "status": "active",
+            "standard_key": previous_record.standard_key or (
+                f"{manufacturer}_{robot_variant}_{stage}"
+            ),
+        })
+        atomic_write_json(active_path, replacement)
+
+    replacement_record = _record(
+        replacement, scope="xenoma_standard", path=active_path,
+        robot_variant=robot_variant, stage=stage,
+    )
+    archived_record = _record(
+        archived, scope="xenoma_standard", path=archive_path,
+        robot_variant=robot_variant, stage=stage,
+    )
+    return replacement_record, replacement, archived_record

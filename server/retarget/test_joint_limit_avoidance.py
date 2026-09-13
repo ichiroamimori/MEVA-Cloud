@@ -5,7 +5,7 @@ import mujoco
 import mink
 import numpy as np
 
-from ik_solver import JointLimitAvoidanceTask, joint_limit_avoidance_target_and_cost
+from server.retarget.ik_solver import JointLimitAvoidanceTask, joint_limit_avoidance_target_and_cost
 
 
 class JointLimitAvoidanceTest(unittest.TestCase):
