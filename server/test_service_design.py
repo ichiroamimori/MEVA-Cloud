@@ -25,6 +25,7 @@ from server.retarget.viewer_data import (
     FORMAT_VERSION,
     LEGACY_MAGIC,
     _serialize_bin,
+    generate_meva_viewer_bin,
     read_viewer_bin,
 )
 from server.retarget.meva_schema import (
@@ -72,7 +73,7 @@ class ServiceDesignTests(unittest.TestCase):
         self.assertFalse(is_public_capsule("000000ABCD"))
         self.assertTrue(is_valid_capsule_id("2609130042"))
 
-    def test_current_bin_round_trip_preserves_capsule_and_auxiliary_bvh(self) -> None:
+    def test_current_bin_round_trip_preserves_capsule_without_bvh(self) -> None:
         payload = _serialize_bin(
             {
                 "kind": "meva",
@@ -82,7 +83,6 @@ class ServiceDesignTests(unittest.TestCase):
             {
                 "source_frame": np.array([0, 1], dtype=np.int32),
                 "gcp": np.array([[0.1], [0.2]], dtype=np.float32),
-                "bvh_bytes": np.frombuffer(b"HIERARCHY\r\n", dtype=np.uint8),
             },
         )
         with tempfile.TemporaryDirectory() as name:
@@ -91,7 +91,7 @@ class ServiceDesignTests(unittest.TestCase):
             header, arrays = read_viewer_bin(path)
         self.assertEqual(header["format_version"], FORMAT_VERSION)
         self.assertEqual(header["capsule_id"], "2609130042")
-        self.assertEqual(bytes(arrays["bvh_bytes"]), b"HIERARCHY\r\n")
+        self.assertNotIn("bvh_bytes", arrays)
 
     def test_legacy_bin_remains_readable(self) -> None:
         header = {"format_version": 1, "kind": "meva", "blocks": []}
@@ -103,6 +103,49 @@ class ServiceDesignTests(unittest.TestCase):
             loaded, arrays = read_viewer_bin(path)
         self.assertEqual(loaded["format_version"], 1)
         self.assertEqual(arrays, {})
+
+    def test_meva_bin_generation_does_not_require_or_embed_bvh(self) -> None:
+        capsule_id = "2609130042"
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            meva_dir = (
+                root / "workspace" / "users" / "local_user"
+                / "capsules" / capsule_id / "meva"
+            )
+            meva_dir.mkdir(parents=True)
+            csv_path = meva_dir / "motion.csv"
+            width = max(MEVA_GCP_COLUMN_INDICES.values()) + 1
+            header = [f"unused_{index}" for index in range(width)]
+            for index, component in enumerate("wxyz"):
+                header[index] = f"Pelvis_q_gs_{component}"
+            for index, axis in zip(MEVA_POSITION_COLUMN_INDICES["Pelvis"], "xyz"):
+                header[index] = f"Pelvis_g_{axis}"
+            for index, axis in zip((4, 5, 6), "xyz"):
+                header[index] = f"Neck_g_{axis}"
+            row = ["0"] * width
+            row[0] = "1"
+            for index, value in zip(MEVA_POSITION_COLUMN_INDICES["Pelvis"], (0.1, 0.2, 0.3)):
+                row[index] = str(value)
+            for index, value in zip((4, 5, 6), (0.1, 0.2, 0.5)):
+                row[index] = str(value)
+            with csv_path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.writer(stream)
+                writer.writerow(header)
+                writer.writerow(row)
+
+            output = generate_meva_viewer_bin(root, capsule_id, {
+                "source": {
+                    "file": csv_path.relative_to(root).as_posix(),
+                    "header_row_1based": 1,
+                    "sampling_rate_hz": 100.0,
+                },
+            })
+            loaded, arrays = read_viewer_bin(output)
+
+        self.assertEqual(loaded["format_version"], FORMAT_VERSION)
+        self.assertEqual(loaded["capsule_id"], capsule_id)
+        self.assertNotIn("bvh_filename", loaded)
+        self.assertNotIn("bvh_bytes", arrays)
 
     def test_primary_target_is_equal_for_csv_and_versioned_bin(self) -> None:
         segments = ["Pelvis", "LeftFoot", "RightFoot"]
@@ -159,7 +202,6 @@ class ServiceDesignTests(unittest.TestCase):
                     "segment_pos": positions, "segment_quat": quaternions,
                     "joint_pos": np.zeros((frame_count, 1, 3), dtype=np.float32),
                     "gcp": gcp,
-                    "bvh_bytes": np.frombuffer(b"HIERARCHY\n", dtype=np.uint8),
                 },
             ))
             base = {

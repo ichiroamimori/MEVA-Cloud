@@ -167,7 +167,7 @@ class RemoteIKContractTest(unittest.TestCase):
             packaged_config = json.loads((extracted / "inputs/config.json").read_text(encoding="utf-8"))
             self.assertEqual("package://source", packaged_config["source"]["file"])
 
-    def test_worker_uses_capsule_id_and_bvh_from_primary_bin(self) -> None:
+    def test_worker_uses_capsule_id_without_bvh_from_primary_bin(self) -> None:
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(dir=root / "workspace") as name:
             directory = Path(name)
@@ -177,7 +177,6 @@ class RemoteIKContractTest(unittest.TestCase):
                     "kind": "meva", "capsule_id": "2609110001", "fps": 100.0,
                     "segment_names": ["Pelvis"], "joint_names": ["dummy"],
                     "quaternion_order": "wxyz", "gcp_names": ["left_ff"],
-                    "bvh_filename": "motion.bvh",
                 },
                 {
                     "source_frame": np.array([0], dtype=np.int32),
@@ -185,7 +184,6 @@ class RemoteIKContractTest(unittest.TestCase):
                     "segment_quat": np.array([[[1, 0, 0, 0]]], dtype=np.float32),
                     "joint_pos": np.zeros((1, 1, 3), dtype=np.float32),
                     "gcp": np.zeros((1, 1), dtype=np.float32),
-                    "bvh_bytes": np.frombuffer(b"HIERARCHY\n", dtype=np.uint8),
                 },
             ))
             config = directory / "config.json"
@@ -210,10 +208,7 @@ class RemoteIKContractTest(unittest.TestCase):
             prepared, _ = _prepare_config(request, package, execution, root)
             worker_config = json.loads(prepared.read_text(encoding="utf-8"))
             self.assertEqual(worker_config["capsule_id"], "2609110001")
-            self.assertTrue((root / worker_config["source"]["bvh"]).is_file())
-            self.assertEqual(
-                (root / worker_config["source"]["bvh"]).read_bytes(), b"HIERARCHY\n",
-            )
+            self.assertNotIn("bvh", worker_config["source"])
 
     def test_checksum_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as name:

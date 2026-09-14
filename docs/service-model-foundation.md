@@ -44,15 +44,16 @@ Existing Run snapshots continue to retain the settings used at execution time.
 Capsule IDs remain ten decimal digits. IDs beginning with `000000` are reserved
 for Public Capsules; all other valid IDs are Private.
 
-The current MEVA container is `MEVAVW02`, format version 6. It includes:
+The current MEVA container is `MEVAVW02`, format version 7. It includes:
 
 - `capsule_id` in the JSON header
 - source frame, segment position/quaternion, joint position, and GCP blocks
-- the paired BVH as an auxiliary `uint8` block for offset calculation
+
+Capsule BVH data is not part of the container or the Compute contract. Mapping
+offsets use the versioned canonical MEVA geometry and Robot manifest metadata.
 
 Readers still accept `MEVAVW01` and older `MEVAVW02` files for display and
 inspection. Primary Compute requires the current format, so an older cached
 MEVA BIN is regenerated from the authoritative Capsule source before a new Run.
 Local and Remote Primary both consume this same BIN. Remote packaging rejects a
-raw CSV source, and the Worker reads the authoritative Capsule ID and paired BVH
-from the BIN.
+raw CSV source, and the Worker reads the authoritative Capsule ID from the BIN.

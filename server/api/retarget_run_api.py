@@ -216,10 +216,9 @@ def _prepare_run(
         cfg["output"]["save_diagnostics_csv"] = bool(req.iteration_diagnostics)
         cfg["output"]["save_debug_artifacts"] = bool(req.iteration_diagnostics)
 
-        # Local and Remote Primary use the same self-contained MEVA BIN.  The
-        # Capsule metadata remains the source of the original CSV/BVH path,
-        # while the compute boundary takes its Capsule identity and motion
-        # payload from this versioned container.
+        # Local and Remote Primary use the same self-contained MEVA BIN. The
+        # compute boundary takes its Capsule identity and motion payload from
+        # this versioned container.
         meva_bin = generate_meva_viewer_bin(
             repo_root(), req.capsule_id, cfg, req.user_id,
         )

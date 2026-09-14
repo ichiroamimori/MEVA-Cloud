@@ -5748,10 +5748,6 @@ input[type="checkbox"]{
     const payloadStart = fixedHeaderBytes + headerLen;
     const arrays = {};
     for(const b of header.blocks){
-      // The paired BVH is carried for the Python compute boundary. Result
-      // comparison does not use it, so avoid copying a potentially large text
-      // payload into another browser ArrayBuffer.
-      if(b.name === "bvh_bytes") continue;
       const byteOffset = payloadStart + b.offset;
       const length = b.dtype === "uint8" ? b.nbytes : b.nbytes / 4;
       // TypedArray byteOffset must be aligned to 4 bytes. viewer.bin has a

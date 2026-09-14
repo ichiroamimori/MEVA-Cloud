@@ -126,12 +126,7 @@ def prepare_primary(
 ) -> PrimaryPreparation:
     csv_path = (repo_root / cfg["source"]["file"]).resolve()
     xml_path = (repo_root / cfg["robot"]["mjcf"]).resolve()
-    bvh_path = (
-        (repo_root / cfg["source"]["bvh"]).resolve()
-        if cfg["source"].get("bvh") else csv_path.with_suffix(".bvh")
-    )
     print("SOURCE :", csv_path)
-    print("BVH    :", bvh_path)
     print("MJCF   :", xml_path)
 
     from server.retarget.check_offsets import compute_offsets

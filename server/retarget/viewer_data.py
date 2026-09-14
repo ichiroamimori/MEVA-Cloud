@@ -23,7 +23,7 @@ from server.capsule_identity import is_valid_capsule_id
 
 LEGACY_MAGIC = b"MEVAVW01"
 MAGIC = b"MEVAVW02"
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 
 MEVA_SEGMENTS = [
     "Pelvis", "LumbarSpine", "Thoracic2", "Head",
@@ -76,7 +76,6 @@ def _is_current(path: Path, kind: str) -> bool:
         if (
             "joint_pos" not in block_names
             or "gcp" not in block_names
-            or "bvh_bytes" not in block_names
             or not h.get("joint_names")
             or not is_valid_capsule_id(str(h.get("capsule_id") or ""))
         ):
@@ -509,15 +508,6 @@ def generate_meva_viewer_bin(
     joint_pos = np.empty((n, len(joints), 3), dtype=np.float32)
     gcp = np.empty((n, len(MEVA_GCP_COLUMN_INDICES)), dtype=np.float32)
     max_gcp_index = max(MEVA_GCP_COLUMN_INDICES.values())
-    bvh_value = config["source"].get("bvh")
-    bvh_path = (
-        (repo_root / bvh_value).resolve()
-        if bvh_value else csv_path.with_suffix(".bvh")
-    )
-    if not bvh_path.is_file():
-        raise FileNotFoundError(f"Paired BVH not found: {bvh_path}")
-    bvh_bytes = np.frombuffer(bvh_path.read_bytes(), dtype=np.uint8).copy()
-
     for fi, row in enumerate(rows):
         if len(row) <= max_gcp_index:
             raise ValueError(f"MEVA frame {fi} is shorter than required schema")
@@ -556,7 +546,6 @@ def generate_meva_viewer_bin(
             "joint_names": joints,
             "quaternion_order": "wxyz",
             "gcp_names": list(MEVA_GCP_COLUMN_INDICES),
-            "bvh_filename": bvh_path.name,
             "rendering": {
                 "type": "joint_skeleton_plus_segment_pose",
                 "plot_pose_available": True,
@@ -568,7 +557,6 @@ def generate_meva_viewer_bin(
             "segment_quat": quat,
             "joint_pos": joint_pos,
             "gcp": gcp,
-            "bvh_bytes": bvh_bytes,
         },
     )
     return out_path

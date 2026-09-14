@@ -269,25 +269,6 @@ def metadata_frame_count(
     except (KeyError, TypeError, ValueError):
         pass
 
-    # Older Capsule metadata did not include frame_count. A same-stem BVH has
-    # the authoritative frame count in its small header and avoids rescanning a
-    # potentially hundreds-of-megabytes CSV whenever the page is opened.
-    source_file = str(source.get("file") or "").replace("\\", "/").strip("/")
-    relative = Path(source_file)
-    if not source_file or relative.is_absolute() or ".." in relative.parts:
-        return None
-    bvh_path = (path.parent / relative).with_suffix(".bvh")
-    try:
-        with bvh_path.open("r", encoding="utf-8-sig", errors="replace") as stream:
-            for _ in range(1000):
-                line = stream.readline()
-                if not line:
-                    break
-                match = re.fullmatch(r"\s*Frames:\s*(\d+)\s*", line)
-                if match:
-                    return int(match.group(1))
-    except OSError:
-        pass
     return None
 
 def capsule_metadata(

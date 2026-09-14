@@ -206,26 +206,6 @@ def _capsule_runtime_context(
             or "{segment}_q_gs_{component}"
         ),
     }
-    bvh_relative = source_metadata.get("bvh")
-    if not bvh_relative:
-        same_stem = relative_path.with_suffix(".bvh")
-        if (capsule / same_stem).is_file():
-            bvh_relative = same_stem.as_posix()
-        else:
-            bvh_file = next((path for path in (capsule / "meva").glob("*.bvh")), None)
-            if bvh_file:
-                bvh_relative = bvh_file.relative_to(capsule).as_posix()
-    if bvh_relative:
-        bvh_path = Path(str(bvh_relative).replace("\\", "/").strip("/"))
-        if not bvh_path.is_absolute() and ".." not in bvh_path.parts:
-            resolved_bvh = (capsule / bvh_path).resolve()
-            try:
-                resolved_bvh.relative_to(capsule)
-            except ValueError:
-                pass
-            else:
-                if resolved_bvh.is_file():
-                    source["bvh"] = (logical_prefix / bvh_path).as_posix()
     return {
         "capsule_id": capsule_id,
         "source": source,

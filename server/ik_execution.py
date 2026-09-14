@@ -126,7 +126,7 @@ def _prepare_config(
                 "input_load_failure", "Remote Primary requires a MEVA BIN input",
             )
         try:
-            bin_header, bin_arrays = read_viewer_bin(source)
+            bin_header, _ = read_viewer_bin(source)
         except (OSError, ValueError, KeyError) as exc:
             raise IKExecutionError(
                 "input_load_failure", f"Could not load MEVA BIN: {exc}",
@@ -143,14 +143,8 @@ def _prepare_config(
         job = cfg.setdefault("retarget_job", {})
         if isinstance(job, dict):
             job["capsule_id"] = capsule_id
-        bvh_bytes = bin_arrays.get("bvh_bytes")
-        bvh_filename = Path(str(bin_header.get("bvh_filename") or "source.bvh")).name
-        if bvh_bytes is None or not bvh_filename.lower().endswith(".bvh"):
-            raise IKExecutionError("input_load_failure", "MEVA BIN has no valid paired BVH")
-        bvh_path = package_directory / "inputs" / bvh_filename
-        bvh_path.write_bytes(bytes(bvh_bytes))
         cfg.setdefault("source", {})["file"] = _relative_to_repository(source, repository_root)
-        cfg["source"]["bvh"] = _relative_to_repository(bvh_path, repository_root)
+        cfg["source"].pop("bvh", None)
         run_id = primary_run_id
         cfg.setdefault("output", {})["overwrite_existing"] = False
         config_directory = execution_directory
