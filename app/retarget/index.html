@@ -2817,8 +2817,8 @@ input[type="checkbox"]{
     mainWorkingConfig = deepClone(data.config);
     selectMainSharedRecord(data.selection);
     applyMainConfig(data.config, {updateBaseline:true});
-    if(mainStartFrame && preservedStart != null) mainStartFrame.value = preservedStart;
-    if(mainEndFrame && preservedEnd != null) mainEndFrame.value = preservedEnd;
+    if(mainStartFrame && preservedStart != null && preservedStart !== "") mainStartFrame.value = preservedStart;
+    if(mainEndFrame && preservedEnd != null && preservedEnd !== "") mainEndFrame.value = preservedEnd;
     if(mainStartFrameBottom && mainStartFrame) mainStartFrameBottom.value = mainStartFrame.value;
     if(mainEndFrameBottom && mainEndFrame) mainEndFrameBottom.value = mainEndFrame.value;
   }

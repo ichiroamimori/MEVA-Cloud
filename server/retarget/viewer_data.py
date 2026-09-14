@@ -376,11 +376,12 @@ def build_retarget_viewer_bytes(
     # metadata so browser-side Roll/Pitch/Yaw compares like with like.
     mapping_offsets = {}
     try:
-        from .check_offsets import compute_offsets
-        _, offsets_path, _ = compute_offsets(config_path)
-        with offsets_path.open("r", encoding="utf-8") as f:
-            offset_asset = json.load(f)
-        mapping_offsets = offset_asset.get("offsets_wxyz_by_link", {})
+        from .check_offsets import load_approved_offsets
+        loaded_offsets, _, _ = load_approved_offsets(config_path)
+        mapping_offsets = {
+            name: np.asarray(value, dtype=float).tolist()
+            for name, value in loaded_offsets.items()
+        }
     except Exception:
         mapping_offsets = {}
 

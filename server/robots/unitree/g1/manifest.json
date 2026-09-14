@@ -26,6 +26,13 @@
       "initial_pose": {
         "type": "model_default"
       },
+      "retarget_assets": {
+        "meva_offsets": {
+          "policy": "approved",
+          "file": "retarget_assets/meva/approved_offsets.json",
+          "sha256": "d87317bc239d1615d5384287f61f2e3708928fba980ebaf616e10dbf92065d24"
+        }
+      },
       "output_joint_order": "model_hinge_order",
       "ui": {
         "groups": [

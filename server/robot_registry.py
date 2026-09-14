@@ -46,6 +46,28 @@ class RobotVariant:
             "model file",
         )
 
+    @property
+    def meva_offset_policy(self) -> str:
+        assets = self.variant.get("retarget_assets") or {}
+        spec = assets.get("meva_offsets") if isinstance(assets, dict) else None
+        return str(spec.get("policy") or "missing") if isinstance(spec, dict) else "missing"
+
+    @property
+    def approved_meva_offset_path(self) -> Path | None:
+        assets = self.variant.get("retarget_assets") or {}
+        spec = assets.get("meva_offsets") if isinstance(assets, dict) else None
+        if not isinstance(spec, dict) or spec.get("policy") != "approved":
+            return None
+        return _child_path(self.robot_directory, str(spec.get("file") or ""), "MEVA Offset asset")
+
+    @property
+    def approved_meva_offset_sha256(self) -> str | None:
+        assets = self.variant.get("retarget_assets") or {}
+        spec = assets.get("meva_offsets") if isinstance(assets, dict) else None
+        if not isinstance(spec, dict) or spec.get("policy") != "approved":
+            return None
+        return str(spec.get("sha256") or "").lower()
+
     def runtime_robot(self, repository_root: Path) -> dict[str, Any]:
         model = self.variant["model"]
         value: dict[str, Any] = {
@@ -67,6 +89,7 @@ class RobotVariant:
                 self.variant.get("output_joint_order", "model_hinge_order")
             ),
             "ui": deepcopy(self.variant.get("ui", {})),
+            "retarget_assets": deepcopy(self.variant.get("retarget_assets", {})),
         }
         initial_pose = value["initial_pose"]
         if isinstance(initial_pose, dict) and initial_pose.get("type") == "keyframe":
@@ -104,6 +127,7 @@ class RobotVariant:
             ),
             "ui": deepcopy(self.variant.get("ui", {})),
             "retargeting": deepcopy(self.variant.get("retargeting", {})),
+            "retarget_assets": deepcopy(self.variant.get("retarget_assets", {})),
         }
 
 
@@ -293,6 +317,39 @@ def _repository_relative(path: Path, root: Path) -> str:
         raise RobotRegistryError(f"Robot asset is outside the repository: {path}") from exc
 
 
+def _validate_retarget_assets(
+    value: Any, *, robot_directory: Path, identity: str,
+) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise RobotRegistryError(f"Variant retarget_assets must be an object: {identity}")
+    result = deepcopy(value)
+    spec = result.get("meva_offsets")
+    if spec is None:
+        return result
+    if not isinstance(spec, dict):
+        raise RobotRegistryError(f"retarget_assets.meva_offsets must be an object: {identity}")
+    policy = str(spec.get("policy") or "")
+    if policy not in {"approved", "none"}:
+        raise RobotRegistryError(f"Invalid MEVA Offset policy {policy!r}: {identity}")
+    if policy == "none":
+        if set(spec) - {"policy"}:
+            raise RobotRegistryError(f"No-offset policy must not reference an asset: {identity}")
+        return result
+    relative = str(spec.get("file") or "")
+    path = _child_path(robot_directory, relative, "MEVA Offset asset")
+    if not path.is_file():
+        raise RobotRegistryError(f"Approved MEVA Offset asset not found: {identity}, path={path}")
+    digest = str(spec.get("sha256") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise RobotRegistryError(f"Invalid approved MEVA Offset SHA256: {identity}")
+    spec["policy"] = policy
+    spec["file"] = relative.replace("\\", "/")
+    spec["sha256"] = digest
+    return result
+
+
 def _validate_manifest(
     manifest: dict[str, Any],
     *,
@@ -410,6 +467,12 @@ def _validate_manifest(
         _validate_skeleton_ui(
             ui or {}, identity=f"{manufacturer_id}/{robot_id}/{variant_id}"
         )
+        identity = f"{manufacturer_id}/{robot_id}/{variant_id}"
+        retarget_assets = _validate_retarget_assets(
+            variant.get("retarget_assets", {}),
+            robot_directory=manifest_path.parent,
+            identity=identity,
+        )
         retargeting = variant.get("retargeting", {})
         if retargeting is not None and not isinstance(retargeting, dict):
             raise RobotRegistryError(
@@ -426,6 +489,7 @@ def _validate_manifest(
         variant["floating_base"] = floating_base
         variant["output_joint_order"] = output_joint_order
         variant["ui"] = deepcopy(ui or {})
+        variant["retarget_assets"] = retarget_assets
         variants.append(variant)
     return variants
 

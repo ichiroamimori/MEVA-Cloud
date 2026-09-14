@@ -20,6 +20,7 @@ from server.retarget_config_store import (
 )
 from server.api.retarget_config_api import (
     SharedConfigSaveRequest,
+    get_main_config,
     get_shared_config,
     get_shared_configs,
     replace_standard_config,
@@ -382,6 +383,38 @@ class RetargetConfigStoreTests(unittest.TestCase):
         self.assertFalse(snapshot["output"]["save_diagnostics_csv"])
         request_path.unlink()
         release_id_reservation(reservation, "test-job-1")
+
+    def test_main_context_and_ui_preserve_primary_frame_range(self) -> None:
+        run_id = "2608250001"
+        run = (
+            self.workspace / "users" / "local_user" / "capsules" / "2608250001"
+            / "retarget" / "g1_29dof" / run_id
+        )
+        config_path = run / f"{run_id}_primary_config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["frame_range"] = {"start": 123, "stop": 456, "step": 1}
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        (run / f"{run_id}_primary.npz").write_bytes(b"present")
+
+        context = get_main_config(
+            capsule_id="2608250001",
+            robot_variant="g1_29dof",
+            run_id=run_id,
+            main_id="new",
+        )
+        self.assertEqual(context["config"]["frame_range"], {
+            "start": 123, "stop": 456, "step": 1,
+        })
+
+        html = (
+            Path(__file__).resolve().parents[1] / "app" / "retarget" / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'preservedStart != null && preservedStart !== ""', html,
+        )
+        self.assertIn(
+            'preservedEnd != null && preservedEnd !== ""', html,
+        )
 
     def test_primary_request_refreshes_robot_metadata_from_manifest(self) -> None:
         config = deepcopy(BASE_CONFIG)

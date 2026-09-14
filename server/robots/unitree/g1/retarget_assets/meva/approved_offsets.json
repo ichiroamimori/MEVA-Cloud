@@ -1,0 +1,578 @@
+{
+  "schema_version": "2.1",
+  "algorithm": "geometry-v4.0-orientation-capabilities",
+  "meva_canonical_geometry_version": "meva-canonical-geometry-1.0",
+  "meva_canonical_geometry_sha256": "49e6e210ca7acbc4bec229c0303b23edfeef4397f395c79be902b906ae95c32b",
+  "robot_mjcf": "server/robots/unitree/g1/g1_29dof.xml",
+  "fingerprint": {
+    "algorithm_version": "geometry-v4.0-orientation-capabilities",
+    "meva_canonical_geometry_version": "meva-canonical-geometry-1.0",
+    "meva_canonical_geometry_sha256": "49e6e210ca7acbc4bec229c0303b23edfeef4397f395c79be902b906ae95c32b",
+    "mjcf_sha256": "fd789bfc1987f16527b0f41243e2fe848e1d9f0d3fcddf416a6a5001af0563ae",
+    "robot_retargeting_sha256": "4b30033c59e0eb30484032922395b17ca07c2bc4e53885a073b614f9980065de",
+    "mappings": [
+      {
+        "source_segment": "Pelvis",
+        "target_link": "pelvis",
+        "orientation_mode": "full"
+      },
+      {
+        "source_segment": "Thoracic2",
+        "target_link": "torso_link",
+        "orientation_mode": "full"
+      },
+      {
+        "source_segment": "LeftUpperArm",
+        "target_link": "left_shoulder_yaw_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "LeftForearm",
+        "target_link": "left_elbow_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "LeftHand",
+        "target_link": "left_wrist_yaw_link",
+        "orientation_mode": "full"
+      },
+      {
+        "source_segment": "RightUpperArm",
+        "target_link": "right_shoulder_yaw_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "RightForearm",
+        "target_link": "right_elbow_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "RightHand",
+        "target_link": "right_wrist_yaw_link",
+        "orientation_mode": "full"
+      },
+      {
+        "source_segment": "LeftUpperLeg",
+        "target_link": "left_hip_yaw_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "LeftLowerLeg",
+        "target_link": "left_knee_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "LeftFoot",
+        "target_link": "left_ankle_roll_link",
+        "orientation_mode": "full"
+      },
+      {
+        "source_segment": "RightUpperLeg",
+        "target_link": "right_hip_yaw_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "RightLowerLeg",
+        "target_link": "right_knee_link",
+        "orientation_mode": "axis"
+      },
+      {
+        "source_segment": "RightFoot",
+        "target_link": "right_ankle_roll_link",
+        "orientation_mode": "full"
+      }
+    ]
+  },
+  "offsets_wxyz_by_link": {
+    "pelvis": [
+      0.7057759649347484,
+      -0.7057759649347485,
+      -0.043362279926507784,
+      0.04336227992650778
+    ],
+    "torso_link": [
+      0.6890758623435916,
+      -0.6890795647539913,
+      0.1586561358361242,
+      -0.15865698829687538
+    ],
+    "left_shoulder_yaw_link": [
+      0.6932758910923214,
+      -0.7168849555703295,
+      0.05122413599237965,
+      -0.053109200699208534
+    ],
+    "left_elbow_link": [
+      -0.4686675322796124,
+      0.5766579807045374,
+      -0.5102195155114599,
+      0.43300388389476974
+    ],
+    "left_wrist_yaw_link": [
+      -0.5,
+      0.5,
+      -0.5,
+      0.5
+    ],
+    "right_shoulder_yaw_link": [
+      0.7168849555703294,
+      -0.6932758910923215,
+      0.05310920069920853,
+      -0.05122413599237965
+    ],
+    "right_elbow_link": [
+      0.5766579807045373,
+      -0.46866753227961233,
+      0.4330038838947697,
+      -0.5102195155114598
+    ],
+    "right_wrist_yaw_link": [
+      -0.5,
+      0.5,
+      -0.5,
+      0.5
+    ],
+    "left_hip_yaw_link": [
+      0.6866093903881503,
+      -0.6998824894357001,
+      -0.13873248896925264,
+      0.13958990836194468
+    ],
+    "left_knee_link": [
+      0.7071365600950434,
+      -0.7069262883378651,
+      0.010320970284503428,
+      -0.010324040206492904
+    ],
+    "left_ankle_roll_link": [
+      0.7071067811865476,
+      -0.7071067811865475,
+      0.0,
+      0.0
+    ],
+    "right_hip_yaw_link": [
+      0.6998824894357,
+      -0.6866093903881504,
+      -0.13958990836194465,
+      0.13873248896925267
+    ],
+    "right_knee_link": [
+      0.7069262883378652,
+      -0.7071365600950433,
+      0.010324040206492904,
+      -0.010320970284503428
+    ],
+    "right_ankle_roll_link": [
+      0.7071067811865476,
+      -0.7071067811865475,
+      0.0,
+      0.0
+    ]
+  },
+  "details": {
+    "pelvis": {
+      "source_segment": "Pelvis",
+      "source_geometry_mode": "meva_canonical_direction",
+      "source_long_axis_canonical_local": [
+        -0.1947384779861242,
+        0.9808552009301107,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        -0.0732012349261878,
+        0.0,
+        0.9973171908702271
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7057759649347484,
+        -0.7057759649347485,
+        -0.043362279926507784,
+        0.04336227992650778
+      ]
+    },
+    "torso_link": {
+      "source_segment": "Thoracic2",
+      "source_geometry_mode": "meva_canonical_direction",
+      "source_long_axis_canonical_local": [
+        0.43730680411633854,
+        0.8993123812392478,
+        -4.832000001285477e-06
+      ],
+      "robot_long_axis_link_local": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.6890758623435916,
+        -0.6890795647539913,
+        0.1586561358361242,
+        -0.15865698829687538
+      ]
+    },
+    "left_shoulder_yaw_link": {
+      "source_segment": "LeftUpperArm",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        0.0458401859985067,
+        -0.9983881539674764,
+        0.03346298499890991
+      ],
+      "robot_long_axis_link_local": [
+        0.19235761931023737,
+        -1.6160153062913708e-16,
+        -0.9813248933423109
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.6932758910923214,
+        -0.7168849555703295,
+        0.05122413599237965,
+        -0.053109200699208534
+      ]
+    },
+    "left_elbow_link": {
+      "source_segment": "LeftForearm",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        0.0031406070000042723,
+        -0.9997732770013599,
+        0.02106018000002865
+      ],
+      "robot_long_axis_link_local": [
+        0.9948616665800252,
+        0.018782092889531,
+        -0.09948616665800276
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        -0.4686675322796124,
+        0.5766579807045374,
+        -0.5102195155114599,
+        0.43300388389476974
+      ]
+    },
+    "left_wrist_yaw_link": {
+      "source_segment": "LeftHand",
+      "source_geometry_mode": "semantic_frame",
+      "source_primary_axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "source_secondary_axis_local": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "robot_secondary_axis_link_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "secondary_axis_semantics": "palm_normal",
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        -0.5,
+        0.5,
+        -0.5,
+        0.5
+      ]
+    },
+    "right_shoulder_yaw_link": {
+      "source_segment": "RightUpperArm",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        0.0458401859985067,
+        -0.9983881539674764,
+        -0.03346298499890991
+      ],
+      "robot_long_axis_link_local": [
+        0.19235761931023737,
+        1.6160153062913708e-16,
+        -0.9813248933423109
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7168849555703294,
+        -0.6932758910923215,
+        0.05310920069920853,
+        -0.05122413599237965
+      ]
+    },
+    "right_elbow_link": {
+      "source_segment": "RightForearm",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        0.0031406070000042723,
+        -0.9997732770013599,
+        -0.02106018000002865
+      ],
+      "robot_long_axis_link_local": [
+        0.9948616665800252,
+        -0.018782092889531,
+        -0.09948616665800276
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.5766579807045373,
+        -0.46866753227961233,
+        0.4330038838947697,
+        -0.5102195155114598
+      ]
+    },
+    "right_wrist_yaw_link": {
+      "source_segment": "RightHand",
+      "source_geometry_mode": "semantic_frame",
+      "source_primary_axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "source_secondary_axis_local": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "robot_secondary_axis_link_local": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "secondary_axis_semantics": "palm_normal",
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        -0.5,
+        0.5,
+        -0.5,
+        0.5
+      ]
+    },
+    "left_hip_yaw_link": {
+      "source_segment": "LeftUpperLeg",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        -0.019438030000106486,
+        -0.9997828930054771,
+        0.007505321000041116
+      ],
+      "robot_long_axis_link_local": [
+        -0.40376551511555175,
+        0.011084942642185775,
+        -0.914795350256052
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.6866093903881503,
+        -0.6998824894357001,
+        -0.13873248896925264,
+        0.13958990836194468
+      ]
+    },
+    "left_knee_link": {
+      "source_segment": "LeftLowerLeg",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        -0.029193342986343438,
+        -0.9995737835324022,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        0.0,
+        -0.0002974008584721925,
+        -0.9999999557763637
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7071365600950434,
+        -0.7069262883378651,
+        0.010320970284503428,
+        -0.010324040206492904
+      ]
+    },
+    "left_ankle_roll_link": {
+      "source_segment": "LeftFoot",
+      "source_geometry_mode": "semantic_frame",
+      "source_primary_axis_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "source_secondary_axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "robot_secondary_axis_link_local": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "secondary_axis_semantics": "sole_outward_normal",
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7071067811865476,
+        -0.7071067811865475,
+        0.0,
+        0.0
+      ]
+    },
+    "right_hip_yaw_link": {
+      "source_segment": "RightUpperLeg",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        -0.019438030000106486,
+        -0.9997828930054771,
+        -0.007505321000041116
+      ],
+      "robot_long_axis_link_local": [
+        -0.40376551511555175,
+        -0.011084942642185775,
+        -0.914795350256052
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.6998824894357,
+        -0.6866093903881504,
+        -0.13958990836194465,
+        0.13873248896925267
+      ]
+    },
+    "right_knee_link": {
+      "source_segment": "RightLowerLeg",
+      "source_geometry_mode": "primary_axis:target_geometry:body_to_body",
+      "source_primary_axis_local": [
+        -0.029193342986343438,
+        -0.9995737835324022,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        0.0,
+        0.0002974008584721925,
+        -0.9999999557763637
+      ],
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7069262883378652,
+        -0.7071365600950433,
+        0.010324040206492904,
+        -0.010320970284503428
+      ]
+    },
+    "right_ankle_roll_link": {
+      "source_segment": "RightFoot",
+      "source_geometry_mode": "semantic_frame",
+      "source_primary_axis_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "robot_long_axis_link_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "source_secondary_axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "robot_secondary_axis_link_local": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "secondary_axis_semantics": "sole_outward_normal",
+      "uses_bvh_end_site": false,
+      "offset_quaternion_wxyz": [
+        0.7071067811865476,
+        -0.7071067811865475,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "mapping_offset_variants": [
+    {
+      "source_segment": "LeftUpperLeg",
+      "target_link": "left_hip_yaw_link",
+      "orientation_mode": "full",
+      "offset_wxyz": [
+        0.6866093903881503,
+        -0.6998824894357001,
+        -0.13873248896925264,
+        0.13958990836194468
+      ],
+      "details": {
+        "source_segment": "LeftUpperLeg",
+        "source_geometry_mode": "meva_canonical_direction",
+        "source_long_axis_canonical_local": [
+          -0.019438030000106486,
+          -0.9997828930054771,
+          0.007505321000041116
+        ],
+        "robot_long_axis_link_local": [
+          -0.40376551511555175,
+          0.011084942642185775,
+          -0.914795350256052
+        ],
+        "uses_bvh_end_site": false,
+        "offset_quaternion_wxyz": [
+          0.6866093903881503,
+          -0.6998824894357001,
+          -0.13873248896925264,
+          0.13958990836194468
+        ]
+      }
+    },
+    {
+      "source_segment": "RightUpperLeg",
+      "target_link": "right_hip_yaw_link",
+      "orientation_mode": "full",
+      "offset_wxyz": [
+        0.6998824894357,
+        -0.6866093903881504,
+        -0.13958990836194465,
+        0.13873248896925267
+      ],
+      "details": {
+        "source_segment": "RightUpperLeg",
+        "source_geometry_mode": "meva_canonical_direction",
+        "source_long_axis_canonical_local": [
+          -0.019438030000106486,
+          -0.9997828930054771,
+          -0.007505321000041116
+        ],
+        "robot_long_axis_link_local": [
+          -0.40376551511555175,
+          -0.011084942642185775,
+          -0.914795350256052
+        ],
+        "uses_bvh_end_site": false,
+        "offset_quaternion_wxyz": [
+          0.6998824894357,
+          -0.6866093903881504,
+          -0.13958990836194465,
+          0.13873248896925267
+        ]
+      }
+    }
+  ]
+}

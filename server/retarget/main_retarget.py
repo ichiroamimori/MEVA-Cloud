@@ -782,7 +782,9 @@ def run_main(config_path: Path) -> tuple[Path, Path]:
         "reference": "previous_retargeted_frame_final_q",
         "dofs": "all articulated joints; floating base excluded by Mink PostureTask",
     }
-    metadata["mapping_offset_asset"] = str(preparation.mapping_offset_path)
+    metadata["mapping_offset_asset"] = preparation.mapping_offset_path.relative_to(
+        root
+    ).as_posix()
     metadata["resolved_mapping_offsets_wxyz"] = {
         link: [float(x) for x in value]
         for link, value in preparation.mapping_offsets.items()

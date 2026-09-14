@@ -159,6 +159,13 @@ class RemoteIKContractTest(unittest.TestCase):
             self.assertEqual(RESULT_FORMAT, manifest["result"]["format"])
             self.assertEqual(MANIFEST_JSON_HASH, manifest["robot"]["manifest_hash_algorithm"])
             self.assertEqual(64, len(manifest["robot"]["manifest_json_sha256"]))
+            self.assertEqual("approved", manifest["robot"]["offset_policy"])
+            self.assertEqual(64, len(manifest["robot"]["offset_asset_sha256"]))
+            self.assertEqual(64, len(manifest["robot"]["offset_fingerprint_sha256"]))
+            self.assertEqual(
+                "geometry-v4.0-orientation-capabilities",
+                manifest["robot"]["offset_algorithm"],
+            )
             self.assertNotIn(str(root), json.dumps(manifest))
             request = read_request_manifest(archive)
             extracted = directory / "extracted"
@@ -209,6 +216,46 @@ class RemoteIKContractTest(unittest.TestCase):
             worker_config = json.loads(prepared.read_text(encoding="utf-8"))
             self.assertEqual(worker_config["capsule_id"], "2609110001")
             self.assertNotIn("bvh", worker_config["source"])
+
+    def test_worker_rejects_approved_offset_hash_mismatch(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / "workspace") as name:
+            directory = Path(name)
+            source = directory / "motion.bin"
+            source.write_bytes(b"not reached because Robot assets fail first")
+            config = directory / "config.json"
+            config.write_text(json.dumps({
+                "robot": {"manufacturer": "unitree", "model": "g1", "variant": "g1_29dof"},
+                "source": {"file": source.relative_to(root).as_posix()},
+                "output": {"run_id": "2609110001"},
+            }), encoding="utf-8")
+            archive = directory / "request.zip"
+            build_request_archive(
+                destination=archive, repository_root=root, stage="primary",
+                client_job_id="cloud-job-offset-mismatch", config_path=config,
+            )
+            request = read_request_manifest(archive)
+            robot = dict(request.robot)
+            robot["offset_asset_sha256"] = "0" * 64
+            tampered = IKRequest.from_dict({
+                "schema_version": request.schema_version,
+                "backend": request.backend,
+                "stage": request.stage,
+                "client_job_id": request.client_job_id,
+                "robot": robot,
+                "config_path": request.config_path,
+                "files": list(request.files),
+            })
+            package = directory / "package"
+            extract_request_archive(
+                archive, package, request, max_uncompressed_bytes=1024 * 1024,
+            )
+            execution = directory / "execution"
+            execution.mkdir()
+            with self.assertRaisesRegex(
+                IKExecutionError, "approved MEVA Offset asset differs"
+            ):
+                _prepare_config(tampered, package, execution, root)
 
     def test_checksum_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as name:

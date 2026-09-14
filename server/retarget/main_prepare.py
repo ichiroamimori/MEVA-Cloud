@@ -38,7 +38,7 @@ from server.retarget.main_calibration import (
     analyze_main_calibration,
     preprocess_gcp,
 )
-from server.retarget.check_offsets import compute_offsets
+from server.retarget.check_offsets import load_approved_offsets
 from server.retarget.support_state import SupportState
 from server.retarget.main_target import load_main_target
 from server.retarget.motion_io import load_motion
@@ -597,10 +597,7 @@ def prepare_main(
 
     initial_motion["root_pos"] = out_root_pos
 
-    mapping_offsets, mapping_offset_path, _ = compute_offsets(
-        config_path,
-        force=bool(cfg.get("offsets", {}).get("force_recompute", False)),
-    )
+    mapping_offsets, mapping_offset_path, _ = load_approved_offsets(config_path)
     mapping_offset_asset = json.loads(
         mapping_offset_path.read_text(encoding="utf-8")
     )

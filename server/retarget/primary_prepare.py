@@ -129,12 +129,9 @@ def prepare_primary(
     print("SOURCE :", csv_path)
     print("MJCF   :", xml_path)
 
-    from server.retarget.check_offsets import compute_offsets
-    mapping_offsets, offset_path, offsets_generated = compute_offsets(
-        config_path,
-        force=bool(cfg.get("offsets", {}).get("force_recompute", False)),
-    )
-    print("OFFSET :", offset_path, "(generated)" if offsets_generated else "(reused)")
+    from server.retarget.check_offsets import load_approved_offsets
+    mapping_offsets, offset_path, _ = load_approved_offsets(config_path)
+    print("OFFSET :", offset_path, "(approved)")
     offset_asset = load_json(offset_path)
     offset_details = offset_asset.get("details", {})
 

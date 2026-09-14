@@ -60,6 +60,11 @@ class RobotRegistryTests(unittest.TestCase):
             [["left_arm", "right_arm"], ["left_leg", "right_leg"]],
         )
         self.assertNotIn("initial_keyframe", runtime["robot"])
+        self.assertEqual(
+            runtime["robot"]["retarget_assets"]["meva_offsets"]["policy"],
+            "approved",
+        )
+        self.assertTrue(record.approved_meva_offset_path.is_file())
 
     def test_catalog_keeps_disabled_variants_for_management(self) -> None:
         catalog = public_catalog(self.root)
@@ -75,6 +80,8 @@ class RobotRegistryTests(unittest.TestCase):
         runtime = apply_variant_to_runtime_config({"robot": {}}, record, root=self.root)
         contacts = runtime["robot"]["foot_contacts"]
         self.assertEqual(contacts["robot_foot_to_ground_offset_m"], 0.038)
+        self.assertEqual(record.meva_offset_policy, "approved")
+        self.assertTrue(record.approved_meva_offset_path.is_file())
         self.assertEqual(len(contacts["left"]["support_points"]), 4)
         self.assertEqual(len(contacts["right"]["support_points"]), 4)
         self.assertEqual(len(runtime["robot"]["ui"]["groups"]), 5)

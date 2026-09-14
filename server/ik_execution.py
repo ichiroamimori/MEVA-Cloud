@@ -11,6 +11,7 @@ from typing import Callable
 
 from server.ik_contract import (
     IKRequest,
+    canonical_value_sha256,
     mujoco_asset_fingerprint,
     robot_manifest_matches,
     sha256_file,
@@ -113,6 +114,40 @@ def _prepare_config(
                 "robot_model_load_failure",
                 "Remote MuJoCo mesh/texture asset bundle differs from MEVA Cloud",
             )
+        if record.meva_offset_policy != request.robot.get("offset_policy"):
+            raise IKExecutionError(
+                "robot_model_load_failure",
+                "Remote Robot approved Offset policy differs from MEVA Cloud",
+            )
+        if record.meva_offset_policy == "missing":
+            raise IKExecutionError(
+                "robot_model_load_failure",
+                "Robot manifest does not declare a production MEVA Offset policy",
+            )
+        if record.meva_offset_policy == "approved":
+            offset_path = record.approved_meva_offset_path
+            expected_sha = request.robot.get("offset_asset_sha256")
+            if (
+                offset_path is None
+                or not offset_path.is_file()
+                or record.approved_meva_offset_sha256 != expected_sha
+                or sha256_file(offset_path) != expected_sha
+            ):
+                raise IKExecutionError(
+                    "robot_model_load_failure",
+                    "Remote approved MEVA Offset asset differs from MEVA Cloud",
+                )
+            offset_asset = _load_config(offset_path)
+            if (
+                str(offset_asset.get("algorithm") or "")
+                != request.robot.get("offset_algorithm")
+                or canonical_value_sha256(offset_asset.get("fingerprint"))
+                != request.robot.get("offset_fingerprint_sha256")
+            ):
+                raise IKExecutionError(
+                    "robot_model_load_failure",
+                    "Remote approved MEVA Offset provenance differs from MEVA Cloud",
+                )
         cfg = apply_variant_to_runtime_config(cfg, record, root=repository_root)
     except IKExecutionError:
         raise

@@ -1281,12 +1281,140 @@ def offsets_path_for_config(
     )
 
 
+def _mapping_identity(mapping):
+    return (
+        str(mapping.get("source_segment") or ""),
+        str(mapping.get("target_link") or ""),
+        str(mapping.get("orientation_mode") or "full"),
+    )
+
+
+def load_approved_offsets(config_path: Path):
+    """Load the Git-managed Robot Offset asset used by production IK.
+
+    Runtime cache generation remains available through ``compute_offsets`` for
+    Robot setup.  Normal IK must never turn a cache miss into an unreviewed
+    production asset.
+    """
+    config_path = config_path.resolve()
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    application_root = Path(__file__).resolve().parents[2]
+    if str(application_root) not in sys.path:
+        sys.path.insert(0, str(application_root))
+    from server.robot_registry import resolve_variant
+
+    robot = cfg.get("robot") or {}
+    record = resolve_variant(
+        str(robot.get("variant") or ""),
+        manufacturer_id=str(robot.get("manufacturer") or "") or None,
+        robot_id=str(robot.get("model") or "") or None,
+        root=application_root,
+    )
+    mappings = cfg.get("mappings")
+    if not isinstance(mappings, list):
+        raise ValueError("Config mappings must be an array")
+    if bool((cfg.get("offsets") or {}).get("force_recompute", False)):
+        raise ValueError(
+            "Offset regeneration is not allowed during IK execution; "
+            "use the Robot setup Offset command and approve the result"
+        )
+
+    policy = record.meva_offset_policy
+    if policy == "none":
+        return (
+            {str(m["target_link"]): np.asarray([1.0, 0.0, 0.0, 0.0]) for m in mappings},
+            record.manifest_path,
+            False,
+        )
+    if policy != "approved":
+        raise ValueError(
+            "Robot has no approved MEVA Offset policy: "
+            f"{record.manufacturer_id}/{record.robot_id}/{record.variant_id}"
+        )
+    asset_path = record.approved_meva_offset_path
+    expected_sha = record.approved_meva_offset_sha256
+    if asset_path is None or expected_sha is None or not asset_path.is_file():
+        raise ValueError(
+            "Approved MEVA Offset asset is missing: "
+            f"{record.manufacturer_id}/{record.robot_id}/{record.variant_id}"
+        )
+    actual_sha = sha256(asset_path)
+    if actual_sha != expected_sha:
+        raise ValueError(
+            "Approved MEVA Offset asset SHA256 mismatch: "
+            f"expected={expected_sha}, actual={actual_sha}, path={asset_path}"
+        )
+    asset = json.loads(asset_path.read_text(encoding="utf-8"))
+    if not isinstance(asset, dict) or not isinstance(asset.get("fingerprint"), dict):
+        raise ValueError(f"Invalid approved MEVA Offset asset: {asset_path}")
+    if asset.get("algorithm") != ALGORITHM_VERSION:
+        raise ValueError(
+            "Approved MEVA Offset algorithm mismatch: "
+            f"expected={ALGORITHM_VERSION}, actual={asset.get('algorithm')}"
+        )
+
+    robot_retargeting = record.variant.get("retargeting") or {}
+    mjcf_path = record.model_path
+    expected_fingerprint = offset_fingerprint(
+        cfg,
+        mjcf_path,
+        geometry_hash=canonical_geometry_hash(
+            terminal_semantics=MEVA_TERMINAL_SEMANTICS
+        ),
+        robot_retargeting=robot_retargeting,
+    )
+    approved_fingerprint = asset["fingerprint"]
+    for key in (
+        "algorithm_version", "meva_canonical_geometry_version",
+        "meva_canonical_geometry_sha256", "mjcf_sha256",
+        "robot_retargeting_sha256",
+    ):
+        if approved_fingerprint.get(key) != expected_fingerprint.get(key):
+            raise ValueError(
+                f"Approved MEVA Offset fingerprint mismatch for {key}: {asset_path}"
+            )
+
+    approved_mappings = approved_fingerprint.get("mappings")
+    raw_offsets = asset.get("offsets_wxyz_by_link")
+    if not isinstance(approved_mappings, list) or not isinstance(raw_offsets, dict):
+        raise ValueError(f"Invalid approved MEVA Offset mapping data: {asset_path}")
+    approved_by_identity = {
+        _mapping_identity(item): raw_offsets.get(str(item.get("target_link") or ""))
+        for item in approved_mappings
+    }
+    if len(approved_by_identity) != len(approved_mappings):
+        raise ValueError(f"Duplicate approved MEVA Offset mapping: {asset_path}")
+    variants = asset.get("mapping_offset_variants", [])
+    if not isinstance(variants, list):
+        raise ValueError(f"Invalid approved MEVA Offset variants: {asset_path}")
+    for item in variants:
+        if not isinstance(item, dict) or not isinstance(item.get("offset_wxyz"), list):
+            raise ValueError(f"Invalid approved MEVA Offset variant: {asset_path}")
+        identity = _mapping_identity(item)
+        if identity in approved_by_identity:
+            raise ValueError(f"Duplicate approved MEVA Offset mapping: {asset_path}")
+        approved_by_identity[identity] = item["offset_wxyz"]
+    selected = {}
+    for mapping in mappings:
+        identity = _mapping_identity(mapping)
+        if identity not in approved_by_identity:
+            raise ValueError(
+                "Config mapping is not covered by the approved MEVA Offset asset: "
+                f"source={identity[0]}, target={identity[1]}, mode={identity[2]}"
+            )
+        value = approved_by_identity[identity]
+        if value is None:
+            raise ValueError(f"Approved MEVA Offset is missing target link {identity[1]!r}")
+        selected[identity[1]] = normalize_quat(value)
+    return selected, asset_path, False
+
+
 def compute_offsets(
     config_path: Path,
     force=False,
 ):
     """
-    Public API used by primary_retarget.py.
+    Generate/reuse a workspace cache for Robot install/setup.
 
     Returns:
         offsets_by_link,
@@ -1325,6 +1453,10 @@ def compute_offsets(
         application_root, variant_record.runtime_robot(application_root)
     )
     runtime_definition.validate_config(cfg)
+    if not cfg.get("mappings"):
+        raise ValueError(
+            "Cannot generate an Offset asset from an empty mappings array"
+        )
     robot_retargeting = runtime_definition.retargeting
     target_geometry = robot_retargeting.get("target_geometry") or {}
     terminal_semantics = robot_retargeting.get("terminal_semantics") or {}
@@ -1562,6 +1694,15 @@ def main():
         action="store_true",
     )
 
+    ap.add_argument(
+        "--approve",
+        action="store_true",
+        help=(
+            "Copy the generated/reused setup cache to the approved asset path "
+            "declared by the Robot manifest. Review it before updating the manifest SHA256."
+        ),
+    )
+
     args = (
         ap.parse_args()
     )
@@ -1574,6 +1715,30 @@ def main():
         args.config,
         force=args.force,
     )
+
+    if args.approve:
+        cfg = json.loads(args.config.resolve().read_text(encoding="utf-8"))
+        application_root = Path(__file__).resolve().parents[2]
+        from server.robot_registry import resolve_variant
+        robot = cfg.get("robot") or {}
+        record = resolve_variant(
+            str(robot.get("variant") or ""),
+            manufacturer_id=str(robot.get("manufacturer") or "") or None,
+            robot_id=str(robot.get("model") or "") or None,
+            root=application_root,
+        )
+        approved_path = record.approved_meva_offset_path
+        if approved_path is None:
+            raise ValueError(
+                "Robot manifest must declare an approved MEVA Offset file before --approve"
+            )
+        approved_path.parent.mkdir(parents=True, exist_ok=True)
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+        approved_path.write_bytes(
+            (json.dumps(candidate, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        )
+        print("Approved asset:", approved_path)
+        print("Approved SHA256:", sha256(approved_path))
 
     print()
 

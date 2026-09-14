@@ -10,7 +10,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Iterable
 
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
+SUPPORTED_CONTRACT_VERSIONS = {"1.0", CONTRACT_VERSION}
 MANIFEST_NAME = "request.json"
 RESULT_MANIFEST_NAME = "result.json"
 RESULT_FORMAT = "meva_ik_result_zip_v2"
@@ -37,7 +38,8 @@ class IKRequest:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "IKRequest":
-        if raw.get("schema_version") != CONTRACT_VERSION:
+        schema_version = str(raw.get("schema_version") or "")
+        if schema_version not in SUPPORTED_CONTRACT_VERSIONS:
             raise IKContractError("Unsupported IK contract schema_version")
         backend = str(raw.get("backend") or "")
         stage = str(raw.get("stage") or "")
@@ -63,6 +65,20 @@ class IKRequest:
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise IKContractError(f"Invalid robot {key}")
             normalized_robot[key] = digest
+        offset_policy = str(robot.get("offset_policy") or "missing")
+        if offset_policy not in {"approved", "none", "missing"}:
+            raise IKContractError("Invalid robot offset_policy")
+        normalized_robot["offset_policy"] = offset_policy
+        if offset_policy == "approved":
+            for key in ("offset_asset_sha256", "offset_fingerprint_sha256"):
+                digest = str(robot.get(key) or "").lower()
+                if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    raise IKContractError(f"Invalid robot {key}")
+                normalized_robot[key] = digest
+            algorithm = str(robot.get("offset_algorithm") or "")
+            if not SAFE_ID_RE.fullmatch(algorithm):
+                raise IKContractError("Invalid robot offset_algorithm")
+            normalized_robot["offset_algorithm"] = algorithm
         manifest_json_sha256 = str(robot.get("manifest_json_sha256") or "").lower()
         if manifest_json_sha256:
             if not re.fullmatch(r"[0-9a-f]{64}", manifest_json_sha256):
@@ -103,7 +119,7 @@ class IKRequest:
         if missing:
             raise IKContractError(f"Missing required file roles: {', '.join(sorted(missing))}")
         return cls(
-            schema_version=CONTRACT_VERSION,
+            schema_version=schema_version,
             backend=backend,
             stage=stage,
             client_job_id=client_job_id,
@@ -151,6 +167,14 @@ def canonical_json_sha256(path: Path) -> str:
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def canonical_value_sha256(value: Any) -> str:
+    canonical = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
         allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()

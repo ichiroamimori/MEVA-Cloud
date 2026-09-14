@@ -16,6 +16,7 @@ from server.ik_contract import (
     IKContractError,
     MANIFEST_JSON_HASH,
     canonical_json_sha256,
+    canonical_value_sha256,
     extract_result_archive as extract_verified_result_archive,
     file_descriptor,
     mujoco_asset_fingerprint,
@@ -71,6 +72,29 @@ def _robot_identity(config: dict[str, Any], repository_root: Path) -> dict[str, 
     identity["asset_bundle_sha256"] = mujoco_asset_fingerprint(
         record.model_path, record.robot_directory,
     )
+    identity["offset_policy"] = record.meva_offset_policy
+    if record.meva_offset_policy == "missing":
+        raise RemoteIKError(
+            "robot_model_load_failure",
+            "Robot manifest does not declare a production MEVA Offset policy",
+        )
+    if record.meva_offset_policy == "approved":
+        path = record.approved_meva_offset_path
+        if path is None or not path.is_file():
+            raise RemoteIKError(
+                "robot_model_load_failure", "Approved MEVA Offset asset is missing"
+            )
+        try:
+            asset = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RemoteIKError(
+                "robot_model_load_failure", f"Invalid approved MEVA Offset asset: {exc}"
+            ) from exc
+        identity["offset_asset_sha256"] = sha256_file(path)
+        identity["offset_fingerprint_sha256"] = canonical_value_sha256(
+            asset.get("fingerprint")
+        )
+        identity["offset_algorithm"] = str(asset.get("algorithm") or "")
     return identity
 
 

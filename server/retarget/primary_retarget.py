@@ -298,8 +298,10 @@ def _write_primary_outputs(*, config_path, cfg, preparation, result, iteration_d
                 "source_fps": float(cfg["source"]["sampling_rate_hz"]),
                 "primary_target_npz": f"{run.name}_primary_target.npz",
             },
-            "mapping_offset_method": "meva_canonical_mjcf_geometry_cached",
-            "mapping_offset_asset": str(preparation.offset_path),
+            "mapping_offset_method": "approved_robot_asset",
+            "mapping_offset_asset": preparation.offset_path.relative_to(
+                repo_root_from(config_path)
+            ).as_posix(),
             "resolved_mapping_offsets_wxyz": resolved_offsets,
             "orientation_residual_summary_deg": residual_summary,
             "iteration_diagnostics_enabled": bool(iteration_diagnostics),
