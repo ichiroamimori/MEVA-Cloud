@@ -17,6 +17,7 @@ from server.retarget_config_store import (
     ConfigStoreError,
     list_configs as list_shared_configs,
     load_config as load_shared_config,
+    overlay_main_mapping_parameters,
     publish_to_workspace,
     replace_xenoma_standard,
     runtime_config as merge_runtime_config,
@@ -671,7 +672,6 @@ def _overlay_main_defaults(primary_cfg: dict[str, Any], overlay: dict[str, Any] 
         # Main defaults are independent from the selected Primary run.  Apply
         # only common IK configuration, never Primary source/output identity.
         for key in (
-            "mappings",
             "root",
             "world_alignment",
             "temporal_regularization",
@@ -684,6 +684,9 @@ def _overlay_main_defaults(primary_cfg: dict[str, Any], overlay: dict[str, Any] 
         ):
             if key in overlay:
                 cfg[key] = deepcopy(overlay[key])
+        cfg["mappings"] = overlay_main_mapping_parameters(
+            primary_cfg.get("mappings"), overlay.get("mappings")
+        )
         if isinstance(overlay.get("main"), dict):
             overlay_main = deepcopy(overlay["main"])
             overlay_height = overlay_main.pop("ground_contact_height_correction", None)

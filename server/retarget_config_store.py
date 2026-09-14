@@ -418,6 +418,32 @@ def runtime_config(
     return runtime
 
 
+def overlay_main_mapping_parameters(
+    primary_mappings: Any,
+    main_mappings: Any,
+) -> list[dict[str, Any]]:
+    """Keep Primary mapping identity while applying Main-only tuning values."""
+    primary_items = primary_mappings if isinstance(primary_mappings, list) else []
+    main_items = main_mappings if isinstance(main_mappings, list) else []
+    main_by_target = {
+        str(item.get("target_link")): item
+        for item in main_items
+        if isinstance(item, dict) and item.get("target_link")
+    }
+    merged_mappings: list[dict[str, Any]] = []
+    for primary_mapping in primary_items:
+        if not isinstance(primary_mapping, dict):
+            continue
+        merged = deepcopy(primary_mapping)
+        main_mapping = main_by_target.get(str(primary_mapping.get("target_link") or ""))
+        if main_mapping:
+            for key, value in main_mapping.items():
+                if key not in {"source_segment", "target_link"}:
+                    merged[key] = deepcopy(value)
+        merged_mappings.append(merged)
+    return merged_mappings
+
+
 def list_configs(
     *,
     source_type: str,
