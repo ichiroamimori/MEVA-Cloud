@@ -12,9 +12,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from server.ik_contract import (
+    ASSET_BUNDLE_HASH,
     IKContractError,
     IKRequest,
     MANIFEST_JSON_HASH,
+    MODEL_TEXT_HASH,
     RESULT_FORMAT,
     RESULT_MANIFEST_NAME,
     canonical_json_sha256,
@@ -158,9 +160,17 @@ class RemoteIKContractTest(unittest.TestCase):
             self.assertEqual("inputs/source.bin", manifest["files"][1]["path"])
             self.assertEqual(RESULT_FORMAT, manifest["result"]["format"])
             self.assertEqual(MANIFEST_JSON_HASH, manifest["robot"]["manifest_hash_algorithm"])
+            self.assertEqual(MODEL_TEXT_HASH, manifest["robot"]["model_hash_algorithm"])
+            self.assertEqual(
+                ASSET_BUNDLE_HASH, manifest["robot"]["asset_bundle_hash_algorithm"]
+            )
             self.assertEqual(64, len(manifest["robot"]["manifest_json_sha256"]))
             self.assertEqual("approved", manifest["robot"]["offset_policy"])
             self.assertEqual(64, len(manifest["robot"]["offset_asset_sha256"]))
+            self.assertEqual(
+                MANIFEST_JSON_HASH,
+                manifest["robot"]["offset_asset_hash_algorithm"],
+            )
             self.assertEqual(64, len(manifest["robot"]["offset_fingerprint_sha256"]))
             self.assertEqual(
                 "geometry-v4.0-orientation-capabilities",

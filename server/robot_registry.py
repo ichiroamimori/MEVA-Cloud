@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from server.content_hash import CANONICAL_JSON_SHA256
+
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
@@ -67,6 +69,14 @@ class RobotVariant:
         if not isinstance(spec, dict) or spec.get("policy") != "approved":
             return None
         return str(spec.get("sha256") or "").lower()
+
+    @property
+    def approved_meva_offset_hash_algorithm(self) -> str | None:
+        assets = self.variant.get("retarget_assets") or {}
+        spec = assets.get("meva_offsets") if isinstance(assets, dict) else None
+        if not isinstance(spec, dict) or spec.get("policy") != "approved":
+            return None
+        return str(spec.get("hash_algorithm") or "raw-sha256-v1")
 
     def runtime_robot(self, repository_root: Path) -> dict[str, Any]:
         model = self.variant["model"]
@@ -344,9 +354,15 @@ def _validate_retarget_assets(
     digest = str(spec.get("sha256") or "").lower()
     if not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise RobotRegistryError(f"Invalid approved MEVA Offset SHA256: {identity}")
+    hash_algorithm = str(spec.get("hash_algorithm") or "raw-sha256-v1")
+    if hash_algorithm not in {"raw-sha256-v1", CANONICAL_JSON_SHA256}:
+        raise RobotRegistryError(
+            f"Invalid approved MEVA Offset hash algorithm: {identity}"
+        )
     spec["policy"] = policy
     spec["file"] = relative.replace("\\", "/")
     spec["sha256"] = digest
+    spec["hash_algorithm"] = hash_algorithm
     return result
 
 

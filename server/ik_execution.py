@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Callable
 
 from server.ik_contract import (
+    ASSET_BUNDLE_HASH,
     IKRequest,
+    MANIFEST_JSON_HASH,
+    MODEL_TEXT_HASH,
+    canonical_json_sha256,
+    canonical_text_sha256,
     canonical_value_sha256,
     mujoco_asset_fingerprint,
     robot_manifest_matches,
@@ -101,13 +106,25 @@ def _prepare_config(
                 "robot_model_load_failure",
                 "Remote robot manifest content differs from the MEVA Cloud manifest",
             )
-        if sha256_file(record.model_path) != request.robot["model_sha256"]:
+        model_digest = (
+            canonical_text_sha256(record.model_path)
+            if request.robot.get("model_hash_algorithm") == MODEL_TEXT_HASH
+            else sha256_file(record.model_path)
+        )
+        if model_digest != request.robot["model_sha256"]:
             raise IKExecutionError(
                 "robot_model_load_failure",
                 "Remote robot MJCF differs from the MEVA Cloud MJCF",
             )
         if (
-            mujoco_asset_fingerprint(record.model_path, record.robot_directory)
+            mujoco_asset_fingerprint(
+                record.model_path,
+                record.robot_directory,
+                canonicalize_text=(
+                    request.robot.get("asset_bundle_hash_algorithm")
+                    == ASSET_BUNDLE_HASH
+                ),
+            )
             != request.robot["asset_bundle_sha256"]
         ):
             raise IKExecutionError(
@@ -131,7 +148,14 @@ def _prepare_config(
                 offset_path is None
                 or not offset_path.is_file()
                 or record.approved_meva_offset_sha256 != expected_sha
-                or sha256_file(offset_path) != expected_sha
+                or record.approved_meva_offset_hash_algorithm
+                != request.robot.get("offset_asset_hash_algorithm", "raw-sha256-v1")
+                or (
+                    canonical_json_sha256(offset_path)
+                    if request.robot.get("offset_asset_hash_algorithm")
+                    == MANIFEST_JSON_HASH
+                    else sha256_file(offset_path)
+                ) != expected_sha
             ):
                 raise IKExecutionError(
                     "robot_model_load_failure",

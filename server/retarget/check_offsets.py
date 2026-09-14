@@ -11,6 +11,14 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+from server.content_hash import (
+    CANONICAL_JSON_SHA256,
+    CANONICAL_TEXT_SHA256,
+    canonical_text_sha256,
+    sha256_file,
+)
+from server.ik_contract import canonical_json_sha256
+
 try:
     from .meva_canonical_geometry import (
         CANONICAL_GEOMETRY_VERSION,
@@ -394,29 +402,6 @@ def find_repo_root(
     raise FileNotFoundError(
         "repo root not found"
     )
-
-
-def sha256(
-    path: Path,
-) -> str:
-
-    h = hashlib.sha256()
-
-    with path.open(
-        "rb"
-    ) as f:
-
-        while True:
-            chunk = f.read(
-                1024 * 1024
-            )
-
-            if not chunk:
-                break
-
-            h.update(chunk)
-
-    return h.hexdigest()
 
 
 # ============================================================
@@ -1210,7 +1195,8 @@ def offset_fingerprint(
             if geometry_hash is not None
             else canonical_geometry_hash(terminal_semantics=MEVA_TERMINAL_SEMANTICS)
         ),
-        "mjcf_sha256": sha256(mjcf_path),
+        "mjcf_hash_algorithm": CANONICAL_TEXT_SHA256,
+        "mjcf_sha256": canonical_text_sha256(mjcf_path),
         "robot_retargeting_sha256": hashlib.sha256(
             json.dumps(
                 robot_retargeting or {}, sort_keys=True, separators=(",", ":")
@@ -1338,7 +1324,14 @@ def load_approved_offsets(config_path: Path):
             "Approved MEVA Offset asset is missing: "
             f"{record.manufacturer_id}/{record.robot_id}/{record.variant_id}"
         )
-    actual_sha = sha256(asset_path)
+    asset_hash_algorithm = getattr(
+        record, "approved_meva_offset_hash_algorithm", "raw-sha256-v1"
+    )
+    actual_sha = (
+        canonical_json_sha256(asset_path)
+        if asset_hash_algorithm == CANONICAL_JSON_SHA256
+        else sha256_file(asset_path)
+    )
     if actual_sha != expected_sha:
         raise ValueError(
             "Approved MEVA Offset asset SHA256 mismatch: "
@@ -1366,7 +1359,7 @@ def load_approved_offsets(config_path: Path):
     approved_fingerprint = asset["fingerprint"]
     for key in (
         "algorithm_version", "meva_canonical_geometry_version",
-        "meva_canonical_geometry_sha256", "mjcf_sha256",
+        "meva_canonical_geometry_sha256", "mjcf_hash_algorithm", "mjcf_sha256",
         "robot_retargeting_sha256",
     ):
         if approved_fingerprint.get(key) != expected_fingerprint.get(key):
@@ -1738,7 +1731,7 @@ def main():
             (json.dumps(candidate, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
         )
         print("Approved asset:", approved_path)
-        print("Approved SHA256:", sha256(approved_path))
+        print("Approved canonical JSON SHA256:", canonical_json_sha256(approved_path))
 
     print()
 

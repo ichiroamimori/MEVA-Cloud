@@ -13,9 +13,12 @@ from urllib.parse import urlsplit
 
 from server.ik_contract import (
     CONTRACT_VERSION,
+    ASSET_BUNDLE_HASH,
     IKContractError,
     MANIFEST_JSON_HASH,
+    MODEL_TEXT_HASH,
     canonical_json_sha256,
+    canonical_text_sha256,
     canonical_value_sha256,
     extract_result_archive as extract_verified_result_archive,
     file_descriptor,
@@ -68,10 +71,12 @@ def _robot_identity(config: dict[str, Any], repository_root: Path) -> dict[str, 
     identity["manifest_sha256"] = sha256_file(record.manifest_path)
     identity["manifest_json_sha256"] = canonical_json_sha256(record.manifest_path)
     identity["manifest_hash_algorithm"] = MANIFEST_JSON_HASH
-    identity["model_sha256"] = sha256_file(record.model_path)
+    identity["model_sha256"] = canonical_text_sha256(record.model_path)
+    identity["model_hash_algorithm"] = MODEL_TEXT_HASH
     identity["asset_bundle_sha256"] = mujoco_asset_fingerprint(
         record.model_path, record.robot_directory,
     )
+    identity["asset_bundle_hash_algorithm"] = ASSET_BUNDLE_HASH
     identity["offset_policy"] = record.meva_offset_policy
     if record.meva_offset_policy == "missing":
         raise RemoteIKError(
@@ -90,7 +95,8 @@ def _robot_identity(config: dict[str, Any], repository_root: Path) -> dict[str, 
             raise RemoteIKError(
                 "robot_model_load_failure", f"Invalid approved MEVA Offset asset: {exc}"
             ) from exc
-        identity["offset_asset_sha256"] = sha256_file(path)
+        identity["offset_asset_sha256"] = canonical_json_sha256(path)
+        identity["offset_asset_hash_algorithm"] = MANIFEST_JSON_HASH
         identity["offset_fingerprint_sha256"] = canonical_value_sha256(
             asset.get("fingerprint")
         )

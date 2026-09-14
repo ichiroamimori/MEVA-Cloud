@@ -9,13 +9,24 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Iterable
 
+from server.content_hash import (
+    CANONICAL_JSON_SHA256,
+    CANONICAL_TEXT_SHA256,
+    MUJOCO_ASSET_BUNDLE_SHA256,
+    canonical_text_sha256,
+    repository_asset_sha256,
+    sha256_file,
+)
 
-CONTRACT_VERSION = "1.1"
-SUPPORTED_CONTRACT_VERSIONS = {"1.0", CONTRACT_VERSION}
+
+CONTRACT_VERSION = "1.2"
+SUPPORTED_CONTRACT_VERSIONS = {"1.0", "1.1", CONTRACT_VERSION}
 MANIFEST_NAME = "request.json"
 RESULT_MANIFEST_NAME = "result.json"
 RESULT_FORMAT = "meva_ik_result_zip_v2"
-MANIFEST_JSON_HASH = "canonical-json-sha256-v1"
+MANIFEST_JSON_HASH = CANONICAL_JSON_SHA256
+MODEL_TEXT_HASH = CANONICAL_TEXT_SHA256
+ASSET_BUNDLE_HASH = MUJOCO_ASSET_BUNDLE_SHA256
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 ALLOWED_STAGES = {"primary", "main"}
 ALLOWED_BACKENDS = {"remote_python", "remote_native", "local_native"}
@@ -65,6 +76,15 @@ class IKRequest:
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
                 raise IKContractError(f"Invalid robot {key}")
             normalized_robot[key] = digest
+        for key, expected in (
+            ("model_hash_algorithm", MODEL_TEXT_HASH),
+            ("asset_bundle_hash_algorithm", ASSET_BUNDLE_HASH),
+        ):
+            algorithm = str(robot.get(key) or "")
+            if schema_version == CONTRACT_VERSION and algorithm != expected:
+                raise IKContractError(f"Unsupported robot {key}")
+            if algorithm:
+                normalized_robot[key] = algorithm
         offset_policy = str(robot.get("offset_policy") or "missing")
         if offset_policy not in {"approved", "none", "missing"}:
             raise IKContractError("Invalid robot offset_policy")
@@ -79,6 +99,11 @@ class IKRequest:
             if not SAFE_ID_RE.fullmatch(algorithm):
                 raise IKContractError("Invalid robot offset_algorithm")
             normalized_robot["offset_algorithm"] = algorithm
+            asset_hash_algorithm = str(robot.get("offset_asset_hash_algorithm") or "")
+            if schema_version == CONTRACT_VERSION and asset_hash_algorithm != MANIFEST_JSON_HASH:
+                raise IKContractError("Unsupported robot offset_asset_hash_algorithm")
+            if asset_hash_algorithm:
+                normalized_robot["offset_asset_hash_algorithm"] = asset_hash_algorithm
         manifest_json_sha256 = str(robot.get("manifest_json_sha256") or "").lower()
         if manifest_json_sha256:
             if not re.fullmatch(r"[0-9a-f]{64}", manifest_json_sha256):
@@ -143,14 +168,6 @@ def _safe_archive_path(value: str) -> str:
     return path.as_posix()
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def canonical_json_sha256(path: Path) -> str:
     """Hash JSON values rather than formatting or checkout line endings."""
     try:
@@ -188,7 +205,12 @@ def robot_manifest_matches(path: Path, identity: dict[str, str]) -> bool:
     return sha256_file(path) == identity.get("manifest_sha256")
 
 
-def mujoco_asset_fingerprint(model_path: Path, asset_root: Path) -> str:
+def mujoco_asset_fingerprint(
+    model_path: Path,
+    asset_root: Path,
+    *,
+    canonicalize_text: bool = True,
+) -> str:
     """Hash the selected MJCF and files it names without packaging those assets."""
     root = asset_root.resolve()
     pending = [model_path.resolve()]
@@ -227,7 +249,10 @@ def mujoco_asset_fingerprint(model_path: Path, asset_root: Path) -> str:
             raise IKContractError(f"MuJoCo asset is missing: {relative}")
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(bytes.fromhex(sha256_file(path)))
+        content_digest = (
+            repository_asset_sha256(path) if canonicalize_text else sha256_file(path)
+        )
+        digest.update(bytes.fromhex(content_digest))
     return digest.hexdigest()
 
 

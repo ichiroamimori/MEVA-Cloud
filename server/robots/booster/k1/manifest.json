@@ -30,7 +30,8 @@
         "meva_offsets": {
           "policy": "approved",
           "file": "retarget_assets/meva/approved_offsets.json",
-          "sha256": "542237126891f43d370e2499da177d028fed1614a5f0f840f27e4ac63543460c"
+          "hash_algorithm": "canonical-json-sha256-v1",
+          "sha256": "36b5c517cd99c5a969c65f6111191a82505b489cbc839838b34e3949a8538870"
         }
       },
       "output_joint_order": "model_hinge_order",
