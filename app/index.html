@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>My Capsules | MEVA Cloud</title>
+<title>Capsules | MEVA Cloud</title>
 <style>
 :root{
   --bg:#f5f7fa;
@@ -20,7 +20,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);font-family:Inter,"Segoe UI",Arial,sans-serif;color:var(--ink)}
-button,input,textarea{font:inherit}
+button,input,textarea,select{font:inherit}
 header{
   height:76px;background:var(--panel);border-bottom:1px solid var(--line);
   display:flex;align-items:center;justify-content:space-between;padding:0 32px
@@ -50,6 +50,16 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
 .btn.danger{border-color:#d8a5a2;background:#fff;color:#a8322d}
 .btn.danger:hover{border-color:#a8322d;background:#fff4f3;color:#8f2622}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.library-bar{display:flex;align-items:center;gap:14px;margin:0 0 14px;flex-wrap:wrap}
+.library-tabs{display:inline-flex;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.library-tab{border:0;border-radius:8px;background:transparent;color:var(--muted);padding:8px 18px;font-size:13px;font-weight:800;cursor:pointer}
+.library-tab.active{background:var(--brand);color:#fff;box-shadow:0 3px 10px rgba(47,95,143,.18)}
+.workspace-context{color:var(--muted);font-size:12px;font-weight:700}
+.library-spacer{flex:1}
+.breadcrumbs{display:flex;align-items:center;gap:7px;min-height:28px;margin:0 0 14px;color:var(--muted);font-size:13px}
+.breadcrumb{border:0;background:transparent;padding:2px 0;color:var(--brand);font-weight:750;cursor:pointer}
+.breadcrumb[aria-current="page"]{color:var(--ink);cursor:default}
+.breadcrumb-separator{color:#9caebb}
 .card{
   display:flex;flex-direction:column;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;
   color:inherit;box-shadow:var(--shadow);
@@ -61,7 +71,17 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
 .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;font-weight:800;margin:7px 0}
 .meta{min-height:21px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--muted)}
 .card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:auto;padding-top:16px}
+.card-actions{flex-wrap:wrap}
 .card-actions .btn{padding:7px 10px;border-radius:8px;font-size:11px}
+.folder-card{min-height:154px;cursor:pointer}
+.folder-card .card-main{cursor:pointer}
+.folder-symbol{position:relative;width:44px;height:32px;margin-bottom:11px;border-radius:5px;background:#d6e5f3;border:1px solid #b9cfe2}
+.folder-symbol::before{content:"";position:absolute;left:4px;top:-7px;width:20px;height:9px;border:1px solid #b9cfe2;border-bottom:0;border-radius:5px 5px 0 0;background:#d6e5f3}
+.folder-card .title{font-size:17px;margin-bottom:4px}
+.empty-library{grid-column:1/-1;padding:42px 20px;border:1px dashed var(--control-line);border-radius:16px;background:rgba(255,255,255,.55);text-align:center;color:var(--muted)}
+.empty-library strong{display:block;margin-bottom:5px;color:var(--ink);font-size:15px}
+.library-form{padding:22px}
+.library-form select{width:100%;height:42px;border:1px solid var(--control-line);border-radius:9px;background:#fff;color:var(--ink);padding:0 10px}
 .modal-backdrop{
   position:fixed;inset:0;z-index:50;background:rgba(23,50,77,.52);padding:24px;
   display:grid;place-items:center
@@ -129,6 +149,7 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
 @media(max-width:620px){
   header{padding:0 18px}.shell{padding:24px 18px 48px}.page-head{gap:16px}
   .page-head .btn{width:100%}.modal-backdrop{padding:14px}.modal-head,.upload-form{padding:18px}
+  .library-tabs{width:100%}.library-tab{flex:1}.library-spacer{display:none}
 }
 </style>
 </head>
@@ -137,24 +158,22 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
 <main class="shell">
   <div class="page-head">
     <div>
-      <h1>My Capsules</h1>
-      <div class="lead">暫定のログイン後トップです。Capsuleを選択するとCapsuleページへ進みます。</div>
+      <h1>Capsules</h1>
+      <div class="lead">自分のデータとWorkspaceで共有されたデータを整理できます。</div>
     </div>
     <button class="btn primary" id="dataUploadBtn" type="button">DATA UPLOAD</button>
   </div>
-  <div class="grid" id="capsuleGrid">
-    <article class="card">
-      <a class="card-main" href="./capsule/?capsule=2606050001&amp;title=%E3%83%8F%E3%83%B3%E3%83%A4%E7%AF%80">
-        <div class="k">Capsule 2606050001</div>
-        <div class="title" title="ハンヤ節">ハンヤ節</div>
-        <div class="meta">MEVA motion / local prototype</div>
-      </a>
-      <div class="card-actions">
-        <button class="btn" type="button">Edit Capsule</button>
-        <button class="btn danger" type="button">Delete Capsule</button>
-      </div>
-    </article>
+  <div class="library-bar">
+    <div class="library-tabs" role="tablist" aria-label="Capsule data scope">
+      <button class="library-tab active" id="myDataTab" type="button" role="tab" aria-selected="true">My Data</button>
+      <button class="library-tab" id="sharedDataTab" type="button" role="tab" aria-selected="false">Shared Data</button>
+    </div>
+    <div class="workspace-context" id="workspaceContext" hidden></div>
+    <div class="library-spacer"></div>
+    <button class="btn" id="newFolderBtn" type="button">NEW FOLDER</button>
   </div>
+  <nav class="breadcrumbs" id="libraryBreadcrumbs" aria-label="Current folder"></nav>
+  <div class="grid" id="capsuleGrid"><div class="empty-library">Loading...</div></div>
 </main>
 
 <div class="modal-backdrop" id="uploadModal" hidden aria-hidden="true">
@@ -227,6 +246,52 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
   </section>
 </div>
 
+<div class="modal-backdrop" id="folderModal" hidden aria-hidden="true">
+  <section class="upload-modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title" id="folderModalTitle">NEW FOLDER</h2>
+        <p class="modal-subtitle" id="folderModalSubtitle"></p>
+      </div>
+      <button class="modal-close" id="folderModalClose" type="button" aria-label="閉じる">×</button>
+    </div>
+    <form class="library-form" id="folderForm">
+      <div class="upload-field">
+        <label for="folderName">Folder name</label>
+        <input class="text-input" id="folderName" type="text" maxlength="100" required autocomplete="off">
+      </div>
+      <div class="form-error" id="folderError" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="folderCancel" type="button">CANCEL</button>
+        <button class="btn primary" id="folderSubmit" type="submit">CREATE</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<div class="modal-backdrop" id="moveModal" hidden aria-hidden="true">
+  <section class="upload-modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="moveModalTitle">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title" id="moveModalTitle">MOVE CAPSULE</h2>
+        <p class="modal-subtitle" id="moveModalSubtitle"></p>
+      </div>
+      <button class="modal-close" id="moveModalClose" type="button" aria-label="閉じる">×</button>
+    </div>
+    <form class="library-form" id="moveForm">
+      <div class="upload-field">
+        <label for="moveDestination">Destination</label>
+        <select id="moveDestination"></select>
+      </div>
+      <div class="form-error" id="moveError" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="moveCancel" type="button">CANCEL</button>
+        <button class="btn primary" type="submit">MOVE</button>
+      </div>
+    </form>
+  </section>
+</div>
+
 <script>
 (() => {
   const openButton = document.getElementById("dataUploadBtn");
@@ -255,11 +320,46 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
   const editCancel = document.getElementById("editCancel");
   const editSave = document.getElementById("editSave");
   const editError = document.getElementById("editError");
+  const myDataTab = document.getElementById("myDataTab");
+  const sharedDataTab = document.getElementById("sharedDataTab");
+  const workspaceContext = document.getElementById("workspaceContext");
+  const breadcrumbs = document.getElementById("libraryBreadcrumbs");
+  const newFolderButton = document.getElementById("newFolderBtn");
+  const folderModal = document.getElementById("folderModal");
+  const folderModalTitle = document.getElementById("folderModalTitle");
+  const folderModalClose = document.getElementById("folderModalClose");
+  const folderModalSubtitle = document.getElementById("folderModalSubtitle");
+  const folderForm = document.getElementById("folderForm");
+  const folderName = document.getElementById("folderName");
+  const folderCancel = document.getElementById("folderCancel");
+  const folderSubmit = document.getElementById("folderSubmit");
+  const folderError = document.getElementById("folderError");
+  const moveModal = document.getElementById("moveModal");
+  const moveModalClose = document.getElementById("moveModalClose");
+  const moveModalSubtitle = document.getElementById("moveModalSubtitle");
+  const moveForm = document.getElementById("moveForm");
+  const moveDestination = document.getElementById("moveDestination");
+  const moveCancel = document.getElementById("moveCancel");
+  const moveError = document.getElementById("moveError");
   let returnFocus = null;
   let isUploading = false;
   let editingCapsule = null;
   let editReturnFocus = null;
   let isSavingEdit = false;
+  let currentScope = "personal";
+  const currentFolders = { personal: "root", workspace: "root" };
+  let libraryPayload = null;
+  let movingCapsule = null;
+  let editingFolder = null;
+
+  function actionButton(label, handler, className = "btn") {
+    const button = document.createElement("button");
+    button.className = className;
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    return button;
+  }
 
   function createCapsuleCard(capsule) {
     const card = document.createElement("article");
@@ -283,21 +383,69 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
     meta.textContent = capsule.note || capsule.description || "MEVA motion";
     meta.title = meta.textContent;
     cardMain.append(kicker, title, meta);
+    if (currentScope === "workspace") {
+      const owner = document.createElement("div");
+      owner.className = "meta";
+      owner.textContent = `Owner: ${capsule.owner_user_id || "Unknown"}`;
+      cardMain.appendChild(owner);
+    }
 
     const actions = document.createElement("div");
     actions.className = "card-actions";
-    const editButton = document.createElement("button");
-    editButton.className = "btn";
-    editButton.type = "button";
-    editButton.textContent = "Edit Capsule";
-    editButton.addEventListener("click", () => openEditModal(capsule));
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "btn danger";
-    deleteButton.type = "button";
-    deleteButton.textContent = "Delete Capsule";
-    deleteButton.addEventListener("click", () => deleteCapsule(capsule, deleteButton));
-    actions.append(editButton, deleteButton);
+    actions.append(actionButton("Move", () => openMoveModal(capsule)));
+    if (currentScope === "personal") {
+      const shareButton = actionButton(
+        capsule.shared_to_workspace ? "Shared" : "Share",
+        () => shareCapsule(capsule, shareButton)
+      );
+      shareButton.disabled = Boolean(capsule.shared_to_workspace);
+      const deleteButton = actionButton("Delete Capsule", () => deleteCapsule(capsule, deleteButton), "btn danger");
+      actions.append(shareButton, actionButton("Edit Capsule", () => openEditModal(capsule)), deleteButton);
+    } else {
+      actions.append(actionButton("Unshare", () => unshareCapsule(capsule), "btn danger"));
+    }
     card.append(cardMain, actions);
+    return card;
+  }
+
+  function createFolderCard(folder) {
+    const card = document.createElement("article");
+    card.className = "card folder-card";
+    const main = document.createElement("div");
+    main.className = "card-main";
+    main.tabIndex = 0;
+    main.setAttribute("role", "button");
+    const symbol = document.createElement("div");
+    symbol.className = "folder-symbol";
+    symbol.setAttribute("aria-hidden", "true");
+    const kicker = document.createElement("div");
+    kicker.className = "k";
+    kicker.textContent = "Folder";
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = folder.display_name;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = currentScope === "personal" ? "My Data" : "Workspace shared";
+    main.append(symbol, kicker, title, meta);
+    const open = () => {
+      currentFolders[currentScope] = folder.folder_id;
+      loadCapsules();
+    };
+    main.addEventListener("click", open);
+    main.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
+    actions.append(
+      actionButton("Rename", () => openFolderModal(folder)),
+      actionButton("Delete", () => deleteFolder(folder), "btn danger")
+    );
+    card.append(main, actions);
     return card;
   }
 
@@ -321,11 +469,105 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
     }
   }
 
+  async function shareCapsule(capsule, button) {
+    button.disabled = true;
+    button.textContent = "SHARING...";
+    try {
+      await requestJson(`/api/capsules/${encodeURIComponent(capsule.id)}/placement`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "workspace", folder_id: "root" })
+      });
+      await loadCapsules();
+    } catch (error) {
+      window.alert(`Workspaceへ共有できませんでした。\n${error.message}`);
+      button.disabled = false;
+      button.textContent = "Share";
+    }
+  }
+
+  async function unshareCapsule(capsule) {
+    if (!window.confirm(`${capsule.title}のWorkspace共有を解除しますか？`)) return;
+    try {
+      await requestJson(`/api/capsules/${encodeURIComponent(capsule.id)}/placement/workspace`, {
+        method: "DELETE"
+      });
+      await loadCapsules();
+    } catch (error) {
+      window.alert(`Workspace共有を解除できませんでした。\n${error.message}`);
+    }
+  }
+
+  async function deleteFolder(folder) {
+    if (!window.confirm(`${folder.display_name}フォルダを削除しますか？`)) return;
+    try {
+      const query = new URLSearchParams({ scope: currentScope });
+      await requestJson(`/api/capsules/folders/${encodeURIComponent(folder.folder_id)}?${query}`, {
+        method: "DELETE"
+      });
+      await loadCapsules();
+    } catch (error) {
+      window.alert(`フォルダを削除できませんでした。\n${error.message}`);
+    }
+  }
+
+  function renderBreadcrumbs(items) {
+    breadcrumbs.replaceChildren();
+    items.forEach((item, index) => {
+      if (index) {
+        const separator = document.createElement("span");
+        separator.className = "breadcrumb-separator";
+        separator.textContent = "/";
+        breadcrumbs.appendChild(separator);
+      }
+      const button = document.createElement("button");
+      button.className = "breadcrumb";
+      button.type = "button";
+      button.textContent = item.display_name;
+      const isCurrent = index === items.length - 1;
+      if (isCurrent) button.setAttribute("aria-current", "page");
+      else button.addEventListener("click", () => {
+        currentFolders[currentScope] = item.folder_id;
+        loadCapsules();
+      });
+      breadcrumbs.appendChild(button);
+    });
+  }
+
+  function renderEmptyState() {
+    const empty = document.createElement("div");
+    empty.className = "empty-library";
+    const title = document.createElement("strong");
+    title.textContent = currentScope === "personal" ? "このフォルダは空です" : "共有データはまだありません";
+    const detail = document.createElement("span");
+    detail.textContent = currentScope === "personal"
+      ? "Capsuleを移動するか、新しいデータをアップロードできます。"
+      : "My DataからCapsuleをWorkspaceへ共有すると、ここに表示されます。";
+    empty.append(title, detail);
+    return empty;
+  }
+
   async function loadCapsules() {
-    const response = await fetch("/api/capsules", { cache: "no-store" });
+    const query = new URLSearchParams({
+      scope: currentScope,
+      folder_id: currentFolders[currentScope]
+    });
+    const response = await fetch(`/api/capsules/library?${query}`, { cache: "no-store" });
     if (!response.ok) throw new Error("Capsule一覧を読み込めませんでした。");
-    const payload = await response.json();
-    grid.replaceChildren(...payload.capsules.map(createCapsuleCard));
+    libraryPayload = await response.json();
+    workspaceContext.textContent = `Workspace: ${libraryPayload.workspace.display_name}`;
+    workspaceContext.hidden = currentScope !== "workspace";
+    openButton.hidden = currentScope !== "personal";
+    myDataTab.classList.toggle("active", currentScope === "personal");
+    sharedDataTab.classList.toggle("active", currentScope === "workspace");
+    myDataTab.setAttribute("aria-selected", String(currentScope === "personal"));
+    sharedDataTab.setAttribute("aria-selected", String(currentScope === "workspace"));
+    renderBreadcrumbs(libraryPayload.breadcrumbs);
+    const cards = [
+      ...libraryPayload.folders.map(createFolderCard),
+      ...libraryPayload.capsules.map(createCapsuleCard)
+    ];
+    grid.replaceChildren(...(cards.length ? cards : [renderEmptyState()]));
   }
 
   function updateProgress(percent, status) {
@@ -424,20 +666,104 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
     editReturnFocus?.focus();
   }
 
+  function setScope(scope) {
+    if (scope === currentScope) return;
+    currentScope = scope;
+    loadCapsules().catch(showLibraryError);
+  }
+
+  function openFolderModal(folder = null) {
+    editingFolder = folder;
+    returnFocus = document.activeElement;
+    folderName.value = folder?.display_name || "";
+    folderError.hidden = true;
+    const current = libraryPayload?.breadcrumbs?.at(-1)?.display_name || "Root";
+    folderModalTitle.textContent = folder ? "RENAME FOLDER" : "NEW FOLDER";
+    folderModalSubtitle.textContent = folder
+      ? `${folder.display_name} の表示名を変更します。`
+      : `${current} にフォルダを作成します。`;
+    folderSubmit.textContent = folder ? "SAVE" : "CREATE";
+    folderModal.hidden = false;
+    folderModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    folderName.focus();
+  }
+
+  function closeFolderModal() {
+    folderModal.hidden = true;
+    folderModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    editingFolder = null;
+    returnFocus?.focus();
+  }
+
+  function openMoveModal(capsule) {
+    movingCapsule = capsule;
+    returnFocus = document.activeElement;
+    moveModalSubtitle.textContent = `${capsule.title} の表示位置を変更します。`;
+    moveError.hidden = true;
+    moveDestination.replaceChildren(...libraryPayload.folder_options.map((folder) => {
+      const option = document.createElement("option");
+      option.value = folder.folder_id;
+      option.textContent = folder.display_name;
+      return option;
+    }));
+    moveDestination.value = libraryPayload.current_folder_id;
+    moveModal.hidden = false;
+    moveModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    moveDestination.focus();
+  }
+
+  function closeMoveModal() {
+    moveModal.hidden = true;
+    moveModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    movingCapsule = null;
+    returnFocus?.focus();
+  }
+
+  function showLibraryError(error) {
+    console.error(error);
+    const empty = document.createElement("div");
+    empty.className = "empty-library";
+    const title = document.createElement("strong");
+    title.textContent = "Capsule一覧を読み込めませんでした";
+    const detail = document.createElement("span");
+    detail.textContent = error.message || String(error);
+    empty.append(title, detail);
+    grid.replaceChildren(empty);
+  }
+
   openButton.addEventListener("click", openModal);
   closeButton.addEventListener("click", closeModal);
   cancelButton.addEventListener("click", closeModal);
   editModalClose.addEventListener("click", closeEditModal);
   editCancel.addEventListener("click", closeEditModal);
+  myDataTab.addEventListener("click", () => setScope("personal"));
+  sharedDataTab.addEventListener("click", () => setScope("workspace"));
+  newFolderButton.addEventListener("click", () => openFolderModal());
+  folderModalClose.addEventListener("click", closeFolderModal);
+  folderCancel.addEventListener("click", closeFolderModal);
+  moveModalClose.addEventListener("click", closeMoveModal);
+  moveCancel.addEventListener("click", closeMoveModal);
   modal.addEventListener("click", (event) => {
     if (event.target === modal) closeModal();
   });
   editModal.addEventListener("click", (event) => {
     if (event.target === editModal) closeEditModal();
   });
+  folderModal.addEventListener("click", (event) => {
+    if (event.target === folderModal) closeFolderModal();
+  });
+  moveModal.addEventListener("click", (event) => {
+    if (event.target === moveModal) closeMoveModal();
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.hidden) closeModal();
     if (event.key === "Escape" && !editModal.hidden) closeEditModal();
+    if (event.key === "Escape" && !folderModal.hidden) closeFolderModal();
+    if (event.key === "Escape" && !moveModal.hidden) closeMoveModal();
   });
   input.addEventListener("change", () => setFiles(input.files));
   capsuleName.addEventListener("input", () => {
@@ -511,6 +837,55 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
     }
     return payload;
   }
+
+  folderForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const displayName = folderName.value.trim();
+    if (!displayName) return;
+    folderError.hidden = true;
+    try {
+      const url = editingFolder
+        ? `/api/capsules/folders/${encodeURIComponent(editingFolder.folder_id)}`
+        : "/api/capsules/folders";
+      await requestJson(url, {
+        method: editingFolder ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingFolder
+          ? { scope: currentScope, display_name: displayName }
+          : {
+              scope: currentScope,
+              parent_folder_id: currentFolders[currentScope],
+              display_name: displayName
+            })
+      });
+      closeFolderModal();
+      await loadCapsules();
+    } catch (error) {
+      folderError.textContent = error.message;
+      folderError.hidden = false;
+    }
+  });
+
+  moveForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!movingCapsule) return;
+    moveError.hidden = true;
+    try {
+      await requestJson(`/api/capsules/${encodeURIComponent(movingCapsule.id)}/placement`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: currentScope,
+          folder_id: moveDestination.value
+        })
+      });
+      closeMoveModal();
+      await loadCapsules();
+    } catch (error) {
+      moveError.textContent = error.message;
+      moveError.hidden = false;
+    }
+  });
 
   editForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -593,7 +968,14 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
       }
 
       updateProgress(100, "Capsuleを作成中");
-      await requestJson(`/api/capsules/uploads/${started.upload_id}/complete`, { method: "POST" });
+      const completed = await requestJson(`/api/capsules/uploads/${started.upload_id}/complete`, { method: "POST" });
+      if (currentFolders.personal !== "root") {
+        await requestJson(`/api/capsules/${encodeURIComponent(completed.capsule.id)}/placement`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "personal", folder_id: currentFolders.personal })
+        });
+      }
       await loadCapsules();
       updateProgress(100, "アップロード完了");
       submitButton.textContent = "UPLOADED";
@@ -618,7 +1000,7 @@ h1{font-size:34px;margin:0 0 6px;letter-spacing:-.025em}
     }
   });
 
-  loadCapsules().catch((error) => console.error(error));
+  loadCapsules().catch(showLibraryError);
 })();
 </script>
 </body>

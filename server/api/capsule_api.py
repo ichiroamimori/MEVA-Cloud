@@ -9,12 +9,17 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from server.capsule_identity import CAPSULE_ID_RE, is_public_capsule
+from server.service_context import (
+    DEVELOPMENT_STORAGE_USER_ID,
+    DEVELOPMENT_USER,
+    DEVELOPMENT_WORKSPACE,
+)
 
 
 router = APIRouter(prefix="/api/capsules", tags=["capsules"])
@@ -49,6 +54,22 @@ class CapsuleUpdateRequest(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class FolderCreateRequest(BaseModel):
+    scope: Literal["personal", "workspace"]
+    parent_folder_id: str = Field(default="root", min_length=1, max_length=40)
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class FolderUpdateRequest(BaseModel):
+    scope: Literal["personal", "workspace"]
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class CapsulePlacementRequest(BaseModel):
+    scope: Literal["personal", "workspace"]
+    folder_id: str = Field(default="root", min_length=1, max_length=40)
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -59,11 +80,101 @@ def workspace_root() -> Path:
 
 
 def capsules_root() -> Path:
-    return workspace_root() / "users" / "local_user" / "capsules"
+    return workspace_root() / "users" / DEVELOPMENT_STORAGE_USER_ID / "capsules"
 
 
 def uploads_root() -> Path:
-    return workspace_root() / "users" / "local_user" / ".uploads"
+    return workspace_root() / "users" / DEVELOPMENT_STORAGE_USER_ID / ".uploads"
+
+
+def library_path() -> Path:
+    return workspace_root() / "capsule_library.json"
+
+
+def empty_library() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "folders": [],
+        "personal_locations": {},
+        "workspace_locations": {},
+    }
+
+
+def read_library() -> dict[str, Any]:
+    try:
+        value = json.loads(library_path().read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return empty_library()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=409, detail="Capsule library metadata is invalid") from exc
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=409, detail="Capsule library metadata is invalid")
+    result = empty_library()
+    result.update(value)
+    for key in ("folders", "personal_locations", "workspace_locations"):
+        expected_type = list if key == "folders" else dict
+        if not isinstance(result[key], expected_type):
+            raise HTTPException(status_code=409, detail="Capsule library metadata is invalid")
+    return result
+
+
+def write_library(value: dict[str, Any]) -> None:
+    path = library_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(path, value)
+
+
+def folder_for_scope(library: dict[str, Any], scope: str, folder_id: str) -> dict[str, Any] | None:
+    if folder_id == "root":
+        return None
+    folder = next(
+        (item for item in library["folders"] if item.get("folder_id") == folder_id),
+        None,
+    )
+    if not folder or folder.get("scope") != scope:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return folder
+
+
+def folder_breadcrumbs(library: dict[str, Any], scope: str, folder_id: str) -> list[dict[str, str]]:
+    labels = {"personal": "My Data", "workspace": "Shared Data"}
+    result = [{"folder_id": "root", "display_name": labels[scope]}]
+    if folder_id == "root":
+        return result
+    by_id = {
+        item.get("folder_id"): item
+        for item in library["folders"]
+        if item.get("scope") == scope
+    }
+    chain = []
+    current_id = folder_id
+    visited = set()
+    while current_id != "root":
+        if current_id in visited or current_id not in by_id:
+            raise HTTPException(status_code=409, detail="Folder hierarchy is invalid")
+        visited.add(current_id)
+        current = by_id[current_id]
+        chain.append({"folder_id": current_id, "display_name": str(current.get("display_name", ""))})
+        current_id = str(current.get("parent_folder_id", "root"))
+    result.extend(reversed(chain))
+    return result
+
+
+def folder_options(library: dict[str, Any], scope: str) -> list[dict[str, str]]:
+    options = []
+    for folder in library["folders"]:
+        if folder.get("scope") != scope:
+            continue
+        folder_id = str(folder.get("folder_id", ""))
+        crumbs = folder_breadcrumbs(library, scope, folder_id)
+        options.append(
+            {
+                "folder_id": folder_id,
+                "display_name": " / ".join(item["display_name"] for item in crumbs[1:]),
+            }
+        )
+    options.sort(key=lambda item: item["display_name"].casefold())
+    return [{"folder_id": "root", "display_name": "Root"}, *options]
 
 
 def capsule_dir(capsule_id: str) -> Path:
@@ -256,6 +367,164 @@ def list_capsules() -> dict[str, list[dict[str, Any]]]:
     return {"capsules": items}
 
 
+@router.get("/library")
+def list_capsule_library(
+    scope: Literal["personal", "workspace"] = "personal",
+    folder_id: str = "root",
+) -> dict[str, Any]:
+    library = read_library()
+    folder_for_scope(library, scope, folder_id)
+    root = capsules_root()
+    summaries = {
+        path.name: capsule_summary(path)
+        for path in root.iterdir()
+        if root.exists() and path.is_dir() and CAPSULE_ID_RE.fullmatch(path.name)
+    } if root.exists() else {}
+    locations_key = f"{scope}_locations"
+    locations = library[locations_key]
+    if scope == "personal":
+        capsule_ids = [
+            capsule_id
+            for capsule_id in summaries
+            if locations.get(capsule_id, "root") == folder_id
+        ]
+    else:
+        capsule_ids = [
+            capsule_id
+            for capsule_id, location in locations.items()
+            if location == folder_id and capsule_id in summaries
+        ]
+    capsules = []
+    for capsule_id in capsule_ids:
+        summary = dict(summaries[capsule_id])
+        summary["owner_user_id"] = DEVELOPMENT_USER.user_id
+        summary["shared_to_workspace"] = capsule_id in library["workspace_locations"]
+        capsules.append(summary)
+    capsules.sort(key=lambda item: item["id"], reverse=True)
+    folders = [
+        {
+            "folder_id": str(item["folder_id"]),
+            "display_name": str(item["display_name"]),
+        }
+        for item in library["folders"]
+        if item.get("scope") == scope and item.get("parent_folder_id", "root") == folder_id
+    ]
+    folders.sort(key=lambda item: item["display_name"].casefold())
+    return {
+        "scope": scope,
+        "workspace": {
+            "workspace_id": DEVELOPMENT_WORKSPACE.workspace_id,
+            "display_name": DEVELOPMENT_WORKSPACE.display_name,
+        },
+        "current_folder_id": folder_id,
+        "breadcrumbs": folder_breadcrumbs(library, scope, folder_id),
+        "folder_options": folder_options(library, scope),
+        "folders": folders,
+        "capsules": capsules,
+    }
+
+
+@router.post("/folders", status_code=201)
+def create_capsule_folder(payload: FolderCreateRequest) -> dict[str, Any]:
+    display_name = payload.display_name.strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="Folder name is required")
+    with UPLOAD_LOCK:
+        library = read_library()
+        folder_for_scope(library, payload.scope, payload.parent_folder_id)
+        duplicate = any(
+            item.get("scope") == payload.scope
+            and item.get("parent_folder_id", "root") == payload.parent_folder_id
+            and str(item.get("display_name", "")).casefold() == display_name.casefold()
+            for item in library["folders"]
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="A folder with this name already exists")
+        folder = {
+            "folder_id": f"fld_{uuid.uuid4().hex}",
+            "scope": payload.scope,
+            "parent_folder_id": payload.parent_folder_id,
+            "display_name": display_name,
+            "created_by": DEVELOPMENT_USER.user_id,
+            "workspace_id": DEVELOPMENT_WORKSPACE.workspace_id if payload.scope == "workspace" else None,
+            "created_at": datetime.now().astimezone().isoformat(),
+        }
+        library["folders"].append(folder)
+        write_library(library)
+    return {"folder": folder}
+
+
+@router.patch("/folders/{folder_id}")
+def rename_capsule_folder(folder_id: str, payload: FolderUpdateRequest) -> dict[str, Any]:
+    display_name = payload.display_name.strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="Folder name is required")
+    with UPLOAD_LOCK:
+        library = read_library()
+        folder = folder_for_scope(library, payload.scope, folder_id)
+        assert folder is not None
+        duplicate = any(
+            item.get("folder_id") != folder_id
+            and item.get("scope") == payload.scope
+            and item.get("parent_folder_id", "root") == folder.get("parent_folder_id", "root")
+            and str(item.get("display_name", "")).casefold() == display_name.casefold()
+            for item in library["folders"]
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="A folder with this name already exists")
+        folder["display_name"] = display_name
+        folder["updated_at"] = datetime.now().astimezone().isoformat()
+        write_library(library)
+    return {"folder": folder}
+
+
+@router.delete("/folders/{folder_id}")
+def delete_capsule_folder(
+    folder_id: str,
+    scope: Literal["personal", "workspace"],
+) -> dict[str, Any]:
+    with UPLOAD_LOCK:
+        library = read_library()
+        folder = folder_for_scope(library, scope, folder_id)
+        assert folder is not None
+        has_children = any(
+            item.get("scope") == scope and item.get("parent_folder_id") == folder_id
+            for item in library["folders"]
+        )
+        has_capsules = folder_id in library[f"{scope}_locations"].values()
+        if has_children or has_capsules:
+            raise HTTPException(status_code=409, detail="Only empty folders can be deleted")
+        library["folders"].remove(folder)
+        write_library(library)
+    return {"deleted": {"folder_id": folder_id, "display_name": folder["display_name"]}}
+
+
+@router.put("/{capsule_id}/placement")
+def place_capsule(capsule_id: str, payload: CapsulePlacementRequest) -> dict[str, Any]:
+    capsule_dir(capsule_id)
+    with UPLOAD_LOCK:
+        library = read_library()
+        folder_for_scope(library, payload.scope, payload.folder_id)
+        library[f"{payload.scope}_locations"][capsule_id] = payload.folder_id
+        write_library(library)
+    return {
+        "capsule_id": capsule_id,
+        "scope": payload.scope,
+        "folder_id": payload.folder_id,
+    }
+
+
+@router.delete("/{capsule_id}/placement/workspace")
+def unshare_capsule(capsule_id: str) -> dict[str, Any]:
+    capsule_dir(capsule_id)
+    with UPLOAD_LOCK:
+        library = read_library()
+        removed = library["workspace_locations"].pop(capsule_id, None) is not None
+        if removed:
+            write_library(library)
+    return {"capsule_id": capsule_id, "shared": False}
+
+
 @router.put("/{capsule_id}")
 def update_capsule(capsule_id: str, payload: CapsuleUpdateRequest) -> dict[str, Any]:
     title = payload.title.strip()
@@ -286,6 +555,13 @@ def delete_capsule(capsule_id: str) -> dict[str, Any]:
         path = capsule_dir(capsule_id)
         deleted = capsule_summary(path)
         shutil.rmtree(path)
+        library = read_library()
+        changed = False
+        for key in ("personal_locations", "workspace_locations"):
+            if library[key].pop(capsule_id, None) is not None:
+                changed = True
+        if changed:
+            write_library(library)
     return {"deleted": deleted}
 
 
